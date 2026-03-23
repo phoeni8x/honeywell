@@ -1,6 +1,7 @@
 "use client";
 
 import { AnnouncementCard } from "@/components/AnnouncementCard";
+import { FulfillmentLocationsInfo } from "@/components/FulfillmentLocationsInfo";
 import { HoneycombBg } from "@/components/HoneycombBg";
 import { LS_REFERRED_BY, LS_USER_TYPE } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
@@ -96,6 +97,14 @@ export function HomePageInner() {
           <Link href="/shop" className="btn-primary mt-8 inline-flex">
             Browse products
           </Link>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-display text-2xl text-honey-text">Dead drop &amp; pickup</h2>
+        <p className="mt-2 text-sm text-honey-muted">Where to collect — no phone tracking, just the spots your team sets in admin.</p>
+        <div className="mt-6">
+          <FulfillmentLocationsInfo />
         </div>
       </section>
 

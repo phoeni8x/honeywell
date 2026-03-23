@@ -6,7 +6,7 @@ const csp = [
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   // Apex + www: some mobile browsers treat fetch to the API as cross-origin if the page host differs from 'self' in edge cases.
-  "connect-src 'self' https://teamruby.net https://www.teamruby.net https://*.supabase.co https://api.telegram.org https://api.coingecko.com https://api.etherscan.io https://blockstream.info",
+  "connect-src 'self' https://teamruby.net https://www.teamruby.net https://*.supabase.co https://api.telegram.org https://api.coingecko.com https://api.etherscan.io https://blockstream.info https://*.tile.openstreetmap.org https://tile.openstreetmap.org",
 ].join("; ");
 
 const nextConfig = {

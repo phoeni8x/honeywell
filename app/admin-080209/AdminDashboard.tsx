@@ -133,10 +133,8 @@ export default function AdminDashboard() {
     loadAll();
   }, [loadAll]);
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    router.push(`${ADMIN_BASE_PATH}/login`);
-    router.refresh();
+  function leaveAdmin() {
+    router.push("/");
   }
 
   async function upsertSetting(key: string, value: string) {
@@ -150,11 +148,11 @@ export default function AdminDashboard() {
         <h1 className="font-display text-3xl text-honey-text">Dashboard</h1>
         <button
           type="button"
-          onClick={signOut}
+          onClick={leaveAdmin}
           className="inline-flex items-center gap-2 rounded-full border border-honey-border px-4 py-2 text-sm font-medium text-honey-muted transition hover:bg-honey-border/30"
         >
           <LogOut className="h-4 w-4" />
-          Sign out
+          Back to site
         </button>
       </div>
 

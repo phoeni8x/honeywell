@@ -24,7 +24,7 @@ export function LocationBanner() {
   return (
     <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-accent/30 bg-accent/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <p className="flex items-start gap-2 text-sm text-honey-text">
-        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
         Enable location to find your nearest pickup point.
       </p>
       <div className="flex gap-2">
@@ -38,7 +38,11 @@ export function LocationBanner() {
             if (!navigator.geolocation) return;
             navigator.geolocation.getCurrentPosition(
               () => {
-                sessionStorage.removeItem(SESSION_KEY);
+                try {
+                  sessionStorage.removeItem(SESSION_KEY);
+                } catch {
+                  /* ignore */
+                }
                 setShow(false);
                 window.dispatchEvent(new Event("honeywell:location"));
               },

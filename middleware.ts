@@ -4,10 +4,23 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const ADMIN_LOGIN_PATH = `${ADMIN_BASE_PATH}/login`;
 
+/**
+ * Admin is gated only by the obscured path. No login screen.
+ * If ADMIN_EMAIL + ADMIN_PASSWORD are set, middleware signs into Supabase so RLS (authenticated) still works for the dashboard.
+ */
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   });
+
+  const path = request.nextUrl.pathname;
+
+  if (path === ADMIN_LOGIN_PATH || path.startsWith(`${ADMIN_LOGIN_PATH}/`)) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = ADMIN_BASE_PATH;
+    redirectUrl.search = "";
+    return NextResponse.redirect(redirectUrl);
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -33,31 +46,23 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  if (path.startsWith(ADMIN_BASE_PATH)) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
-  if (path.startsWith(ADMIN_BASE_PATH) && !path.startsWith(ADMIN_LOGIN_PATH)) {
     if (!user) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = ADMIN_LOGIN_PATH;
-      redirectUrl.searchParams.set("redirect", path);
-      return NextResponse.redirect(redirectUrl);
+      const email = process.env.ADMIN_EMAIL;
+      const password = process.env.ADMIN_PASSWORD;
+      if (email && password) {
+        await supabase.auth.signInWithPassword({ email, password });
+      }
     }
-  }
-
-  if (path === ADMIN_LOGIN_PATH && user) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = ADMIN_BASE_PATH;
-    redirectUrl.search = "";
-    return NextResponse.redirect(redirectUrl);
   }
 
   return supabaseResponse;
 }
 
 export const config = {
-  // Must match ADMIN_BASE_PATH in @/lib/constants
   matcher: ["/admin-080209", "/admin-080209/:path*"],
 };

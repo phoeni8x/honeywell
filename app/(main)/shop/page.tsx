@@ -1,5 +1,6 @@
 "use client";
 
+import { FulfillmentLocationsInfo } from "@/components/FulfillmentLocationsInfo";
 import { LocationBanner } from "@/components/LocationBanner";
 import { ProductCard } from "@/components/ProductCard";
 import { LS_USER_TYPE } from "@/lib/constants";
@@ -92,6 +93,8 @@ export default function ShopPage() {
           <p className="mt-2 text-honey-muted">Flowers and vitamins — live stock, boutique feel.</p>
         </div>
       </div>
+
+      <FulfillmentLocationsInfo />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
