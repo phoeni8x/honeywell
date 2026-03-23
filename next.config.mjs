@@ -10,6 +10,12 @@ const csp = [
 ].join("; ");
 
 const nextConfig = {
+  async redirects() {
+    return [
+      { source: "/shops", destination: "/shop", permanent: true },
+      { source: "/shops/", destination: "/shop", permanent: true },
+    ];
+  },
   images: {
     remotePatterns: [
       {

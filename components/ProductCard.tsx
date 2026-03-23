@@ -13,9 +13,11 @@ interface ProductCardProps {
 
 export function ProductCard({ product, userType }: ProductCardProps) {
   const { unit, isDiscounted } = getPriceForUser(product, userType);
-  const stock = product.stock_quantity;
+  const stockRaw = Number(product.stock_quantity);
+  const stock = Number.isFinite(stockRaw) ? stockRaw : 0;
   const out = stock <= 0;
   const low = stock > 0 && stock <= 5;
+  const title = product.name?.trim() ? product.name : "Product";
 
   return (
     <div
@@ -30,14 +32,14 @@ export function ProductCard({ product, userType }: ProductCardProps) {
             {canDisplayProductImageUrl(product.image_url) ? (
               <ProductImage
                 src={product.image_url!}
-                alt={product.name}
+                alt={title}
                 fill
                 className="object-cover"
                 sizes="(max-width:768px) 50vw, 25vw"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-primary/10 font-display text-lg text-primary/60">
-                {product.name}
+                {title}
               </div>
             )}
             {out && (
@@ -62,7 +64,7 @@ export function ProductCard({ product, userType }: ProductCardProps) {
         >
           {product.category === "flower" ? "Flower" : "Vitamin"}
         </span>
-        <h3 className="font-display text-lg font-semibold text-honey-text">{product.name}</h3>
+        <h3 className="font-display text-lg font-semibold text-honey-text">{title}</h3>
         <div className="mt-1 flex flex-wrap items-baseline gap-2">
           {isDiscounted && (
             <span className="text-sm text-honey-muted line-through">{formatPrice(Number(product.price_regular))}</span>

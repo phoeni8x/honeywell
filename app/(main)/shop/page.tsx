@@ -18,18 +18,26 @@ export default function ShopPage() {
   const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
-    if (!error && data) setProducts(data as Product[]);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+      if (!error && data) setProducts(data as Product[]);
+    } catch {
+      setProducts([]);
+    }
   }, []);
 
   useEffect(() => {
-    const v = localStorage.getItem(LS_USER_TYPE) as UserType | null;
-    if (v === "team_member" || v === "guest") setUserType(v);
+    try {
+      const v = localStorage.getItem(LS_USER_TYPE) as UserType | null;
+      if (v === "team_member" || v === "guest") setUserType(v);
+    } catch {
+      /* Safari private / storage blocked */
+    }
   }, []);
 
   useEffect(() => {
@@ -37,7 +45,12 @@ export default function ShopPage() {
   }, [load]);
 
   useEffect(() => {
-    const supabase = createClient();
+    let supabase: ReturnType<typeof createClient> | null = null;
+    try {
+      supabase = createClient();
+    } catch {
+      return;
+    }
     const channel = supabase
       .channel("products-realtime")
       .on(
@@ -50,7 +63,11 @@ export default function ShopPage() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        supabase?.removeChannel(channel);
+      } catch {
+        /* ignore */
+      }
     };
   }, [load]);
 
@@ -59,7 +76,9 @@ export default function ShopPage() {
       if (filter !== "all" && p.category !== filter) return false;
       if (!search.trim()) return true;
       const q = search.toLowerCase();
-      return p.name.toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q);
+      const name = String(p.name ?? "");
+      const desc = String(p.description ?? "");
+      return name.toLowerCase().includes(q) || desc.toLowerCase().includes(q);
     });
   }, [products, filter, search]);
 

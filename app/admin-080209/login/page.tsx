@@ -1,7 +1,6 @@
 "use client";
 
 import { ADMIN_BASE_PATH } from "@/lib/constants";
-import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -10,8 +9,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || ADMIN_BASE_PATH;
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -20,10 +18,14 @@ function LoginForm() {
     setError(null);
     setLoading(true);
     try {
-      const supabase = createClient();
-      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-      if (err) {
-        setError(err.message);
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code.trim() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(data.error || "Invalid code");
         return;
       }
       router.push(redirect);
@@ -36,28 +38,19 @@ function LoginForm() {
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-4">
       <h1 className="font-display text-3xl text-honey-text">Admin sign in</h1>
-      <p className="mt-2 text-sm text-honey-muted">Supabase Auth (email / password).</p>
+      <p className="mt-2 text-sm text-honey-muted">Enter your access code.</p>
       <form onSubmit={submit} className="mt-8 space-y-4">
         <div>
-          <label className="text-xs font-semibold uppercase text-honey-muted">Email</label>
-          <input
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-honey-border bg-surface px-4 py-3 text-honey-text outline-none ring-primary/20 focus:ring-2 dark:bg-surface-dark"
-          />
-        </div>
-        <div>
-          <label className="text-xs font-semibold uppercase text-honey-muted">Password</label>
+          <label className="text-xs font-semibold uppercase text-honey-muted">Access code</label>
           <input
             type="password"
             required
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="off"
+            inputMode="numeric"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
             className="mt-1 w-full rounded-xl border border-honey-border bg-surface px-4 py-3 text-honey-text outline-none ring-primary/20 focus:ring-2 dark:bg-surface-dark"
+            placeholder="••••••"
           />
         </div>
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}

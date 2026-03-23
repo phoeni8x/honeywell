@@ -1,4 +1,4 @@
-/** Obscured admin UI URL; access still requires Supabase Auth. */
+/** Obscured admin UI URL; access requires access code + Supabase session (see /api/admin/login). */
 export const ADMIN_BASE_PATH = "/admin-080209";
 
 export const LS_USER_TYPE = "honeywell_user_type";

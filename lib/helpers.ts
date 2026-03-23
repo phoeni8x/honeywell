@@ -1,10 +1,16 @@
 import type { Product, UserType } from "@/types";
 
+function finitePrice(n: unknown): number {
+  const x = Number(n);
+  return Number.isFinite(x) ? x : 0;
+}
+
 export function formatPrice(n: number): string {
+  const v = finitePrice(n);
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
     currency: "GBP",
-  }).format(n);
+  }).format(v);
 }
 
 export function getPriceForUser(
@@ -12,9 +18,9 @@ export function getPriceForUser(
   userType: UserType | null
 ): { unit: number; isDiscounted: boolean } {
   if (userType === "team_member") {
-    return { unit: Number(product.price_team_member), isDiscounted: true };
+    return { unit: finitePrice(product.price_team_member), isDiscounted: true };
   }
-  return { unit: Number(product.price_regular), isDiscounted: false };
+  return { unit: finitePrice(product.price_regular), isDiscounted: false };
 }
 
 export function truncateToken(token: string, head = 6, tail = 4): string {

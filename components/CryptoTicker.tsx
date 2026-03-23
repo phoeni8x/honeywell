@@ -46,11 +46,12 @@ export function CryptoTicker({ embedded = false }: { embedded?: boolean }) {
   }, []);
 
   const line = rows
-    .map((r) =>
-      r.eur !== undefined && r.huf !== undefined
-        ? `${r.label}: €${r.eur.toLocaleString("en-GB", { maximumFractionDigits: 0 })} / ${Math.round(r.huf).toLocaleString("hu-HU")} HUF`
-        : null
-    )
+    .map((r) => {
+      const eur = Number(r.eur);
+      const huf = Number(r.huf);
+      if (!Number.isFinite(eur) || !Number.isFinite(huf)) return null;
+      return `${r.label}: €${eur.toLocaleString("en-GB", { maximumFractionDigits: 0 })} / ${Math.round(huf).toLocaleString("hu-HU")} HUF`;
+    })
     .filter(Boolean)
     .join("   ·   ");
 
