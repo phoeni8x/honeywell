@@ -5,8 +5,8 @@ import { LS_USER_TYPE } from "@/lib/constants";
 import { formatPrice, getPriceForUser } from "@/lib/helpers";
 import { createClient } from "@/lib/supabase/client";
 import type { Product, UserType } from "@/types";
+import { canDisplayProductImageUrl, ProductImage } from "@/components/ProductImage";
 import clsx from "clsx";
-import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -85,8 +85,8 @@ export default function ProductPage() {
       <div className="relative mx-auto w-full max-w-md">
         <div className="hex-border relative aspect-square w-full">
           <div className="relative h-full w-full overflow-hidden hex-clip bg-bg-secondary">
-            {product.image_url ? (
-              <Image src={product.image_url} alt={product.name} fill className="object-cover" priority />
+            {canDisplayProductImageUrl(product.image_url) ? (
+              <ProductImage src={product.image_url!} alt={product.name} fill className="object-cover" priority />
             ) : (
               <div className="flex h-full items-center justify-center font-display text-2xl text-primary/50">
                 {product.name}

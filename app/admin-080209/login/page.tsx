@@ -1,5 +1,6 @@
 "use client";
 
+import { ADMIN_BASE_PATH } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -8,7 +9,7 @@ import { Suspense, useState } from "react";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/admin";
+  const redirect = searchParams.get("redirect") || ADMIN_BASE_PATH;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);

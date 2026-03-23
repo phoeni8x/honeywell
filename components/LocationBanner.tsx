@@ -11,7 +11,11 @@ export function LocationBanner() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (sessionStorage.getItem(SESSION_KEY)) return;
+    try {
+      if (sessionStorage.getItem(SESSION_KEY)) return;
+    } catch {
+      return;
+    }
     setShow(true);
   }, []);
 
@@ -49,7 +53,11 @@ export function LocationBanner() {
           type="button"
           className="rounded-full border border-honey-border px-4 py-2 text-xs font-semibold text-honey-muted hover:bg-honey-border/30"
           onClick={() => {
-            sessionStorage.setItem(SESSION_KEY, "1");
+            try {
+              sessionStorage.setItem(SESSION_KEY, "1");
+            } catch {
+              /* ignore */
+            }
             setShow(false);
           }}
         >

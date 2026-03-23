@@ -5,7 +5,8 @@ const csp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
-  "connect-src 'self' https://*.supabase.co https://api.telegram.org https://api.coingecko.com https://api.etherscan.io https://blockstream.info",
+  // Apex + www: some mobile browsers treat fetch to the API as cross-origin if the page host differs from 'self' in edge cases.
+  "connect-src 'self' https://teamruby.net https://www.teamruby.net https://*.supabase.co https://api.telegram.org https://api.coingecko.com https://api.etherscan.io https://blockstream.info",
 ].join("; ");
 
 const nextConfig = {

@@ -14,6 +14,8 @@ export default function SplashPage() {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [botUrl, setBotUrl] = useState<string | null>(null);
 
   function continueGuest() {
     localStorage.setItem(LS_USER_TYPE, "guest");
@@ -22,6 +24,7 @@ export default function SplashPage() {
 
   async function verifyTeam() {
     setError(null);
+    setInfo(null);
     if (!username.trim()) {
       setError("Enter your Telegram username.");
       return;
@@ -33,21 +36,43 @@ export default function SplashPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ telegram_username: username }),
       });
-      const data = await res.json();
+      const raw = await res.text();
+      let data: {
+        error?: string;
+        message?: string;
+        verified?: boolean;
+        needsOpenBot?: boolean;
+        botUrl?: string;
+      } = {};
+      if (raw) {
+        try {
+          data = JSON.parse(raw) as typeof data;
+        } catch {
+          setError(`Verification failed (${res.status}). Try again.`);
+          return;
+        }
+      }
       if (!res.ok) {
-        setError(data.error || "Verification failed");
+        setError(data.error || data.message || `Verification failed (${res.status}). Try again.`);
         return;
       }
-      if (data.needsBotVerify) {
-        setError(data.message || "Please complete bot verification first.");
+      if (data.needsOpenBot && data.botUrl) {
+        setBotUrl(data.botUrl);
+        setInfo(data.message ?? "Open Telegram, then return here and tap Verify again.");
         return;
       }
       if (data.verified) {
+        setBotUrl(null);
+        setInfo(null);
         localStorage.setItem(LS_USER_TYPE, "team_member");
         setModalOpen(false);
         router.push("/home");
       } else {
-        setError("We couldn’t verify membership. You can continue as a guest.");
+        setBotUrl(null);
+        setError(
+          data.error ||
+            "We couldn’t verify membership (make sure you’re in the team channel). You can continue as a guest."
+        );
       }
     } catch {
       setError("Network error. Try again.");
@@ -73,7 +98,16 @@ export default function SplashPage() {
         </p>
 
         <div className="mt-12 flex w-full max-w-sm flex-col gap-4">
-          <button type="button" onClick={() => setModalOpen(true)} className="btn-primary w-full">
+          <button
+            type="button"
+            onClick={() => {
+              setModalOpen(true);
+              setError(null);
+              setInfo(null);
+              setBotUrl(null);
+            }}
+            className="btn-primary w-full"
+          >
             I&apos;m a Team Member
           </button>
           <button
@@ -97,16 +131,41 @@ export default function SplashPage() {
           <div className="card-hive relative w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl dark:bg-surface-dark">
             <h2 className="font-display text-2xl text-honey-text">Team verification</h2>
             <p className="mt-2 text-sm text-honey-muted">
-              Enter your Telegram username (after sending <code className="rounded bg-honey-border/50 px-1">/verify</code>{" "}
-              to our bot). We&apos;ll check channel membership.
+              Enter your <strong className="font-semibold text-honey-text">public</strong> Telegram username (Settings
+              → Username). Tap <strong className="text-honey-text">Verify</strong>: if needed, we&apos;ll give you a
+              Telegram link so our bot can link your account in the background — then tap <strong className="text-honey-text">Verify</strong>{" "}
+              again to finish. We&apos;ll check if you belong to our beehive zzzzz.
+            </p>
+            <p className="mt-2 text-xs text-honey-muted">
+              Example: if Telegram shows <span className="font-medium text-honey-text">@ruby</span>, type{" "}
+              <code className="rounded bg-honey-border/50 px-1">ruby</code> or{" "}
+              <code className="rounded bg-honey-border/50 px-1">@ruby</code> — letters only, no spaces.
             </p>
             <input
               type="text"
-              placeholder="@username or username"
+              placeholder="e.g. ruby or @ruby"
+              autoComplete="username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="mt-4 w-full rounded border-2 border-honey-border bg-bg px-4 py-3 text-honey-text outline-none ring-primary/20 focus:ring-2"
+              onChange={(e) => {
+                setUsername(e.target.value);
+                setBotUrl(null);
+                setInfo(null);
+              }}
+              className="mt-3 w-full rounded border-2 border-honey-border bg-bg px-4 py-3 text-honey-text outline-none ring-primary/20 focus:ring-2"
             />
+            {info && (
+              <p className="mt-2 text-sm text-amber-800 dark:text-amber-200">{info}</p>
+            )}
+            {botUrl && (
+              <a
+                href={botUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 flex w-full items-center justify-center rounded-xl border-2 border-primary bg-primary/10 py-3 text-sm font-semibold text-primary transition hover:bg-primary/20"
+              >
+                Open Telegram (link your account)
+              </a>
+            )}
             {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
             <div className="mt-6 flex flex-col gap-2 sm:flex-row">
               <button

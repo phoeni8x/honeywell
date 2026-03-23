@@ -18,19 +18,37 @@ type LimitResult = { success: boolean; remaining?: number };
 
 type Limiter = { limit: (id: string) => Promise<LimitResult> };
 
+function noopLimiter(requests: number): Limiter {
+  return {
+    limit: async () => ({ success: true, remaining: requests }),
+  };
+}
+
 function make(prefix: string, requests: number, window: `${number} s` | `${number} m`): Limiter {
   if (!redis) {
-    return {
-      limit: async () => ({ success: true, remaining: requests }),
-    };
+    return noopLimiter(requests);
   }
-  const rl = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(requests, window),
-    prefix: `hw:${prefix}`,
-  });
+  let rl: Ratelimit;
+  try {
+    rl = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(requests, window),
+      prefix: `hw:${prefix}`,
+    });
+  } catch (e) {
+    console.error(`[ratelimit:${prefix}] init failed`, e);
+    return noopLimiter(requests);
+  }
   return {
-    limit: (id: string) => rl.limit(id),
+    limit: async (id: string) => {
+      try {
+        return await rl.limit(id);
+      } catch (e) {
+        // Redis/network errors must not take down API routes (e.g. bad Upstash env on Vercel).
+        console.error(`[ratelimit:${prefix}]`, e);
+        return { success: true, remaining: requests };
+      }
+    },
   };
 }
 

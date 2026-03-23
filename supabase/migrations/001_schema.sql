@@ -49,7 +49,7 @@ create table if not exists public.settings (
   value text not null
 );
 
--- Telegram: map username -> user_id after user sends /verify to bot
+-- Telegram: optional username -> user_id (legacy; site now uses getChat + getChatMember)
 create table if not exists public.telegram_verifications (
   telegram_username text primary key,
   telegram_user_id bigint not null,

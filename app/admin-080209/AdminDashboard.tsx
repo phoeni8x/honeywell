@@ -1,5 +1,6 @@
 "use client";
 
+import { ADMIN_BASE_PATH } from "@/lib/constants";
 import { formatPrice, truncateToken } from "@/lib/helpers";
 import { createClient } from "@/lib/supabase/client";
 import type { Announcement, Order, Product } from "@/types";
@@ -134,7 +135,7 @@ export default function AdminDashboard() {
 
   async function signOut() {
     await supabase.auth.signOut();
-    router.push("/admin/login");
+    router.push(`${ADMIN_BASE_PATH}/login`);
     router.refresh();
   }
 

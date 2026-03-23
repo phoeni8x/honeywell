@@ -5,9 +5,9 @@ import type { OrderWithProduct } from "@/types";
 import clsx from "clsx";
 import { LifeBuoy, MapPin, Navigation, Truck } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { ConfettiBurst } from "./ConfettiBurst";
+import { ProductImage } from "./ProductImage";
 import { PickupPhotoModal } from "./PickupPhotoModal";
 
 interface OrderCardProps {
@@ -79,7 +79,7 @@ export function OrderCard({
         <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start">
           <div className="relative h-28 w-full shrink-0 overflow-hidden rounded-xl bg-primary/5 sm:h-24 sm:w-32">
             {product?.image_url ? (
-              <Image src={product.image_url} alt={product.name} fill className="object-cover" />
+              <ProductImage src={product.image_url} alt={product.name} fill className="object-cover" />
             ) : (
               <div className="flex h-full items-center justify-center text-xs text-honey-muted">No image</div>
             )}

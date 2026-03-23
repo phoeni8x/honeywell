@@ -3,8 +3,8 @@
 import { formatPrice, getPriceForUser } from "@/lib/helpers";
 import type { Product, UserType } from "@/types";
 import clsx from "clsx";
-import Image from "next/image";
 import Link from "next/link";
+import { canDisplayProductImageUrl, ProductImage } from "./ProductImage";
 
 interface ProductCardProps {
   product: Product;
@@ -27,9 +27,9 @@ export function ProductCard({ product, userType }: ProductCardProps) {
       <Link href={out ? "#" : `/product/${product.id}`} className={clsx("relative mx-auto mt-4 block w-[88%]", out && "pointer-events-none")}>
         <div className="hex-border relative aspect-square w-full max-w-[220px] mx-auto">
           <div className="relative h-full w-full overflow-hidden hex-clip bg-bg-secondary">
-            {product.image_url ? (
-              <Image
-                src={product.image_url}
+            {canDisplayProductImageUrl(product.image_url) ? (
+              <ProductImage
+                src={product.image_url!}
                 alt={product.name}
                 fill
                 className="object-cover"

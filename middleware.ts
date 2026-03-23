@@ -1,5 +1,8 @@
+import { ADMIN_BASE_PATH } from "@/lib/constants";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+
+const ADMIN_LOGIN_PATH = `${ADMIN_BASE_PATH}/login`;
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -35,18 +38,18 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  if (path.startsWith("/admin") && !path.startsWith("/admin/login")) {
+  if (path.startsWith(ADMIN_BASE_PATH) && !path.startsWith(ADMIN_LOGIN_PATH)) {
     if (!user) {
       const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/admin/login";
+      redirectUrl.pathname = ADMIN_LOGIN_PATH;
       redirectUrl.searchParams.set("redirect", path);
       return NextResponse.redirect(redirectUrl);
     }
   }
 
-  if (path === "/admin/login" && user) {
+  if (path === ADMIN_LOGIN_PATH && user) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/admin";
+    redirectUrl.pathname = ADMIN_BASE_PATH;
     redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
   }
@@ -55,5 +58,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*"],
+  // Must match ADMIN_BASE_PATH in @/lib/constants
+  matcher: ["/admin-080209", "/admin-080209/:path*"],
 };

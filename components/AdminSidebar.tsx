@@ -13,24 +13,25 @@ import {
   Ticket,
   Truck,
 } from "lucide-react";
+import { ADMIN_BASE_PATH } from "@/lib/constants";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 const tabs = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard, href: "/admin?tab=overview" },
-  { id: "products", label: "Products", icon: Package, href: "/admin?tab=products" },
-  { id: "orders", label: "Orders", icon: ShoppingCart, href: "/admin?tab=orders" },
-  { id: "locations", label: "Locations", icon: MapPin, href: "/admin?tab=locations" },
-  { id: "tickets", label: "Stock", icon: Ticket, href: "/admin?tab=tickets" },
-  { id: "support", label: "Support", icon: Headphones, href: "/admin?tab=support" },
-  { id: "announcements", label: "Announcements", icon: Megaphone, href: "/admin?tab=announcements" },
-  { id: "settings", label: "Settings", icon: Settings, href: "/admin?tab=settings" },
+  { id: "overview", label: "Overview", icon: LayoutDashboard, href: `${ADMIN_BASE_PATH}?tab=overview` },
+  { id: "products", label: "Products", icon: Package, href: `${ADMIN_BASE_PATH}?tab=products` },
+  { id: "orders", label: "Orders", icon: ShoppingCart, href: `${ADMIN_BASE_PATH}?tab=orders` },
+  { id: "locations", label: "Locations", icon: MapPin, href: `${ADMIN_BASE_PATH}?tab=locations` },
+  { id: "tickets", label: "Stock", icon: Ticket, href: `${ADMIN_BASE_PATH}?tab=tickets` },
+  { id: "support", label: "Support", icon: Headphones, href: `${ADMIN_BASE_PATH}?tab=support` },
+  { id: "announcements", label: "Announcements", icon: Megaphone, href: `${ADMIN_BASE_PATH}?tab=announcements` },
+  { id: "settings", label: "Settings", icon: Settings, href: `${ADMIN_BASE_PATH}?tab=settings` },
 ] as const;
 
 const part4 = [
-  { label: "Dead drops", href: "/admin/dead-drops", icon: Skull },
-  { label: "Deliveries", href: "/admin/deliveries", icon: Truck },
-  { label: "Pickup points", href: "/admin/pickup-points", icon: MapPin },
+  { label: "Dead drops", href: `${ADMIN_BASE_PATH}/dead-drops`, icon: Skull },
+  { label: "Deliveries", href: `${ADMIN_BASE_PATH}/deliveries`, icon: Truck },
+  { label: "Pickup points", href: `${ADMIN_BASE_PATH}/pickup-points`, icon: MapPin },
 ] as const;
 
 export function AdminSidebar() {
@@ -42,7 +43,7 @@ export function AdminSidebar() {
     <aside className="flex w-full flex-col gap-1 border-b border-honey-border bg-surface p-4 dark:border-honey-border dark:bg-surface-dark md:w-56 md:border-b-0 md:border-r">
       <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-honey-muted">Honey Well</p>
       {tabs.map(({ id, label, icon: Icon, href }) => {
-        const active = pathname === "/admin" && tab === id;
+        const active = pathname === ADMIN_BASE_PATH && tab === id;
         return (
           <Link
             key={id}
