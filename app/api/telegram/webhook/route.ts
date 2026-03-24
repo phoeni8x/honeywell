@@ -1,5 +1,10 @@
 import { createServiceClient } from "@/lib/supabase/admin";
-import { getChannelMembership } from "@/lib/telegram";
+import {
+  banChatMemberApi,
+  getChannelMembership,
+  getTelegramUserIdByUsername,
+  unbanChatMemberApi,
+} from "@/lib/telegram";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -20,16 +25,38 @@ type TelegramUpdate = { message?: TgMessage };
 const USERNAME_REQUIRED_MESSAGE =
   "Please set a public Telegram username first (Settings → Telegram → Username). Honey Well needs it before we can verify you or link your account — then try again.";
 
-/** Shown once, the first time someone uses /start or /verify and we have no prior record for their Telegram user id. */
 const FIRST_CONTACT_COMMUNITY_MESSAGE =
   "Welcome to Honey Well. Sending /start, tapping Start, or sending /verify registers you with our community — we save your Telegram so we can verify team membership and send updates from Honey Well.";
 
+const ADMIN_RULES_TEXT = `Honey Well — Admin commands (your Telegram user id must match ADMIN_TELEGRAM_USER_ID)
+
+/rules — This list.
+
+/broadcast — Mass message to everyone who opted in:
+• Text: /broadcast then your message (same line or multiple lines after a space).
+• Photo: send an image with a caption starting with /broadcast (optional text after it).
+
+/broadcast_list — See who can receive broadcasts (opted in vs out) from saved customers.
+
+/kick <user id or @username> — Remove that user from the team channel (ban). The bot must be an admin in the channel. Example: /kick 123456789 or /kick @name
+
+/unban <user id or @username> — Lift the ban so they can rejoin with the channel invite link.
+
+———
+Customers (not admin-only) in this chat:
+/broadcast_off — Stop receiving broadcast announcements.
+/broadcast_on — Receive broadcasts again (default).`;
+
 async function sendBotMessage(botToken: string, chatId: number, text: string) {
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  });
+  const max = 4096;
+  for (let i = 0; i < text.length; i += max) {
+    const chunk = text.slice(i, i + max);
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: chunk }),
+    });
+  }
 }
 
 function sleep(ms: number) {
@@ -42,10 +69,16 @@ function isAdminTelegram(userId: number): boolean {
   return String(userId) === a;
 }
 
-/** Broadcast: text /broadcast … or photo whose caption starts with /broadcast */
-function isBroadcastIntent(msg: TgMessage): boolean {
+/**
+ * Mass broadcast only — not /broadcast_list or /broadcast_off /broadcast_on.
+ */
+function isMassBroadcastIntent(msg: TgMessage): boolean {
   const t = msg.text?.trim() ?? "";
-  if (t && /^\/broadcast(?:@\w+)?/i.test(t)) return true;
+  if (t) {
+    if (/^\/broadcast_list$/i.test(t)) return false;
+    if (/^\/broadcast_(on|off)$/i.test(t)) return false;
+    if (/^\/broadcast(?:@\w+)?(?:\s|$)/i.test(t)) return true;
+  }
   const c = msg.caption?.trim() ?? "";
   if (msg.photo?.length && c && /^\/broadcast(?:@\w+)?/i.test(c)) return true;
   return false;
@@ -55,15 +88,44 @@ function stripBroadcastPrefix(s: string): string {
   return s.replace(/^\/broadcast(?:@\w+)?\s*/i, "").trim();
 }
 
+async function resolveTargetUserId(
+  botToken: string,
+  supabase: ReturnType<typeof createServiceClient>,
+  raw: string
+): Promise<{ id: number } | { error: string }> {
+  const r = raw.trim();
+  if (/^\d+$/.test(r)) {
+    const n = Number(r);
+    if (Number.isFinite(n) && n > 0) return { id: n };
+  }
+  const uname = r.replace(/^@/, "").toLowerCase();
+  if (!uname) return { error: "Missing user id or @username." };
+  const { data } = await supabase
+    .from("telegram_verifications")
+    .select("telegram_user_id")
+    .eq("telegram_username", uname)
+    .maybeSingle();
+  if (data?.telegram_user_id != null) return { id: Number(data.telegram_user_id) };
+  const tgId = await getTelegramUserIdByUsername(botToken, uname);
+  if (tgId != null) return { id: tgId };
+  return {
+    error: `Could not resolve @${uname}. Try their numeric Telegram user id, or they must have messaged this bot at least once.`,
+  };
+}
+
 async function handleBroadcast(
   botToken: string,
   adminChatId: number,
   msg: TgMessage,
   supabase: ReturnType<typeof createServiceClient>
 ) {
-  const { data: rows, error } = await supabase.from("telegram_verifications").select("telegram_user_id");
+  const { data: rows, error } = await supabase
+    .from("telegram_verifications")
+    .select("telegram_user_id")
+    .eq("broadcast_opt_in", true);
+
   if (error) {
-    await sendBotMessage(botToken, adminChatId, "Could not load recipients. Try again.");
+    await sendBotMessage(botToken, adminChatId, "Could not load recipients. Run DB migration 006 if needed, or try again.");
     return;
   }
 
@@ -77,7 +139,7 @@ async function handleBroadcast(
     await sendBotMessage(
       botToken,
       adminChatId,
-      "No saved customers yet. Users need to message the bot with /start (with a username) so we can store their Telegram ID."
+      "No recipients opted in. Users must use /start (with a username) and not use /broadcast_off."
     );
     return;
   }
@@ -152,10 +214,100 @@ async function handleBroadcast(
   );
 }
 
-/**
- * Plain `/start` or `/verify` (same as website “verify” flow for registration), not the deep link `hw_<token>`.
- * Also `start` or `verify` without slash.
- */
+async function handleBroadcastList(
+  botToken: string,
+  adminChatId: number,
+  supabase: ReturnType<typeof createServiceClient>
+) {
+  const { data: rows, error } = await supabase
+    .from("telegram_verifications")
+    .select("telegram_username, telegram_user_id, broadcast_opt_in")
+    .order("telegram_username");
+
+  if (error) {
+    await sendBotMessage(botToken, adminChatId, "Could not load list. Run DB migration 006 if needed.");
+    return;
+  }
+
+  const list = rows ?? [];
+  let inC = 0;
+  let outC = 0;
+  const lines: string[] = ["Broadcast preferences (saved customers):\n"];
+  for (const r of list.slice(0, 80)) {
+    const on = r.broadcast_opt_in !== false;
+    if (on) inC++;
+    else outC++;
+    lines.push(`@${r.telegram_username} — ${on ? "receives broadcasts" : "opted out"} (id ${r.telegram_user_id})`);
+  }
+  if (list.length > 80) lines.push(`\n… and ${list.length - 80} more (trimmed for message size).`);
+  lines.push(`\nTotal: ${list.length} — ${inC} opted in, ${outC} opted out.`);
+  await sendBotMessage(botToken, adminChatId, lines.join("\n"));
+}
+
+async function handleAdminKick(
+  botToken: string,
+  adminChatId: number,
+  channelId: string | undefined,
+  text: string,
+  supabase: ReturnType<typeof createServiceClient>
+) {
+  if (!channelId) {
+    await sendBotMessage(botToken, adminChatId, "TELEGRAM_CHANNEL_ID is not set on the server.");
+    return;
+  }
+  const m = /^\/kick\s+(.+)$/i.exec(text.trim());
+  const raw = m?.[1]?.trim() ?? "";
+  if (!raw) {
+    await sendBotMessage(botToken, adminChatId, "Usage: /kick <user id or @username>");
+    return;
+  }
+  const resolved = await resolveTargetUserId(botToken, supabase, raw);
+  if ("error" in resolved) {
+    await sendBotMessage(botToken, adminChatId, resolved.error);
+    return;
+  }
+  const r = await banChatMemberApi(botToken, channelId, resolved.id);
+  if (r.ok) {
+    await sendBotMessage(botToken, adminChatId, `Removed user ${resolved.id} from the channel (ban). They can be allowed back with /unban.`);
+  } else {
+    await sendBotMessage(botToken, adminChatId, `Telegram: ${r.description ?? "ban failed"}`);
+  }
+}
+
+async function handleAdminUnban(
+  botToken: string,
+  adminChatId: number,
+  channelId: string | undefined,
+  text: string,
+  supabase: ReturnType<typeof createServiceClient>
+) {
+  if (!channelId) {
+    await sendBotMessage(botToken, adminChatId, "TELEGRAM_CHANNEL_ID is not set on the server.");
+    return;
+  }
+  const m = /^\/unban\s+(.+)$/i.exec(text.trim());
+  const raw = m?.[1]?.trim() ?? "";
+  if (!raw) {
+    await sendBotMessage(botToken, adminChatId, "Usage: /unban <user id or @username>");
+    return;
+  }
+  const resolved = await resolveTargetUserId(botToken, supabase, raw);
+  if ("error" in resolved) {
+    await sendBotMessage(botToken, adminChatId, resolved.error);
+    return;
+  }
+  const r = await unbanChatMemberApi(botToken, channelId, resolved.id);
+  if (r.ok) {
+    await sendBotMessage(
+      botToken,
+      adminChatId,
+      `Unbanned user ${resolved.id}. They can rejoin the channel using the invite link.`
+    );
+  } else {
+    await sendBotMessage(botToken, adminChatId, `Telegram: ${r.description ?? "unban failed"}`);
+  }
+}
+
 function isPlainStartCommand(text: string): boolean {
   const t = text.trim();
   if (/^start$/i.test(t) || /^verify$/i.test(t)) return true;
@@ -227,17 +379,80 @@ export async function POST(request: Request) {
 
   const chatId = msg.chat.id;
   const text = msg.text?.trim() ?? "";
+  const channelId = process.env.TELEGRAM_CHANNEL_ID;
 
   const supabase = createServiceClient();
 
-  if (isAdminTelegram(from.id) && isBroadcastIntent(msg)) {
-    await handleBroadcast(botToken, chatId, msg, supabase);
-    return NextResponse.json({ ok: true });
+  if (isAdminTelegram(from.id)) {
+    const t = text.trim();
+    if (/^\/rules$/i.test(t)) {
+      await sendBotMessage(botToken, chatId, ADMIN_RULES_TEXT);
+      return NextResponse.json({ ok: true });
+    }
+    if (/^\/broadcast_list$/i.test(t)) {
+      await handleBroadcastList(botToken, chatId, supabase);
+      return NextResponse.json({ ok: true });
+    }
+    if (/^\/kick\s+/i.test(t)) {
+      await handleAdminKick(botToken, chatId, channelId, t, supabase);
+      return NextResponse.json({ ok: true });
+    }
+    if (/^\/unban\s+/i.test(t)) {
+      await handleAdminUnban(botToken, chatId, channelId, t, supabase);
+      return NextResponse.json({ ok: true });
+    }
+    if (isMassBroadcastIntent(msg)) {
+      await handleBroadcast(botToken, chatId, msg, supabase);
+      return NextResponse.json({ ok: true });
+    }
   }
 
   const hasUsername = Boolean(from.username?.trim());
   if (!hasUsername) {
     await sendBotMessage(botToken, chatId, USERNAME_REQUIRED_MESSAGE);
+    return NextResponse.json({ ok: true });
+  }
+
+  const tUser = text.trim();
+  if (
+    isMassBroadcastIntent(msg) ||
+    /^\/broadcast_list$/i.test(tUser) ||
+    /^\/rules$/i.test(tUser) ||
+    /^\/kick\s/i.test(tUser) ||
+    /^\/unban\s/i.test(tUser)
+  ) {
+    await sendBotMessage(botToken, chatId, "That command is for Honey Well admins only.");
+    return NextResponse.json({ ok: true });
+  }
+
+  if (/^\/broadcast_off$/i.test(tUser)) {
+    const { data, error } = await supabase
+      .from("telegram_verifications")
+      .update({ broadcast_opt_in: false })
+      .eq("telegram_user_id", from.id)
+      .select("telegram_user_id");
+    if (error || !data?.length) {
+      await sendBotMessage(botToken, chatId, "You’re not registered yet. Send /start first.");
+    } else {
+      await sendBotMessage(
+        botToken,
+        chatId,
+        "You won’t receive broadcast announcements. Use /broadcast_on to turn them back on."
+      );
+    }
+    return NextResponse.json({ ok: true });
+  }
+  if (/^\/broadcast_on$/i.test(tUser)) {
+    const { data, error } = await supabase
+      .from("telegram_verifications")
+      .update({ broadcast_opt_in: true })
+      .eq("telegram_user_id", from.id)
+      .select("telegram_user_id");
+    if (error || !data?.length) {
+      await sendBotMessage(botToken, chatId, "You’re not registered yet. Send /start first.");
+    } else {
+      await sendBotMessage(botToken, chatId, "You’ll receive broadcast announcements from Honey Well again.");
+    }
     return NextResponse.json({ ok: true });
   }
 
@@ -287,12 +502,12 @@ export async function POST(request: Request) {
         telegram_username: tgUser,
         telegram_user_id: from.id,
         verified_at: new Date().toISOString(),
+        broadcast_opt_in: true,
       },
       { onConflict: "telegram_username" }
     );
     await supabase.from("telegram_verify_tokens").delete().eq("token", token);
 
-    const channelId = process.env.TELEGRAM_CHANNEL_ID;
     await sendStartMembershipReply(
       botToken,
       channelId,
@@ -304,7 +519,6 @@ export async function POST(request: Request) {
   }
 
   if (isPlainStartCommand(text)) {
-    const channelId = process.env.TELEGRAM_CHANNEL_ID;
     const { data: priorRow } = await supabase
       .from("telegram_verifications")
       .select("telegram_user_id")
@@ -320,6 +534,7 @@ export async function POST(request: Request) {
         telegram_username: username,
         telegram_user_id: from.id,
         verified_at: new Date().toISOString(),
+        broadcast_opt_in: true,
       },
       { onConflict: "telegram_username" }
     );
