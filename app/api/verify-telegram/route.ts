@@ -1,6 +1,7 @@
 import { getClientIp } from "@/lib/client-ip";
 import { ratelimitTelegram } from "@/lib/ratelimit";
 import { createServiceClient } from "@/lib/supabase/admin";
+import { getChannelMembership } from "@/lib/telegram";
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 
@@ -28,15 +29,6 @@ async function telegramJson<T>(url: string): Promise<TgOk<T> | { parseError: tru
     return { parseError: true };
   }
   return data as TgOk<T>;
-}
-
-function memberStatusOk(status: string | undefined): boolean {
-  return (
-    status === "member" ||
-    status === "administrator" ||
-    status === "creator" ||
-    status === "restricted"
-  );
 }
 
 /**
@@ -140,28 +132,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ verified: true });
     }
 
-    const memberUrl = new URL(`https://api.telegram.org/bot${botToken}/getChatMember`);
-    memberUrl.searchParams.set("chat_id", channelId);
-    memberUrl.searchParams.set("user_id", userIdStr);
-
-    const memberResRaw = await telegramJson<{ status?: string }>(memberUrl.toString());
-    if (isParseError(memberResRaw)) {
-      return NextResponse.json(
-        { verified: false, error: "Telegram returned an unexpected response. Try again." },
-        { status: 502 }
-      );
-    }
-    const memberRes = memberResRaw;
-
+    const memberRes = await getChannelMembership(botToken, channelId, Number(telegramUserId));
     if (!memberRes.ok) {
       return NextResponse.json({
         verified: false,
-        error: memberRes.description || "Telegram API error",
+        error: memberRes.error,
       });
     }
 
-    const status = memberRes.result?.status;
-    return NextResponse.json({ verified: memberStatusOk(status) });
+    return NextResponse.json({ verified: memberRes.member });
   } catch (e) {
     console.error("[verify-telegram]", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
