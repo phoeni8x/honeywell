@@ -1,0 +1,13 @@
+---
+description: Deploy and verify Vercel via CLI — do not only instruct the user
+alwaysApply: true
+---
+
+# Vercel — agent must execute
+
+When production needs to reflect code changes or the user asks for deploy verification:
+
+1. **Use the Vercel CLI** from the repo root: `npx vercel deploy --prod --yes` (or `vercel deploy --prod --yes` if installed globally). Prefer **production** deploys for changes that should go live.
+2. **Confirm** the deployment: capture **READY** state, **inspector** URL, and production URL from the command output. This project’s production alias includes **https://www.teamruby.net** when the deploy reports it.
+3. **Do not** only tell the user to “open Vercel and deploy” if CLI deploy succeeds from this environment.
+4. If CLI is not authenticated or the command fails, report the error and the minimal manual step (e.g. link project, set token), then retry if the user fixes access.

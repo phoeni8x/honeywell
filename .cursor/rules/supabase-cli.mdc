@@ -1,0 +1,14 @@
+---
+description: Run Supabase migrations and DB tasks via CLI when linked — do not only instruct the user
+alwaysApply: true
+---
+
+# Supabase — agent must execute
+
+When this project needs **anything** on Supabase (apply migrations, `db push`, inspect migration list, check link status, or other CLI-supported work):
+
+1. **Use the Supabase CLI** from the repo root (`/Users/mokoro/HoneyWell` or workspace `HoneyWell`): `supabase migration list --linked`, `supabase db push --yes`, `supabase projects list`, etc.
+2. **Do not** end with “run this in the SQL editor” **unless** the CLI is missing, login failed, or the operation is unsupported by CLI — in those cases say what blocked automation and give the exact SQL or dashboard steps.
+3. If the project is **linked** (`supabase projects list` shows ● on this project), **perform** `supabase db push` after adding or fixing migrations.
+4. **Migration filenames** must use a **unique numeric prefix** per file (e.g. `006_…`, `007_…`). Two files like `005_a.sql` and `005_b.sql` both map to version **005** and will fail; merge or renumber.
+5. Remote migration runner may reject **multiple top-level SQL statements** in one file — wrap related DDL in a single `DO $migration$ … END;` block or split into separate versioned files.

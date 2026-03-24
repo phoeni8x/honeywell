@@ -10,8 +10,8 @@ Whenever you finish a meaningful change in this repo (not tiny one-line experime
 1. **Commit** with a clear message describing what changed and why.
 2. **Push** to **`main`** on GitHub (`origin/main`).
 3. **Deploy / verify Vercel**
-   - If the project is linked: a push to `main` usually triggers a production build; **also** run `vercel deploy --prod` from the repo root when you need to confirm the exact revision is live, or to report status.
-   - After deploy, state that **Vercel production is updated**: include **READY** (or equivalent), deployment URL or inspector link, and that **www.teamruby.net** (or the project production alias) points at it when applicable.
+   - Run `npx vercel deploy --prod --yes` from the repo root when production must match the latest commit (see **vercel-cli** rule).
+   - After deploy, state that **Vercel production is updated**: include **READY**, inspector URL, production deployment URL, and **www.teamruby.net** when the CLI reports that alias.
 
 Do **not** end the task with only “you can push” — run `git` and deployment checks yourself unless the user explicitly asked for instructions only.
 
