@@ -4,11 +4,15 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+type TgPhotoSize = { file_id: string; file_unique_id: string; width: number; height: number };
+
 type TgMessage = {
   message_id: number;
   from?: { id: number; username?: string };
   chat?: { id: number; type: string };
   text?: string;
+  caption?: string;
+  photo?: TgPhotoSize[];
 };
 
 type TelegramUpdate = { message?: TgMessage };
@@ -22,6 +26,126 @@ async function sendBotMessage(botToken: string, chatId: number, text: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, text }),
   });
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isAdminTelegram(userId: number): boolean {
+  const a = process.env.ADMIN_TELEGRAM_USER_ID?.trim();
+  if (!a) return false;
+  return String(userId) === a;
+}
+
+/** Broadcast: text /broadcast … or photo whose caption starts with /broadcast */
+function isBroadcastIntent(msg: TgMessage): boolean {
+  const t = msg.text?.trim() ?? "";
+  if (t && /^\/broadcast(?:@\w+)?/i.test(t)) return true;
+  const c = msg.caption?.trim() ?? "";
+  if (msg.photo?.length && c && /^\/broadcast(?:@\w+)?/i.test(c)) return true;
+  return false;
+}
+
+function stripBroadcastPrefix(s: string): string {
+  return s.replace(/^\/broadcast(?:@\w+)?\s*/i, "").trim();
+}
+
+async function handleBroadcast(
+  botToken: string,
+  adminChatId: number,
+  msg: TgMessage,
+  supabase: ReturnType<typeof createServiceClient>
+) {
+  const { data: rows, error } = await supabase.from("telegram_verifications").select("telegram_user_id");
+  if (error) {
+    await sendBotMessage(botToken, adminChatId, "Could not load recipients. Try again.");
+    return;
+  }
+
+  const adminId = Number(process.env.ADMIN_TELEGRAM_USER_ID);
+  const rawIds = (rows ?? [])
+    .map((r) => Number(r.telegram_user_id))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const ids = Array.from(new Set(rawIds)).filter((id) => id !== adminId);
+
+  if (ids.length === 0) {
+    await sendBotMessage(
+      botToken,
+      adminChatId,
+      "No saved customers yet. Users need to message the bot with /start (with a username) so we can store their Telegram ID."
+    );
+    return;
+  }
+
+  const hasPhoto = Boolean(msg.photo?.length);
+  const captionRaw = msg.caption?.trim() ?? "";
+
+  if (hasPhoto) {
+    if (!/^\/broadcast(?:@\w+)?/i.test(captionRaw)) {
+      await sendBotMessage(
+        botToken,
+        adminChatId,
+        "For photos: add a caption that starts with /broadcast (you can add text after it for the announcement)."
+      );
+      return;
+    }
+    const outCaption = stripBroadcastPrefix(captionRaw);
+    const fileId = msg.photo![msg.photo!.length - 1]!.file_id;
+    let ok = 0;
+    let fail = 0;
+    for (const uid of ids) {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: uid,
+          photo: fileId,
+          ...(outCaption ? { caption: outCaption } : {}),
+        }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      if (j.ok) ok++;
+      else fail++;
+      await sleep(40);
+    }
+    await sendBotMessage(
+      botToken,
+      adminChatId,
+      `Photo broadcast: ${ok} delivered${fail ? `, ${fail} failed (blocked bot or deleted chat).` : "."}`
+    );
+    return;
+  }
+
+  const textRaw = msg.text?.trim() ?? "";
+  const announcement = stripBroadcastPrefix(textRaw);
+  if (!announcement) {
+    await sendBotMessage(
+      botToken,
+      adminChatId,
+      "Usage:\n/broadcast Your message here\n\nOr send a photo with a caption starting with /broadcast (optional text after it)."
+    );
+    return;
+  }
+
+  let ok = 0;
+  let fail = 0;
+  for (const uid of ids) {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: uid, text: announcement }),
+    });
+    const j = (await res.json().catch(() => ({}))) as { ok?: boolean };
+    if (j.ok) ok++;
+    else fail++;
+    await sleep(40);
+  }
+  await sendBotMessage(
+    botToken,
+    adminChatId,
+    `Broadcast sent: ${ok} delivered${fail ? `, ${fail} failed.` : "."}`
+  );
 }
 
 /** `/start` or `start` (not the website deep link `hw_<token>`). */
@@ -96,6 +220,13 @@ export async function POST(request: Request) {
   const chatId = msg.chat.id;
   const text = msg.text?.trim() ?? "";
 
+  const supabase = createServiceClient();
+
+  if (isAdminTelegram(from.id) && isBroadcastIntent(msg)) {
+    await handleBroadcast(botToken, chatId, msg, supabase);
+    return NextResponse.json({ ok: true });
+  }
+
   const hasUsername = Boolean(from.username?.trim());
   if (!hasUsername) {
     await sendBotMessage(botToken, chatId, USERNAME_REQUIRED_MESSAGE);
@@ -107,7 +238,6 @@ export async function POST(request: Request) {
     const token = startMatch[1];
 
     const tgUser = from.username!.trim().replace(/^@/, "").toLowerCase();
-    const supabase = createServiceClient();
 
     const { data: row, error: fetchErr } = await supabase
       .from("telegram_verify_tokens")
@@ -169,7 +299,6 @@ export async function POST(request: Request) {
     const channelId = process.env.TELEGRAM_CHANNEL_ID;
     await sendStartMembershipReply(botToken, channelId, chatId, from.id);
     const username = from.username!.trim().replace(/^@/, "").toLowerCase();
-    const supabase = createServiceClient();
     await supabase.from("telegram_verifications").upsert(
       {
         telegram_username: username,
@@ -182,7 +311,6 @@ export async function POST(request: Request) {
   }
 
   const username = from.username!.trim().replace(/^@/, "").toLowerCase();
-  const supabase = createServiceClient();
   await supabase.from("telegram_verifications").upsert(
     {
       telegram_username: username,
