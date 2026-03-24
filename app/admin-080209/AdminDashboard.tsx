@@ -7,6 +7,7 @@ import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
 import { parseShopOpen } from "@/lib/shop-open";
 import { formatPrice, truncateToken } from "@/lib/helpers";
+import { PendingApprovalQueue } from "@/components/admin/PendingApprovalQueue";
 import { createClient } from "@/lib/supabase/client";
 import type { Announcement, Order, Product } from "@/types";
 import clsx from "clsx";
@@ -484,20 +485,41 @@ function OrdersSection({
   }
 
   async function cancelOrder(order: Order & { product?: Product | null }) {
-    if (!confirm("Cancel this order and restore stock?")) return;
-    const { error: rpcErr } = await supabase.rpc("restore_product_stock", {
-      p_product_id: order.product_id,
-      p_quantity: order.quantity,
-    });
-    if (rpcErr) {
-      console.error("[cancelOrder]", rpcErr);
-      alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
-      return;
+    const defer = Boolean(order.defer_stock_until_approval);
+    const skipRestore = order.status === "payment_pending" && defer;
+    const msg = skipRestore
+      ? "Cancel this order? (No stock was deducted yet.)"
+      : "Cancel this order and restore stock?";
+    if (!confirm(msg)) return;
+    if (!skipRestore) {
+      const { error: rpcErr } = await supabase.rpc("restore_product_stock", {
+        p_product_id: order.product_id,
+        p_quantity: order.quantity,
+      });
+      if (rpcErr) {
+        console.error("[cancelOrder]", rpcErr);
+        alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+        return;
+      }
     }
     await supabase
       .from("orders")
       .update({ status: "cancelled", updated_at: new Date().toISOString() })
       .eq("id", order.id);
+    onRefresh();
+  }
+
+  async function rejectOrderApi(id: string, reason: string) {
+    const res = await fetch("/api/admin/orders/reject", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ order_id: id, reason }),
+    });
+    if (!res.ok) {
+      await res.json().catch(() => ({}));
+      throw new Error("reject");
+    }
     onRefresh();
   }
 
@@ -615,6 +637,24 @@ function OrdersSection({
 
   return (
     <div className="space-y-4">
+      <PendingApprovalQueue
+        orders={orders}
+        shopCurrency={shopCurrency}
+        onApproved={async (id) => {
+          const res = await fetch("/api/admin/orders/confirm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ order_id: id }),
+          });
+          if (!res.ok) {
+            await res.json().catch(() => ({}));
+            throw new Error("confirm");
+          }
+          onRefresh();
+        }}
+        onRejected={rejectOrderApi}
+      />
       <div className="flex flex-wrap gap-2">
         <button
           type="button"

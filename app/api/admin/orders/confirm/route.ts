@@ -32,6 +32,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
+    const productId = order.product_id as string;
+    const qty = Number(order.quantity ?? 0);
+    const { data: product, error: prodErr } = await svc
+      .from("products")
+      .select("stock_quantity")
+      .eq("id", productId)
+      .maybeSingle();
+
+    if (prodErr || !product) {
+      console.error("[admin confirm order] product", prodErr);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+    }
+    const stock = Number(product.stock_quantity ?? 0);
+    if (stock < qty) {
+      return NextResponse.json({ error: "Insufficient stock for this order.", code: "insufficient_stock" }, { status: 400 });
+    }
+
+    const { error: stockUpErr } = await svc
+      .from("products")
+      .update({ stock_quantity: stock - qty })
+      .eq("id", productId);
+
+    if (stockUpErr) {
+      console.error("[admin confirm order] stock", stockUpErr);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+    }
+
     const isRevolutDeliveryPayNow =
       order.payment_method === "revolut" &&
       order.fulfillment_type === "delivery" &&

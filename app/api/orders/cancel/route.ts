@@ -40,14 +40,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
 
-    const { error: rpcErr } = await supabase.rpc("restore_product_stock", {
-      p_product_id: order.product_id,
-      p_quantity: order.quantity,
-    });
+    const deferStock = Boolean((order as { defer_stock_until_approval?: boolean }).defer_stock_until_approval);
+    const skipStockRestore = order.status === "payment_pending" && deferStock;
 
-    if (rpcErr) {
-      console.error("[orders/cancel] restore stock", rpcErr);
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+    if (!skipStockRestore) {
+      const { error: rpcErr } = await supabase.rpc("restore_product_stock", {
+        p_product_id: order.product_id,
+        p_quantity: order.quantity,
+      });
+
+      if (rpcErr) {
+        console.error("[orders/cancel] restore stock", rpcErr);
+        return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+      }
     }
 
     const { error: upErr } = await supabase

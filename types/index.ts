@@ -62,6 +62,9 @@ export interface Order {
   /** delivery + Revolut remainder only */
   revolut_pay_timing?: "pay_now" | "pay_on_delivery" | null;
   pay_now_payment_confirmed?: boolean | null;
+  /** True when stock was not deducted at checkout (awaiting admin payment approval). */
+  defer_stock_until_approval?: boolean | null;
+  rejection_reason?: string | null;
 }
 
 export interface Announcement {

@@ -12,7 +12,7 @@ export function useTicketRealtime(
   options?: { enabled?: boolean; intervalMs?: number }
 ) {
   const enabled = options?.enabled !== false;
-  const intervalMs = options?.intervalMs ?? 4000;
+  const intervalMs = options?.intervalMs ?? 2500;
   const loadRef = useRef(load);
   loadRef.current = load;
 

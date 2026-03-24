@@ -1,5 +1,6 @@
 "use client";
 
+import { createClient } from "@/lib/supabase/client";
 import clsx from "clsx";
 import {
   Headphones,
@@ -17,6 +18,7 @@ import {
 import { ADMIN_BASE_PATH } from "@/lib/constants";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 const tabs = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, href: `${ADMIN_BASE_PATH}?tab=overview` },
@@ -40,6 +42,26 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") ?? "overview";
+  const supabase = useMemo(() => createClient(), []);
+  const [pendingOrders, setPendingOrders] = useState(0);
+
+  useEffect(() => {
+    async function load() {
+      const { count } = await supabase
+        .from("orders")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "payment_pending");
+      setPendingOrders(count ?? 0);
+    }
+    void load();
+    const ch = supabase
+      .channel("sidebar-pending-orders")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void load())
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(ch);
+    };
+  }, [supabase]);
 
   return (
     <aside className="flex w-full flex-col gap-1 border-b border-honey-border bg-surface p-4 dark:border-honey-border dark:bg-surface-dark md:w-56 md:border-b-0 md:border-r">
@@ -48,6 +70,7 @@ export function AdminSidebar() {
         const active = href.includes("?")
           ? pathname === ADMIN_BASE_PATH && tab === id
           : pathname === href || pathname.startsWith(`${href}/`);
+        const showBadge = id === "orders" && pendingOrders > 0;
         return (
           <Link
             key={id}
@@ -58,7 +81,14 @@ export function AdminSidebar() {
             )}
           >
             <Icon className="h-4 w-4" />
-            {label}
+            <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+              {label}
+              {showBadge ? (
+                <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold leading-none text-white">
+                  {pendingOrders > 99 ? "99+" : pendingOrders}
+                </span>
+              ) : null}
+            </span>
           </Link>
         );
       })}

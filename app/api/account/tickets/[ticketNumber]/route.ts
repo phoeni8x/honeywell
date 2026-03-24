@@ -36,7 +36,7 @@ export async function GET(request: Request, context: Params) {
     .from("ticket_messages")
     .select("*")
     .eq("ticket_id", ticket.id)
-    .not("sender", "eq", "admin_internal")
+    .neq("sender", "admin_internal")
     .order("created_at", { ascending: true });
 
   if (mErr) {
