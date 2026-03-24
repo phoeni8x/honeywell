@@ -35,6 +35,9 @@ async function telegramJson<T>(url: string): Promise<TgOk<T> | { parseError: tru
 /**
  * Resolve Telegram user id: try getChat(@username), then DB (after user tapped Start on the bot).
  * getChat often returns "chat not found" until the user has messaged the bot at least once — Telegram limitation.
+ *
+ * If the bot already stored is_channel_member = true (from /start), we trust that so channel members
+ * are not blocked when getChatMember fails transiently.
  */
 export async function POST(request: Request) {
   try {
@@ -63,59 +66,67 @@ export async function POST(request: Request) {
       return NextResponse.json({ verified: false, error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 503 });
     }
 
+    const supabase = createServiceClient();
+
     const getChatUrl = new URL(`https://api.telegram.org/bot${botToken}/getChat`);
     getChatUrl.searchParams.set("chat_id", `@${username}`);
 
-    const chatResRaw = await telegramJson<{ id: number; type?: string }>(getChatUrl.toString());
+    const [chatResRaw, verResult] = await Promise.all([
+      telegramJson<{ id: number; type?: string }>(getChatUrl.toString()),
+      supabase
+        .from("telegram_verifications")
+        .select("telegram_user_id, is_channel_member")
+        .eq("telegram_username", username)
+        .maybeSingle(),
+    ]);
+
+    if (verResult.error) {
+      console.error("[verify-telegram] telegram_verifications select", verResult.error);
+    }
+
     if (isParseError(chatResRaw)) {
       return NextResponse.json({ verified: false, error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 502 });
     }
     const chatRes = chatResRaw;
 
+    const verRow = verResult.data;
     let telegramUserId: number | null = null;
 
     if (chatRes.ok && chatRes.result?.id != null) {
       const n = Number(chatRes.result.id);
       if (!Number.isNaN(n)) telegramUserId = n;
     }
+    if (telegramUserId == null && verRow?.telegram_user_id != null) {
+      const n = Number(verRow.telegram_user_id);
+      if (!Number.isNaN(n)) telegramUserId = n;
+    }
+
+    const dbChannelMember = verRow?.is_channel_member;
 
     if (telegramUserId == null) {
-      const supabase = createServiceClient();
-      const { data: row } = await supabase
-        .from("telegram_verifications")
-        .select("telegram_user_id")
-        .eq("telegram_username", username)
-        .maybeSingle();
-      if (row?.telegram_user_id != null) {
-        const n = Number(row.telegram_user_id);
-        if (!Number.isNaN(n)) telegramUserId = n;
+      await supabase.from("telegram_verify_tokens").delete().eq("telegram_username", username);
+
+      const token = randomBytes(16).toString("hex");
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      const { error: insErr } = await supabase.from("telegram_verify_tokens").insert({
+        token,
+        telegram_username: username,
+        expires_at: expiresAt,
+      });
+      if (insErr) {
+        console.error("[verify-telegram] token insert", insErr);
+        return NextResponse.json({ verified: false, error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST });
       }
 
-      if (telegramUserId == null) {
-        await supabase.from("telegram_verify_tokens").delete().eq("telegram_username", username);
-
-        const token = randomBytes(16).toString("hex");
-        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-        const { error: insErr } = await supabase.from("telegram_verify_tokens").insert({
-          token,
-          telegram_username: username,
-          expires_at: expiresAt,
-        });
-        if (insErr) {
-          console.error("[verify-telegram] token insert", insErr);
-          return NextResponse.json({ verified: false, error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST });
-        }
-
-        const botUser = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "Honeyywell_bot";
-        const botUrl = `https://t.me/${botUser}?start=hw_${token}`;
-        return NextResponse.json({
-          verified: false,
-          needsOpenBot: true,
-          botUrl,
-          message:
-            "Open Telegram below so the bot can link this username to your account. After you see the confirmation in Telegram, come back here and tap Verify again.",
-        });
-      }
+      const botUser = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "Honeyywell_bot";
+      const botUrl = `https://t.me/${botUser}?start=hw_${token}`;
+      return NextResponse.json({
+        verified: false,
+        needsOpenBot: true,
+        botUrl,
+        message:
+          "Open Telegram below so the bot can link this username to your account. After you see the confirmation in Telegram, come back here and tap Verify again.",
+      });
     }
 
     const userIdStr = String(telegramUserId);
@@ -123,13 +134,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ verified: true });
     }
 
-    const memberRes = await getChannelMembership(botToken, channelId, Number(telegramUserId));
-    if (!memberRes.ok) {
-      console.error("[verify-telegram] getChatMember failed");
-      return NextResponse.json({ verified: false, error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST });
+    if (dbChannelMember === true) {
+      return NextResponse.json({ verified: true });
     }
 
-    return NextResponse.json({ verified: memberRes.member });
+    const memberRes = await getChannelMembership(botToken, channelId, Number(telegramUserId));
+    if (memberRes.ok) {
+      return NextResponse.json({ verified: memberRes.member });
+    }
+
+    console.error("[verify-telegram] getChatMember failed", memberRes.error);
+    return NextResponse.json({ verified: false, error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST });
   } catch (e) {
     console.error("[verify-telegram]", e);
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });

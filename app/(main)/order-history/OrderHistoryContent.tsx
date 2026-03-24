@@ -61,9 +61,6 @@ export function OrderHistoryContent() {
     <div className="space-y-8">
       <div>
         <h1 className="font-display text-4xl text-honey-text">My orders</h1>
-        <p className="mt-2 text-honey-muted">
-          Orders you place on this device show up here.
-        </p>
       </div>
 
       {loading ? (
