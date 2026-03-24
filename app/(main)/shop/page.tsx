@@ -52,20 +52,26 @@ export default function ShopPage() {
     } catch {
       return;
     }
-    const channel = supabase
-      .channel("products-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "products" },
-        () => {
-          load();
-        }
-      )
-      .subscribe();
+    let channel: ReturnType<ReturnType<typeof createClient>["channel"]> | null = null;
+    try {
+      channel = supabase
+        .channel("products-realtime")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "products" },
+          () => {
+            load();
+          }
+        )
+        .subscribe();
+    } catch {
+      /* Some Telegram / in-app browsers choke on Realtime WebSocket — polling via load() on focus is enough */
+      return;
+    }
 
     return () => {
       try {
-        supabase?.removeChannel(channel);
+        if (channel && supabase) supabase.removeChannel(channel);
       } catch {
         /* ignore */
       }
