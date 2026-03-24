@@ -1,0 +1,10 @@
+---
+description: Never show API/DB/provider details to customers — one generic line only
+alwaysApply: true
+---
+
+# Public errors (customers)
+
+- **Never** render `data.error`, `err.message`, Supabase/Telegram/Postgres/Vercel strings, migration names, or stack traces in the browser for shop, splash, checkout, or Telegram mini app flows.
+- Use **`PUBLIC_ERROR_TRY_AGAIN_OR_GUEST`** from `lib/public-error.ts` (or `safeClientError()`) for every client-visible failure.
+- APIs may log details server-side only (`console.error`); JSON responses must use the same public string for `error` fields aimed at end users.

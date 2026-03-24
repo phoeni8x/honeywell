@@ -53,6 +53,7 @@ export default function SplashPage() {
           return;
         }
       }
+      // Never display data.error — APIs must not leak internals; keep one public line only.
       if (!res.ok) {
         setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
         return;
