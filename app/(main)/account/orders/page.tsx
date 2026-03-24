@@ -1,7 +1,8 @@
 "use client";
 
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
-import { formatPrice, ORDER_STATUS_LABELS } from "@/lib/helpers";
+import { useShopCurrency } from "@/components/ShopCurrencyProvider";
+import { ORDER_STATUS_LABELS } from "@/lib/helpers";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -15,6 +16,7 @@ type OrderRow = {
 };
 
 export default function AccountOrdersPage() {
+  const { formatPrice } = useShopCurrency();
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -52,8 +54,8 @@ export default function AccountOrdersPage() {
       <div>
         <h1 className="font-display text-4xl text-honey-text">Order history</h1>
         <p className="mt-2 text-honey-muted">
-          Paginated view. Lifetime spend (HUF):{" "}
-          <span className="font-mono text-honey-text">{Math.round(totalSpent)}</span>
+          Paginated view. Lifetime spend:{" "}
+          <span className="font-mono text-honey-text">{formatPrice(Math.round(totalSpent))}</span>
         </p>
         <p className="mt-1 text-sm text-honey-muted">
           You can also use the classic{" "}

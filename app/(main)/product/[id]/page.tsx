@@ -2,7 +2,8 @@
 
 import { CheckoutFlow } from "@/components/CheckoutFlow";
 import { LS_USER_TYPE } from "@/lib/constants";
-import { formatPrice, getPriceForUser } from "@/lib/helpers";
+import { useShopCurrency } from "@/components/ShopCurrencyProvider";
+import { getPriceForUser } from "@/lib/helpers";
 import { createClient } from "@/lib/supabase/client";
 import type { Product, UserType } from "@/types";
 import { canDisplayProductImageUrl, ProductImage } from "@/components/ProductImage";
@@ -12,6 +13,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function ProductPage() {
+  const { formatPrice } = useShopCurrency();
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();

@@ -1,6 +1,7 @@
 "use client";
 
-import { formatPrice, getPriceForUser } from "@/lib/helpers";
+import { useShopCurrency } from "@/components/ShopCurrencyProvider";
+import { getPriceForUser } from "@/lib/helpers";
 import type { Product, UserType } from "@/types";
 import clsx from "clsx";
 import Link from "next/link";
@@ -12,6 +13,7 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, userType }: ProductCardProps) {
+  const { formatPrice } = useShopCurrency();
   const { unit, isDiscounted } = getPriceForUser(product, userType);
   const stockRaw = Number(product.stock_quantity);
   const stock = Number.isFinite(stockRaw) ? stockRaw : 0;

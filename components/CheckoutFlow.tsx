@@ -2,7 +2,8 @@
 
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
 import { LS_REFERRED_BY } from "@/lib/constants";
-import { formatPrice, getPriceForUser } from "@/lib/helpers";
+import { useShopCurrency } from "@/components/ShopCurrencyProvider";
+import { getPriceForUser } from "@/lib/helpers";
 import type { FulfillmentType, Product, UserType } from "@/types";
 import clsx from "clsx";
 import { AlertCircle, ChevronLeft, MapPin, Navigation, Package, Truck } from "lucide-react";
@@ -54,6 +55,7 @@ export function CheckoutFlow({
   onSuccess,
   loading: externalLoading,
 }: CheckoutFlowProps) {
+  const { formatPrice } = useShopCurrency();
   const [step, setStep] = useState<Step>(1);
   const [fulfillment, setFulfillment] = useState<FulfillmentType | null>(null);
   const [guestModal, setGuestModal] = useState(false);

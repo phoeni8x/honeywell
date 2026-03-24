@@ -1,3 +1,5 @@
+import type { ShopCurrency } from "@/lib/currency";
+import { formatPriceAmount, parseShopCurrency } from "@/lib/currency";
 import type { Product, UserType } from "@/types";
 
 function finitePrice(n: unknown): number {
@@ -5,14 +7,10 @@ function finitePrice(n: unknown): number {
   return Number.isFinite(x) ? x : 0;
 }
 
-export function formatPrice(n: number): string {
-  const v = finitePrice(n);
-  return new Intl.NumberFormat("hu-HU", {
-    style: "currency",
-    currency: "HUF",
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-  }).format(v);
+/** Format a price for display. Pass `currency` from settings or `useShopCurrency()`. */
+export function formatPrice(n: number, currency: ShopCurrency | string = "HUF"): string {
+  const c = typeof currency === "string" ? parseShopCurrency(currency) : currency;
+  return formatPriceAmount(finitePrice(n), c);
 }
 
 export function getPriceForUser(

@@ -1,6 +1,7 @@
 "use client";
 
 import { ADMIN_BASE_PATH } from "@/lib/constants";
+import { parseShopCurrency, type ShopCurrency } from "@/lib/currency";
 import { formatPrice, truncateToken } from "@/lib/helpers";
 import { createClient } from "@/lib/supabase/client";
 import type { Announcement, Order, Product } from "@/types";
@@ -142,6 +143,8 @@ export default function AdminDashboard() {
     setSettings((s) => ({ ...s, [key]: value }));
   }
 
+  const shopCurrency = parseShopCurrency(settings.shop_currency);
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -172,11 +175,11 @@ export default function AdminDashboard() {
       )}
 
       {tab === "products" && !loading && (
-        <ProductsSection products={products} onRefresh={loadAll} supabase={supabase} />
+        <ProductsSection products={products} onRefresh={loadAll} supabase={supabase} shopCurrency={shopCurrency} />
       )}
 
       {tab === "orders" && !loading && (
-        <OrdersSection orders={orders} onRefresh={loadAll} supabase={supabase} />
+        <OrdersSection orders={orders} onRefresh={loadAll} supabase={supabase} shopCurrency={shopCurrency} />
       )}
 
       {tab === "announcements" && !loading && (
@@ -218,10 +221,12 @@ function ProductsSection({
   products,
   onRefresh,
   supabase,
+  shopCurrency,
 }: {
   products: Product[];
   onRefresh: () => void;
   supabase: ReturnType<typeof createClient>;
+  shopCurrency: ShopCurrency;
 }) {
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
 
@@ -306,7 +311,8 @@ function ProductsSection({
                 <td className="p-3 font-medium">{p.name}</td>
                 <td className="p-3">{p.stock_quantity}</td>
                 <td className="p-3">
-                  {formatPrice(Number(p.price_regular))} / {formatPrice(Number(p.price_team_member))}
+                  {formatPrice(Number(p.price_regular), shopCurrency)} /{" "}
+                  {formatPrice(Number(p.price_team_member), shopCurrency)}
                 </td>
                 <td className="p-3">{p.is_active ? "Yes" : "No"}</td>
                 <td className="p-3">
@@ -346,13 +352,13 @@ function ProductsSection({
                 <option value="vitamin">Vitamin</option>
               </select>
               <Field
-                label="Regular price"
+                label={`Regular price (${shopCurrency})`}
                 type="number"
                 value={String(editing.price_regular ?? 0)}
                 onChange={(v) => setEditing({ ...editing, price_regular: Number(v) })}
               />
               <Field
-                label="Team price"
+                label={`Team price (${shopCurrency})`}
                 type="number"
                 value={String(editing.price_team_member ?? 0)}
                 onChange={(v) => setEditing({ ...editing, price_team_member: Number(v) })}
@@ -440,10 +446,12 @@ function OrdersSection({
   orders,
   onRefresh,
   supabase,
+  shopCurrency,
 }: {
   orders: (Order & { product?: Product | null })[];
   onRefresh: () => void;
   supabase: ReturnType<typeof createClient>;
+  shopCurrency: ShopCurrency;
 }) {
   const [filter, setFilter] = useState<string>("all");
 
@@ -643,7 +651,7 @@ function OrdersSection({
                 <td className="p-2 font-mono text-xs">{truncateToken(o.customer_token)}</td>
                 <td className="p-2">{o.product?.name ?? "—"}</td>
                 <td className="p-2">{o.quantity}</td>
-                <td className="p-2">{formatPrice(Number(o.total_price))}</td>
+                <td className="p-2">{formatPrice(Number(o.total_price), shopCurrency)}</td>
                 <td className="p-2 text-xs">
                   {o.fulfillment_type ?? "—"}
                   {o.fulfillment_type === "delivery" && o.delivery_address && (
@@ -763,6 +771,20 @@ function SettingsSection({
         Sensitive keys should live in <code className="rounded bg-honey-border/40 px-1">.env.local</code> for production.
         Values here are stored in Supabase for convenience.
       </p>
+      <div>
+        <label className="text-xs font-semibold text-honey-muted">Shop display currency</label>
+        <p className="mt-1 text-xs text-honey-muted">
+          Product and order amounts are stored as numbers; this only changes how prices are shown (shop, checkout, admin).
+        </p>
+        <select
+          className="mt-2 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          value={settings.shop_currency === "EUR" ? "EUR" : "HUF"}
+          onChange={(e) => onSave("shop_currency", e.target.value)}
+        >
+          <option value="HUF">Hungarian Forint (HUF)</option>
+          <option value="EUR">Euro (EUR)</option>
+        </select>
+      </div>
       {keys.map(({ key, label }) => (
         <div key={key}>
           <label className="text-xs font-semibold text-honey-muted">{label}</label>

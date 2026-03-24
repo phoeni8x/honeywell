@@ -1,6 +1,7 @@
 "use client";
 
-import { formatPrice, ORDER_STATUS_LABELS } from "@/lib/helpers";
+import { useShopCurrency } from "@/components/ShopCurrencyProvider";
+import { ORDER_STATUS_LABELS } from "@/lib/helpers";
 import type { OrderWithProduct } from "@/types";
 import clsx from "clsx";
 import { LifeBuoy, MapPin, Navigation, Truck } from "lucide-react";
@@ -27,6 +28,7 @@ export function OrderCard({
   customerToken,
   onPhotoUploaded,
 }: OrderCardProps) {
+  const { formatPrice } = useShopCurrency();
   const [showPhoto, setShowPhoto] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
   const product = order.product;

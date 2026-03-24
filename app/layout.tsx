@@ -1,3 +1,4 @@
+import { ShopCurrencyProvider } from "@/components/ShopCurrencyProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import type { Metadata } from "next";
 import { Caveat, Cinzel, DM_Sans } from "next/font/google";
@@ -32,7 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${cinzel.variable} ${dmSans.variable} ${caveat.variable}`} suppressHydrationWarning>
       <body className="min-h-screen bg-bg font-body">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <ShopCurrencyProvider>{children}</ShopCurrencyProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

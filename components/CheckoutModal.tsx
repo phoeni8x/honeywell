@@ -1,6 +1,6 @@
 "use client";
 
-import { formatPrice } from "@/lib/helpers";
+import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { X } from "lucide-react";
 
 interface CheckoutModalProps {
@@ -22,6 +22,7 @@ export function CheckoutModal({
   total,
   loading,
 }: CheckoutModalProps) {
+  const { formatPrice } = useShopCurrency();
   if (!open) return null;
 
   return (

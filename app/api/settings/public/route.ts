@@ -15,6 +15,7 @@ const KEYS = [
   "crypto_wallet_app_url",
   "crypto_exchange_name",
   "crypto_exchange_url",
+  "shop_currency",
 ] as const;
 
 function emptyPayload() {
@@ -35,6 +36,7 @@ function emptyPayload() {
     crypto_wallet_app_url: "",
     crypto_exchange_name: "",
     crypto_exchange_url: "",
+    shop_currency: "HUF",
   };
 }
 
@@ -72,6 +74,7 @@ export async function GET() {
       crypto_wallet_app_url: map.crypto_wallet_app_url ?? "",
       crypto_exchange_name: map.crypto_exchange_name ?? "",
       crypto_exchange_url: map.crypto_exchange_url ?? "",
+      shop_currency: map.shop_currency ?? "HUF",
     });
   } catch (e) {
     console.error(e);
