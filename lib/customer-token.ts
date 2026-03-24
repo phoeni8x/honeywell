@@ -41,7 +41,26 @@ function setSharedCookie(t: string): void {
   document.cookie = `${LS_CUSTOMER_TOKEN}=${encodeURIComponent(t)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure ? "; Secure" : ""}; Domain=${domain}`;
 }
 
+/** Part 8: migrate legacy keys so checkout and order history share one id. */
+function migrateLegacyCustomerTokens(): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (localStorage.getItem(LS_CUSTOMER_TOKEN)) return;
+    for (const k of ["customer_token", "hw_customer_token"]) {
+      const v = localStorage.getItem(k)?.trim();
+      if (v) {
+        localStorage.setItem(LS_CUSTOMER_TOKEN, v);
+        localStorage.removeItem(k);
+        break;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 function readToken(): string | null {
+  migrateLegacyCustomerTokens();
   try {
     const ls = localStorage.getItem(LS_CUSTOMER_TOKEN);
     if (ls) return ls;
@@ -87,6 +106,7 @@ export function setCustomerToken(token: string): string {
  */
 export function getOrCreateCustomerToken(): string {
   if (typeof window === "undefined") return "";
+  migrateLegacyCustomerTokens();
   const cookieToken = readCookie(LS_CUSTOMER_TOKEN)?.trim() ?? "";
   let t = readToken();
   // Cookie is shared across apex+www and should win over stale origin-local storage.

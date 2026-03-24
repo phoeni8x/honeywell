@@ -65,6 +65,7 @@ export interface Order {
   /** True when stock was not deducted at checkout (awaiting admin payment approval). */
   defer_stock_until_approval?: boolean | null;
   rejection_reason?: string | null;
+  points_earned?: number | null;
 }
 
 export interface Announcement {

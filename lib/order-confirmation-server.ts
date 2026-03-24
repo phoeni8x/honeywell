@@ -3,8 +3,17 @@ import { basePointsFromOrderHuf, calculateLevel, pointsWithLevelBonus } from "@/
 
 const MIN_REFERRAL_BEES = 0.05;
 
+export type ProcessOrderConfirmedResult = {
+  ok: boolean;
+  /** Points earned for this order (earn transaction). */
+  pointsEarned?: number;
+  previousLevel?: number;
+  newLevel?: number;
+  leveledUp?: boolean;
+};
+
 /** Run after order is set to `confirmed`. Idempotent per order for points. */
-export async function processOrderConfirmed(orderId: string): Promise<{ ok: boolean; newLevel?: number }> {
+export async function processOrderConfirmed(orderId: string): Promise<ProcessOrderConfirmedResult> {
   const supabase = createServiceClient();
 
   const { data: existingPt } = await supabase
@@ -15,7 +24,18 @@ export async function processOrderConfirmed(orderId: string): Promise<{ ok: bool
     .maybeSingle();
 
   if (existingPt) {
-    return { ok: true };
+    const { data: ord } = await supabase.from("orders").select("customer_token").eq("id", orderId).maybeSingle();
+    const token = ord?.customer_token as string | undefined;
+    if (token) {
+      const { data: w } = await supabase
+        .from("points_wallets")
+        .select("buyer_level")
+        .eq("customer_token", token)
+        .maybeSingle();
+      const lv = w?.buyer_level ?? 1;
+      return { ok: true, pointsEarned: 0, previousLevel: lv, newLevel: lv, leveledUp: false };
+    }
+    return { ok: true, pointsEarned: 0, previousLevel: 1, newLevel: 1, leveledUp: false };
   }
 
   const { data: order, error: oErr } = await supabase.from("orders").select("*").eq("id", orderId).single();
@@ -31,6 +51,8 @@ export async function processOrderConfirmed(orderId: string): Promise<{ ok: bool
     .select("*")
     .eq("customer_token", customerToken)
     .maybeSingle();
+
+  const previousLevel = wallet?.buyer_level ?? 1;
 
   const totalOrders = (wallet?.total_orders ?? 0) + 1;
   const totalSpent = Number(wallet?.total_spent_huf ?? 0) + totalHuf;
@@ -68,6 +90,8 @@ export async function processOrderConfirmed(orderId: string): Promise<{ ok: bool
     points: pts,
     order_id: orderId,
   });
+
+  await supabase.from("orders").update({ points_earned: pts }).eq("id", orderId);
 
   const { data: referral } = await supabase
     .from("referrals")
@@ -139,5 +163,7 @@ export async function processOrderConfirmed(orderId: string): Promise<{ ok: bool
     }
   }
 
-  return { ok: true, newLevel };
+  const leveledUp = newLevel > previousLevel;
+
+  return { ok: true, pointsEarned: pts, previousLevel, newLevel, leveledUp };
 }

@@ -647,10 +647,22 @@ function OrdersSection({
             credentials: "include",
             body: JSON.stringify({ order_id: id }),
           });
+          const data = (await res.json().catch(() => ({}))) as {
+            points_earned?: number;
+            leveled_up?: boolean;
+            level_name?: string;
+          };
           if (!res.ok) {
-            await res.json().catch(() => ({}));
             throw new Error("confirm");
           }
+          let msg = "Order approved.";
+          if (typeof data.points_earned === "number" && data.points_earned > 0) {
+            msg += ` +${data.points_earned} pts awarded to customer.`;
+          }
+          if (data.leveled_up && data.level_name) {
+            msg += ` Customer reached ${data.level_name}.`;
+          }
+          alert(msg);
           onRefresh();
         }}
         onRejected={rejectOrderApi}

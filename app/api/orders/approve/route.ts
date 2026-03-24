@@ -4,7 +4,11 @@ import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
+/**
+ * Part 9 alias — same behavior as `POST /api/admin/orders/confirm` (admin session required).
+ */
 export async function POST(request: Request) {
   try {
     const admin = await requireAdminUser();
@@ -13,21 +17,18 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const orderId = body.order_id as string | undefined;
-    if (!orderId) {
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+    const order_id = body.order_id as string | undefined;
+    if (!order_id) {
+      return NextResponse.json({ error: "order_id is required" }, { status: 400 });
     }
 
-    const result = await executeAdminApproveOrder(orderId);
+    const result = await executeAdminApproveOrder(order_id);
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error, code: result.code },
-        { status: result.status }
-      );
+      return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
     }
 
     return NextResponse.json({
-      ok: true,
+      success: true,
       order_id: result.order_id,
       points_earned: result.points_earned,
       new_level: result.new_level,
@@ -37,6 +38,6 @@ export async function POST(request: Request) {
     });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

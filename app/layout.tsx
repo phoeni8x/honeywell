@@ -2,6 +2,7 @@ import { CustomerBootstrap } from "@/components/CustomerBootstrap";
 import { RegisterServiceWorker } from "@/components/RegisterServiceWorker";
 import { ShopCurrencyProvider } from "@/components/ShopCurrencyProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { WalletProvider } from "@/lib/WalletContext";
 import type { Metadata } from "next";
 import { Caveat, Cinzel, DM_Sans } from "next/font/google";
 import "./globals.css";
@@ -38,7 +39,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <RegisterServiceWorker />
           <CustomerBootstrap />
-          <ShopCurrencyProvider>{children}</ShopCurrencyProvider>
+          <WalletProvider>
+            <ShopCurrencyProvider>{children}</ShopCurrencyProvider>
+          </WalletProvider>
         </ThemeProvider>
       </body>
     </html>

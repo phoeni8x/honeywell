@@ -1,6 +1,6 @@
 "use client";
 
-import { getOrCreateCustomerToken } from "@/lib/customer-token";
+import { useWallet } from "@/lib/WalletContext";
 import { LS_MY_REFERRAL_CODE } from "@/lib/constants";
 import { LEVEL_META } from "@/lib/levels";
 import clsx from "clsx";
@@ -10,37 +10,18 @@ import { useEffect, useState } from "react";
 
 export function WalletNav() {
   const [open, setOpen] = useState(false);
-  const [bees, setBees] = useState(0);
-  const [points, setPoints] = useState(0);
-  const [level, setLevel] = useState(1);
-  const [referralCode, setReferralCode] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const { bees, points, level, levelName, loading, referralCode, refresh } = useWallet();
 
   useEffect(() => {
-    const t = getOrCreateCustomerToken();
-    if (!t) return;
-    (async () => {
-      await fetch("/api/customer/bootstrap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customer_token: t }),
-      }).catch(() => {});
+    if (!referralCode) return;
+    try {
+      localStorage.setItem(LS_MY_REFERRAL_CODE, referralCode);
+    } catch {
+      /* ignore */
+    }
+  }, [referralCode]);
 
-      const r = await fetch("/api/wallet/summary", { headers: { "x-customer-token": t } });
-      const d = await r.json().catch(() => ({}));
-      setBees(typeof d.bees === "number" ? d.bees : 0);
-      setPoints(typeof d.points === "number" ? d.points : 0);
-      setLevel(typeof d.buyer_level === "number" ? d.buyer_level : 1);
-      if (typeof d.referral_code === "string" && d.referral_code) {
-        setReferralCode(d.referral_code);
-        localStorage.setItem(LS_MY_REFERRAL_CODE, d.referral_code);
-      }
-    })()
-      .catch(() => {})
-      .finally(() => setLoaded(true));
-  }, []);
-
-  if (!loaded) {
+  if (loading) {
     return (
       <span className="hidden h-8 w-16 animate-pulse rounded-sm bg-white/10 sm:inline-block" />
     );
@@ -83,7 +64,7 @@ export function WalletNav() {
                 className="ml-2 inline-flex rounded-sm px-2 py-0.5 text-xs font-semibold"
                 style={{ backgroundColor: `${levelMeta.color}22`, color: levelMeta.color }}
               >
-                {levelMeta.name}
+                {levelName}
               </p>
             </div>
             <p className="mt-3 text-honey-muted">
@@ -154,6 +135,13 @@ export function WalletNav() {
               >
                 Crypto rates
               </Link>
+              <button
+                type="button"
+                className="rounded-lg px-2 py-1.5 text-left text-xs text-honey-muted hover:bg-honey-border/30"
+                onClick={() => void refresh()}
+              >
+                Refresh balance
+              </button>
             </div>
           </div>
         </>
