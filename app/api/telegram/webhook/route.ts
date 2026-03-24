@@ -20,6 +20,10 @@ type TelegramUpdate = { message?: TgMessage };
 const USERNAME_REQUIRED_MESSAGE =
   "Please set a public Telegram username first (Settings → Telegram → Username). Honey Well needs it before we can verify you or link your account — then try again.";
 
+/** Shown once, the first time someone uses /start or /verify and we have no prior record for their Telegram user id. */
+const FIRST_CONTACT_COMMUNITY_MESSAGE =
+  "Welcome to Honey Well. Sending /start, tapping Start, or sending /verify registers you with our community — we save your Telegram so we can verify team membership and send updates from Honey Well.";
+
 async function sendBotMessage(botToken: string, chatId: number, text: string) {
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
@@ -148,10 +152,14 @@ async function handleBroadcast(
   );
 }
 
-/** `/start` or `start` (not the website deep link `hw_<token>`). */
+/**
+ * Plain `/start` or `/verify` (same as website “verify” flow for registration), not the deep link `hw_<token>`.
+ * Also `start` or `verify` without slash.
+ */
 function isPlainStartCommand(text: string): boolean {
   const t = text.trim();
-  if (/^start$/i.test(t)) return true;
+  if (/^start$/i.test(t) || /^verify$/i.test(t)) return true;
+  if (/^\/verify(?:\s|$)/i.test(t)) return true;
   if (!/^\/start/i.test(t)) return false;
   if (/^\/start\s+hw_[a-f0-9]{32}\s*$/i.test(t)) return false;
   return true;
@@ -297,6 +305,14 @@ export async function POST(request: Request) {
 
   if (isPlainStartCommand(text)) {
     const channelId = process.env.TELEGRAM_CHANNEL_ID;
+    const { data: priorRow } = await supabase
+      .from("telegram_verifications")
+      .select("telegram_user_id")
+      .eq("telegram_user_id", from.id)
+      .maybeSingle();
+    if (!priorRow) {
+      await sendBotMessage(botToken, chatId, FIRST_CONTACT_COMMUNITY_MESSAGE);
+    }
     await sendStartMembershipReply(botToken, channelId, chatId, from.id);
     const username = from.username!.trim().replace(/^@/, "").toLowerCase();
     await supabase.from("telegram_verifications").upsert(
