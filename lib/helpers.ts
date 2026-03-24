@@ -7,9 +7,11 @@ function finitePrice(n: unknown): number {
 
 export function formatPrice(n: number): string {
   const v = finitePrice(n);
-  return new Intl.NumberFormat("en-GB", {
+  return new Intl.NumberFormat("hu-HU", {
     style: "currency",
-    currency: "GBP",
+    currency: "HUF",
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
   }).format(v);
 }
 
