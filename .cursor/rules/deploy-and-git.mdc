@@ -1,0 +1,18 @@
+---
+description: After code changes — commit, push main, confirm Vercel production
+alwaysApply: true
+---
+
+# Ship changes (Git + Vercel)
+
+Whenever you finish a meaningful change in this repo (not tiny one-line experiments the user discarded):
+
+1. **Commit** with a clear message describing what changed and why.
+2. **Push** to **`main`** on GitHub (`origin/main`).
+3. **Deploy / verify Vercel**
+   - If the project is linked: a push to `main` usually triggers a production build; **also** run `vercel deploy --prod` from the repo root when you need to confirm the exact revision is live, or to report status.
+   - After deploy, state that **Vercel production is updated**: include **READY** (or equivalent), deployment URL or inspector link, and that **www.teamruby.net** (or the project production alias) points at it when applicable.
+
+Do **not** end the task with only “you can push” — run `git` and deployment checks yourself unless the user explicitly asked for instructions only.
+
+If the repo is dirty, prefer **one logical commit per task** (or what the user asked for), not unrelated bundled changes.
