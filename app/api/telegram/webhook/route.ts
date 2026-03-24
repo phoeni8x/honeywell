@@ -30,6 +30,8 @@ const FIRST_CONTACT_COMMUNITY_MESSAGE =
 
 const ADMIN_RULES_TEXT = `Honey Well — Admin commands (your Telegram user id must match ADMIN_TELEGRAM_USER_ID)
 
+Note: "Continue as Guest" on the website only saves Guest in this browser — those people are not in the database. This bot saves people who message it (with a username) to Supabase, with team channel vs guest (not in channel) when TELEGRAM_CHANNEL_ID is set.
+
 /rules — This list.
 
 /broadcast — Mass message to everyone who opted in:
@@ -221,7 +223,7 @@ async function handleBroadcastList(
 ) {
   const { data: rows, error } = await supabase
     .from("telegram_verifications")
-    .select("telegram_username, telegram_user_id, broadcast_opt_in")
+    .select("telegram_username, telegram_user_id, broadcast_opt_in, is_channel_member")
     .order("telegram_username");
 
   if (error) {
@@ -232,12 +234,17 @@ async function handleBroadcastList(
   const list = rows ?? [];
   let inC = 0;
   let outC = 0;
-  const lines: string[] = ["Broadcast preferences (saved customers):\n"];
+  const lines: string[] = ["Broadcast preferences (Telegram bot contacts only — not website-only guests):\n"];
   for (const r of list.slice(0, 80)) {
     const on = r.broadcast_opt_in !== false;
     if (on) inC++;
     else outC++;
-    lines.push(`@${r.telegram_username} — ${on ? "receives broadcasts" : "opted out"} (id ${r.telegram_user_id})`);
+    const mem = r.is_channel_member;
+    const role =
+      mem === true ? "team channel" : mem === false ? "Telegram guest (not in channel)" : "channel status unknown";
+    lines.push(
+      `@${r.telegram_username} — ${on ? "broadcasts on" : "broadcasts off"} · ${role} · id ${r.telegram_user_id}`
+    );
   }
   if (list.length > 80) lines.push(`\n… and ${list.length - 80} more (trimmed for message size).`);
   lines.push(`\nTotal: ${list.length} — ${inC} opted in, ${outC} opted out.`);
@@ -317,17 +324,20 @@ function isPlainStartCommand(text: string): boolean {
   return true;
 }
 
+/** null = channel not configured or Telegram API error (not stored as true/false). */
 async function sendStartMembershipReply(
   botToken: string,
   channelId: string | undefined,
   chatId: number,
   userId: number,
   linkInstruction?: string
-) {
+): Promise<{ channelMember: boolean | null }> {
+  let channelMember: boolean | null = null;
   let body: string;
   if (channelId) {
     const m = await getChannelMembership(botToken, channelId, userId);
     if (m.ok) {
+      channelMember = m.member;
       body = m.member
         ? "You're verified as a Honey Well team member."
         : "Welcome, guest.";
@@ -341,6 +351,7 @@ async function sendStartMembershipReply(
     body = `${body}\n\n${linkInstruction}`;
   }
   await sendBotMessage(botToken, chatId, body);
+  return { channelMember };
 }
 
 export async function POST(request: Request) {
@@ -497,24 +508,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    await supabase.from("telegram_verifications").upsert(
-      {
-        telegram_username: tgUser,
-        telegram_user_id: from.id,
-        verified_at: new Date().toISOString(),
-        broadcast_opt_in: true,
-      },
-      { onConflict: "telegram_username" }
-    );
-    await supabase.from("telegram_verify_tokens").delete().eq("token", token);
-
-    await sendStartMembershipReply(
+    const { channelMember } = await sendStartMembershipReply(
       botToken,
       channelId,
       chatId,
       from.id,
       "Return to the Honey Well website and tap Verify again to finish."
     );
+    await supabase.from("telegram_verifications").upsert(
+      {
+        telegram_username: tgUser,
+        telegram_user_id: from.id,
+        verified_at: new Date().toISOString(),
+        broadcast_opt_in: true,
+        is_channel_member: channelMember,
+      },
+      { onConflict: "telegram_username" }
+    );
+    await supabase.from("telegram_verify_tokens").delete().eq("token", token);
     return NextResponse.json({ ok: true });
   }
 
@@ -527,7 +538,7 @@ export async function POST(request: Request) {
     if (!priorRow) {
       await sendBotMessage(botToken, chatId, FIRST_CONTACT_COMMUNITY_MESSAGE);
     }
-    await sendStartMembershipReply(botToken, channelId, chatId, from.id);
+    const { channelMember } = await sendStartMembershipReply(botToken, channelId, chatId, from.id);
     const username = from.username!.trim().replace(/^@/, "").toLowerCase();
     await supabase.from("telegram_verifications").upsert(
       {
@@ -535,6 +546,7 @@ export async function POST(request: Request) {
         telegram_user_id: from.id,
         verified_at: new Date().toISOString(),
         broadcast_opt_in: true,
+        is_channel_member: channelMember,
       },
       { onConflict: "telegram_username" }
     );
