@@ -17,7 +17,6 @@ export function OrderHistoryContent() {
     revolut_payment_link: "",
   });
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState("");
   const [revolutOpen, setRevolutOpen] = useState(false);
 
   const loadOrders = useCallback(async (t: string) => {
@@ -34,9 +33,7 @@ export function OrderHistoryContent() {
   }, []);
 
   useEffect(() => {
-    const t = getOrCreateCustomerToken();
-    setToken(t);
-    loadOrders(t);
+    loadOrders(getOrCreateCustomerToken());
   }, [loadOrders]);
 
   useEffect(() => {
@@ -65,8 +62,7 @@ export function OrderHistoryContent() {
       <div>
         <h1 className="font-display text-4xl text-honey-text">My orders</h1>
         <p className="mt-2 text-honey-muted">
-          Orders are tied to this browser. Token:{" "}
-          <span className="font-mono text-xs">{token ? `${token.slice(0, 8)}…` : "—"}</span>
+          Orders you place on this device show up here.
         </p>
       </div>
 
@@ -85,8 +81,8 @@ export function OrderHistoryContent() {
               shopAddress={settings.shop_address}
               mapsUrl={settings.google_maps_url}
               appleMapsUrl={settings.apple_maps_url}
-              customerToken={token}
-              onPhotoUploaded={() => loadOrders(token)}
+              customerToken={getOrCreateCustomerToken()}
+              onPhotoUploaded={() => loadOrders(getOrCreateCustomerToken())}
             />
           ))}
         </div>

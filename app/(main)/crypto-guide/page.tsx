@@ -1,5 +1,6 @@
 "use client";
 
+import { coinLabelFromActive } from "@/lib/crypto-coins";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -94,7 +95,9 @@ export default function CryptoGuidePage() {
           <details className="rounded-xl border border-honey-border bg-surface p-4 dark:bg-surface-dark">
             <summary className="cursor-pointer font-medium text-honey-text">Which coins do you accept?</summary>
             <p className="mt-2 text-sm text-honey-muted">
-              Currently: <span className="text-honey-text">{settings.active_crypto_coin}</span> (set by admin).
+              Currently:{" "}
+              <span className="text-honey-text">{coinLabelFromActive(settings.active_crypto_coin)}</span> (set by admin).
+              Rates page lists BTC, ETH, USDT, LTC, and SOL — only the active coin applies at checkout.
             </p>
           </details>
           <details className="rounded-xl border border-honey-border bg-surface p-4 dark:bg-surface-dark">

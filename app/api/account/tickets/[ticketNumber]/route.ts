@@ -1,3 +1,4 @@
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
@@ -8,7 +9,7 @@ type Params = { params: Promise<{ ticketNumber: string }> };
 export async function GET(_request: Request, context: Params) {
   const token = _request.headers.get("x-customer-token");
   if (!token) {
-    return NextResponse.json({ error: "Missing token" }, { status: 401 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
 
   const { ticketNumber } = await context.params;
@@ -23,10 +24,11 @@ export async function GET(_request: Request, context: Params) {
     .maybeSingle();
 
   if (tErr) {
-    return NextResponse.json({ error: tErr.message }, { status: 500 });
+    console.error("[ticket GET]", tErr);
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
   if (!ticket) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });
   }
 
   const { data: messages, error: mErr } = await supabase
@@ -36,7 +38,8 @@ export async function GET(_request: Request, context: Params) {
     .order("created_at", { ascending: true });
 
   if (mErr) {
-    return NextResponse.json({ error: mErr.message }, { status: 500 });
+    console.error("[ticket messages]", mErr);
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 
   return NextResponse.json({ ticket, messages: messages ?? [] });

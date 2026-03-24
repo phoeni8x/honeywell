@@ -1,6 +1,7 @@
 "use client";
 
 import { CryptoTicker } from "@/components/CryptoTicker";
+import { CRYPTO_COIN_OPTIONS } from "@/lib/crypto-coins";
 import { useEffect, useState } from "react";
 
 export default function CryptoRatesPage() {
@@ -38,7 +39,7 @@ export default function CryptoRatesPage() {
 
       <CryptoTicker embedded />
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {cards.map((c) => {
           const p = prices[c.id];
           const isActive = activeCoin === c.id;

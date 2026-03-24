@@ -1,6 +1,7 @@
 "use client";
 
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -24,7 +25,7 @@ function SupportNewForm() {
     setError(null);
     const t = getOrCreateCustomerToken();
     if (!t) {
-      setError("Could not create session");
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
     setLoading(true);
@@ -41,7 +42,7 @@ function SupportNewForm() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Failed");
+        setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
         return;
       }
       const num = data.ticket?.ticket_number as string | undefined;

@@ -1,4 +1,5 @@
 import { getClientIp } from "@/lib/client-ip";
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { ratelimitRedeemPoints } from "@/lib/ratelimit";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -10,16 +11,16 @@ export async function POST(request: Request) {
   const ip = getClientIp(request);
   const { success } = await ratelimitRedeemPoints.limit(ip);
   if (!success) {
-    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 429 });
   }
 
   try {
     const { customer_token, points } = await request.json();
     if (!customer_token || typeof points !== "number") {
-      return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
     if (points < MIN_REDEEM) {
-      return NextResponse.json({ error: `Minimum ${MIN_REDEEM} points` }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const supabase = createServiceClient();
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
 
     const balance = w?.balance_points ?? 0;
     if (balance < points) {
-      return NextResponse.json({ error: "Insufficient points" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const { error } = await supabase
@@ -43,7 +44,8 @@ export async function POST(request: Request) {
       .eq("customer_token", customer_token);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      console.error("[redeem-points]", error);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     await supabase.from("points_transactions").insert({
@@ -55,6 +57,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, redeemed_points: points, discount_huf: points });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 }

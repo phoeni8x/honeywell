@@ -1,9 +1,8 @@
 "use client";
 
-import { getOrCreateCustomerToken } from "@/lib/customer-token";
 import { Hexagon } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const PACKAGES = [
   { bees: 1, huf: 10_000 },
@@ -14,11 +13,6 @@ const PACKAGES = [
 export default function BuyBeesPage() {
   const [custom, setCustom] = useState("");
   const [method, setMethod] = useState<"revolut" | "crypto">("revolut");
-  const [tokenPreview, setTokenPreview] = useState("");
-
-  useEffect(() => {
-    setTokenPreview(getOrCreateCustomerToken().slice(0, 8));
-  }, []);
 
   return (
     <div className="mx-auto max-w-2xl space-y-10 py-6">
@@ -28,10 +22,8 @@ export default function BuyBeesPage() {
         </span>
         <h1 className="mt-4 font-display text-4xl text-honey-text">Buy Bees</h1>
         <p className="mt-2 text-honey-muted">
-          1 Bee = 10,000 HUF. Bees are stored on this browser profile (customer token).
-        </p>
-        <p className="mt-1 text-xs text-honey-muted">
-          Token: <span className="font-mono">{tokenPreview || "…"}…</span>
+          1 Bee = 10,000 HUF. Your Bees balance is tied to this browser profile. Team members can use Revolut or crypto
+          for top-ups — same options as at shop checkout.
         </p>
       </div>
 

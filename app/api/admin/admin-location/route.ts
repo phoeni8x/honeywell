@@ -1,3 +1,4 @@
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
@@ -20,12 +21,13 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      console.error("[admin-location POST]", error);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 }
 
@@ -34,7 +36,8 @@ export async function GET() {
     const supabase = createServiceClient();
     const { data, error } = await supabase.from("admin_location").select("*").eq("id", 1).maybeSingle();
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("[admin-location GET]", error);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
     }
     return NextResponse.json({ location: data });
   } catch (e) {

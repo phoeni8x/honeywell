@@ -25,7 +25,7 @@ export default function NotAMemberPage() {
       </p>
       <ul className="mt-8 space-y-3 rounded-2xl border border-honey-border bg-surface px-6 py-6 text-left text-sm text-honey-muted dark:bg-surface-dark">
         <li>
-          <strong className="text-honey-text">Team members</strong> get discounted prices and can pay with Revolut.
+          <strong className="text-honey-text">Team members</strong> get discounted prices and can pay with Revolut or cryptocurrency.
         </li>
         <li>
           <strong className="text-honey-text">Guests</strong> shop at regular prices and use the crypto checkout flow.

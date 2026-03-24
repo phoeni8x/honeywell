@@ -26,7 +26,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       .eq("product_id", params.id);
 
     if (error) {
-      return NextResponse.json({ error: error.message, locations: [] });
+      console.error("[products/locations]", error);
+      return NextResponse.json({ locations: [] });
     }
 
     const rows = (data ?? []) as unknown as Array<{

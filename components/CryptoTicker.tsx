@@ -1,5 +1,6 @@
 "use client";
 
+import { CRYPTO_COIN_OPTIONS } from "@/lib/crypto-coins";
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 
@@ -23,8 +24,9 @@ export function CryptoTicker({ embedded = false }: { embedded?: boolean }) {
         const j = await res.json();
         if (!res.ok || !j.prices) return;
         const p = j.prices as Record<string, { eur?: number; huf?: number }>;
-        const next: Row[] = ["bitcoin", "ethereum", "tether"].map((id) => {
-          const label = id === "bitcoin" ? "BTC" : id === "ethereum" ? "ETH" : "USDT";
+        const next: Row[] = CRYPTO_COIN_OPTIONS.map(({ geckoId, symbol }) => {
+          const id = geckoId;
+          const label = symbol;
           const eur = p[id]?.eur;
           const huf = p[id]?.huf;
           const key = id;

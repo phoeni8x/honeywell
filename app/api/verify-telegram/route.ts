@@ -1,4 +1,5 @@
 import { getClientIp } from "@/lib/client-ip";
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { ratelimitTelegram } from "@/lib/ratelimit";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { getChannelMembership } from "@/lib/telegram";
@@ -40,18 +41,18 @@ export async function POST(request: Request) {
     const ip = getClientIp(request);
     const { success } = await ratelimitTelegram.limit(ip);
     if (!success) {
-      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 429 });
     }
     const body = await request.json();
     const raw = body.telegram_username;
     if (!raw || typeof raw !== "string") {
-      return NextResponse.json({ error: "telegram_username required" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const telegram_username = trimUsername(raw, 64);
     const username = normalizeUsername(telegram_username);
     if (!username || username.length > 64) {
-      return NextResponse.json({ error: "Invalid username" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -59,10 +60,7 @@ export async function POST(request: Request) {
     const adminTelegramUserId = process.env.ADMIN_TELEGRAM_USER_ID?.trim();
 
     if (!botToken || !channelId) {
-      return NextResponse.json(
-        { verified: false, error: "Telegram is not configured on the server" },
-        { status: 503 }
-      );
+      return NextResponse.json({ verified: false, error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 503 });
     }
 
     const getChatUrl = new URL(`https://api.telegram.org/bot${botToken}/getChat`);
@@ -70,10 +68,7 @@ export async function POST(request: Request) {
 
     const chatResRaw = await telegramJson<{ id: number; type?: string }>(getChatUrl.toString());
     if (isParseError(chatResRaw)) {
-      return NextResponse.json(
-        { verified: false, error: "Telegram returned an unexpected response. Try again." },
-        { status: 502 }
-      );
+      return NextResponse.json({ verified: false, error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 502 });
     }
     const chatRes = chatResRaw;
 
@@ -108,11 +103,7 @@ export async function POST(request: Request) {
         });
         if (insErr) {
           console.error("[verify-telegram] token insert", insErr);
-          return NextResponse.json({
-            verified: false,
-            error:
-              "Could not start Telegram link. Run the latest Supabase migration (telegram_verify_tokens) or try again.",
-          });
+          return NextResponse.json({ verified: false, error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST });
         }
 
         const botUser = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "Honeyywell_bot";
@@ -134,15 +125,13 @@ export async function POST(request: Request) {
 
     const memberRes = await getChannelMembership(botToken, channelId, Number(telegramUserId));
     if (!memberRes.ok) {
-      return NextResponse.json({
-        verified: false,
-        error: memberRes.error,
-      });
+      console.error("[verify-telegram] getChatMember failed");
+      return NextResponse.json({ verified: false, error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST });
     }
 
     return NextResponse.json({ verified: memberRes.member });
   } catch (e) {
     console.error("[verify-telegram]", e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 }

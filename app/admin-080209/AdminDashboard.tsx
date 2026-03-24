@@ -2,6 +2,10 @@
 
 import { ADMIN_BASE_PATH } from "@/lib/constants";
 import { parseShopCurrency, type ShopCurrency } from "@/lib/currency";
+import { CRYPTO_COIN_OPTIONS, normalizeActiveCryptoCoin } from "@/lib/crypto-coins";
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
+import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
+import { parseShopOpen } from "@/lib/shop-open";
 import { formatPrice, truncateToken } from "@/lib/helpers";
 import { createClient } from "@/lib/supabase/client";
 import type { Announcement, Order, Product } from "@/types";
@@ -255,7 +259,8 @@ function ProductsSection({
     const path = `${productId}/${Date.now()}-${file.name}`;
     const { error } = await supabase.storage.from("products").upload(path, file, { upsert: true });
     if (error) {
-      alert(error.message);
+      console.error("[admin uploadImage]", error);
+      alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
     const {
@@ -470,8 +475,8 @@ function OrdersSection({
       body: JSON.stringify({ order_id: id }),
     });
     if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      alert((d as { error?: string }).error || "Could not confirm order");
+      await res.json().catch(() => ({}));
+      alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
     onRefresh();
@@ -484,7 +489,8 @@ function OrdersSection({
       p_quantity: order.quantity,
     });
     if (rpcErr) {
-      alert(rpcErr.message);
+      console.error("[cancelOrder]", rpcErr);
+      alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
     await supabase
@@ -496,7 +502,7 @@ function OrdersSection({
 
   async function markPickedUp(order: Order & { product?: Product | null }) {
     if (!order.pickup_photo_url) {
-      alert("A pickup photo is required before marking as picked up.");
+      alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
     await setStatus(order.id, "picked_up");
@@ -751,8 +757,6 @@ function SettingsSection({
 }) {
   const keys = [
     { key: "revolut_payment_link", label: "Revolut payment URL" },
-    { key: "crypto_wallet_address", label: "Crypto wallet address" },
-    { key: "active_crypto_coin", label: "Active crypto coin (bitcoin / ethereum / tether)" },
     { key: "crypto_tutorial_video_url", label: "Crypto guide — tutorial video embed URL (YouTube embed)" },
     { key: "crypto_wallet_app_name", label: "Crypto guide — recommended wallet app name" },
     { key: "crypto_wallet_app_url", label: "Crypto guide — wallet download link" },
@@ -784,6 +788,105 @@ function SettingsSection({
           <option value="HUF">Hungarian Forint (HUF)</option>
           <option value="EUR">Euro (EUR)</option>
         </select>
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-honey-muted">Shop status</label>
+        <p className="mt-1 text-xs text-honey-muted">
+          When closed, customers cannot start checkout or place new orders.
+        </p>
+        <select
+          className="mt-2 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          value={parseShopOpen(settings.shop_open) ? "1" : "0"}
+          onChange={(e) => onSave("shop_open", e.target.value)}
+        >
+          <option value="1">Open</option>
+          <option value="0">Closed</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-honey-muted">Active crypto coin</label>
+        <p className="mt-1 text-xs text-honey-muted">
+          Checkout and crypto payment pages use this asset for the exact amount to send. Use a wallet address on the
+          same network (e.g. Solana address for SOL).
+        </p>
+        <select
+          className="mt-2 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          value={normalizeActiveCryptoCoin(settings.active_crypto_coin)}
+          onChange={(e) => onSave("active_crypto_coin", e.target.value)}
+        >
+          {CRYPTO_COIN_OPTIONS.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label} ({c.symbol})
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-honey-muted">Crypto network</label>
+        <p className="mt-1 text-xs text-honey-muted">
+          Shown on the payment page so customers send on the correct chain (e.g. Ethereum mainnet, Solana, Bitcoin
+          network, Arbitrum, TRC20 for USDT).
+        </p>
+        <textarea
+          className="mt-2 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          rows={2}
+          defaultValue={settings.crypto_network ?? ""}
+          onBlur={(e) => onSave("crypto_network", e.target.value)}
+          placeholder="e.g. Ethereum mainnet (ERC-20)"
+        />
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-honey-muted">Crypto wallet address (receiving)</label>
+        <p className="mt-1 text-xs text-honey-muted">Must match the coin and network above. Customers can copy this on the payment page.</p>
+        <textarea
+          className="mt-2 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          rows={2}
+          defaultValue={settings.crypto_wallet_address ?? ""}
+          onBlur={(e) => onSave("crypto_wallet_address", e.target.value)}
+          placeholder="Paste the deposit address"
+        />
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-honey-muted">Team fulfillment options</label>
+        <p className="mt-1 text-xs text-honey-muted">
+          Guests always use dead drop only (when dead drop is on and a location is active). Team members see the
+          options you enable below.
+        </p>
+        <div className="mt-3 space-y-3">
+          <div>
+            <label className="text-xs text-honey-muted">Dead drop</label>
+            <select
+              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              value={parseFulfillmentOptionEnabled(settings.fulfillment_dead_drop_enabled) ? "1" : "0"}
+              onChange={(e) => onSave("fulfillment_dead_drop_enabled", e.target.value)}
+            >
+              <option value="1">Enabled</option>
+              <option value="0">Disabled</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-honey-muted">Pickup</label>
+            <select
+              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              value={parseFulfillmentOptionEnabled(settings.fulfillment_pickup_enabled) ? "1" : "0"}
+              onChange={(e) => onSave("fulfillment_pickup_enabled", e.target.value)}
+            >
+              <option value="1">Enabled</option>
+              <option value="0">Disabled</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-honey-muted">Delivery</label>
+            <select
+              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              value={parseFulfillmentOptionEnabled(settings.fulfillment_delivery_enabled) ? "1" : "0"}
+              onChange={(e) => onSave("fulfillment_delivery_enabled", e.target.value)}
+            >
+              <option value="1">Enabled</option>
+              <option value="0">Disabled</option>
+            </select>
+          </div>
+        </div>
       </div>
       {keys.map(({ key, label }) => (
         <div key={key}>
@@ -965,8 +1068,8 @@ function SupportTicketsSection({ supabase }: { supabase: ReturnType<typeof creat
       body: JSON.stringify({ ticket_id: id, message, status: nextStatus }),
     });
     if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      alert((d as { error?: string }).error || "Failed");
+      await res.json().catch(() => ({}));
+      alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
     setReplyText((r) => ({ ...r, [id]: "" }));

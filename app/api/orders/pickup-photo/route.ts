@@ -1,3 +1,4 @@
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
@@ -9,7 +10,7 @@ export async function POST(request: Request) {
     const customerToken = form.get("customerToken") as string | null;
 
     if (!file || !orderId || !customerToken) {
-      return NextResponse.json({ error: "Missing data" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const supabase = createServiceClient();
@@ -21,11 +22,11 @@ export async function POST(request: Request) {
       .single();
 
     if (orderErr || !order || order.customer_token !== customerToken) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });
     }
 
     if (order.status !== "confirmed" && order.status !== "ready_for_pickup") {
-      return NextResponse.json({ error: "Order not ready for pickup proof" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const ext = file.name.split(".").pop() || "jpg";
@@ -38,7 +39,8 @@ export async function POST(request: Request) {
     });
 
     if (upErr) {
-      return NextResponse.json({ error: upErr.message }, { status: 500 });
+      console.error("[pickup-photo upload]", upErr);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
     }
 
     const {
@@ -55,12 +57,13 @@ export async function POST(request: Request) {
       .eq("id", orderId);
 
     if (updErr) {
-      return NextResponse.json({ error: updErr.message }, { status: 500 });
+      console.error("[pickup-photo update]", updErr);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true, url: publicUrl });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 }

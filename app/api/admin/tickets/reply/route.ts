@@ -1,3 +1,4 @@
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { sanitizePlainText } from "@/lib/sanitize";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
     const status = body.status as string | undefined;
 
     if (!ticketId || !message.trim()) {
-      return NextResponse.json({ error: "ticket_id and message required" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const allowed = ["open", "in_progress", "resolved", "closed"];
@@ -26,7 +27,8 @@ export async function POST(request: Request) {
     });
 
     if (mErr) {
-      return NextResponse.json({ error: mErr.message }, { status: 400 });
+      console.error("[admin ticket reply]", mErr);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const patch: Record<string, string> = { updated_at: new Date().toISOString() };
@@ -37,6 +39,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 }

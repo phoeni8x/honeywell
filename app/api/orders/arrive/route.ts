@@ -1,3 +1,4 @@
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { getDistanceKm } from "@/lib/location";
 import { NextResponse } from "next/server";
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { orderId, customerToken, lat, lon, locationId } = body as Record<string, unknown>;
     if (!orderId || !customerToken || typeof lat !== "number" || typeof lon !== "number") {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const supabase = createServiceClient();
@@ -21,12 +22,12 @@ export async function POST(request: Request) {
       .single();
 
     if (oErr || !order || order.customer_token !== customerToken) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });
     }
 
     const locId = (locationId as string) ?? order.location_id;
     if (!locId) {
-      return NextResponse.json({ error: "No pickup location on order" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const { data: loc } = await supabase
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
       .single();
 
     if (!loc) {
-      return NextResponse.json({ error: "Location not found" }, { status: 404 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });
     }
 
     const distKm = getDistanceKm(lat, lon, Number(loc.latitude), Number(loc.longitude));
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
     if (distM > MAX_M) {
       return NextResponse.json({
         ok: false,
-        message: `You don't appear to be at ${loc.name} yet (${Math.round(distM)} m away, max ${MAX_M} m).`,
+        message: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST,
         distance_meters: distM,
       });
     }
@@ -66,6 +67,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, distance_meters: distM });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 }

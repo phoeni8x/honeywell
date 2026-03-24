@@ -1,4 +1,9 @@
-import { generateReferralCode } from "@/lib/referral-code";
+import {
+  generateReferralCode,
+  generateReferralCodeFallback,
+  isPgUniqueViolation,
+} from "@/lib/referral-code";
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
@@ -9,7 +14,7 @@ export async function POST(request: Request) {
   try {
     const { customer_token } = await request.json();
     if (!customer_token || typeof customer_token !== "string") {
-      return NextResponse.json({ error: "customer_token required" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const supabase = createServiceClient();
@@ -23,13 +28,19 @@ export async function POST(request: Request) {
     }
 
     if (bees && !bees.referral_code) {
-      for (let i = 0; i < 8; i++) {
-        const code = generateReferralCode();
+      const maxAttempts = 40;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const code = attempt < maxAttempts - 3 ? generateReferralCode() : generateReferralCodeFallback();
         const { error } = await supabase.from("bees_wallets").update({ referral_code: code }).eq("id", bees.id);
         if (!error) {
           bees = { ...bees, referral_code: code };
           break;
         }
+        if (isPgUniqueViolation(error)) {
+          continue;
+        }
+        console.error("[bootstrap] referral_code update (non-unique error)", error);
+        break;
       }
     }
 
@@ -55,6 +66,6 @@ export async function POST(request: Request) {
     });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 }

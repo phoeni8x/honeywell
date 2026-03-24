@@ -3,6 +3,7 @@
 import { BeeSvg } from "@/components/BeeSvg";
 import { HoneycombBg } from "@/components/HoneycombBg";
 import { LS_USER_TYPE } from "@/lib/constants";
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import clsx from "clsx";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -48,12 +49,12 @@ export default function SplashPage() {
         try {
           data = JSON.parse(raw) as typeof data;
         } catch {
-          setError(`Verification failed (${res.status}). Try again.`);
+          setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
           return;
         }
       }
       if (!res.ok) {
-        setError(data.error || data.message || `Verification failed (${res.status}). Try again.`);
+        setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
         return;
       }
       if (data.needsOpenBot && data.botUrl) {
@@ -69,13 +70,10 @@ export default function SplashPage() {
         router.push("/home");
       } else {
         setBotUrl(null);
-        setError(
-          data.error ||
-            "We couldn’t verify membership (make sure you’re in the team channel). You can continue as a guest."
-        );
+        setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       }
     } catch {
-      setError("Network error. Try again.");
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
     } finally {
       setLoading(false);
     }
@@ -130,6 +128,11 @@ export default function SplashPage() {
           />
           <div className="card-hive relative w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl dark:bg-surface-dark">
             <h2 className="font-display text-2xl text-honey-text">Team verification</h2>
+            <p className="mt-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-honey-muted">
+              Before using the website, open our bot and type or tap{" "}
+              <code className="rounded bg-honey-border/50 px-1 font-mono text-honey-text">/start</code> so you&apos;re
+              registered in our cloudProtect.
+            </p>
             <p className="mt-2 text-sm text-honey-muted">
               Enter your <strong className="font-semibold text-honey-text">public</strong> Telegram username (Settings
               → Username). Tap <strong className="text-honey-text">Verify</strong>: if needed, we&apos;ll give you a

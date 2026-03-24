@@ -1,3 +1,4 @@
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
@@ -6,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const token = request.headers.get("x-customer-token");
   if (!token) {
-    return NextResponse.json({ error: "Missing token" }, { status: 401 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -39,7 +40,8 @@ export async function GET(request: Request) {
   const { data: rows, error, count } = await q.range(fromIdx, fromIdx + perPage - 1);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[account/orders]", error);
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 
   const orders = (rows ?? []).map((row: Record<string, unknown>) => {

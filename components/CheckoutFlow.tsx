@@ -1,6 +1,7 @@
 "use client";
 
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { LS_REFERRED_BY } from "@/lib/constants";
 import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { getPriceForUser } from "@/lib/helpers";
@@ -55,10 +56,9 @@ export function CheckoutFlow({
   onSuccess,
   loading: externalLoading,
 }: CheckoutFlowProps) {
-  const { formatPrice } = useShopCurrency();
+  const { formatPrice, shopOpen, fulfillmentOptions } = useShopCurrency();
   const [step, setStep] = useState<Step>(1);
   const [fulfillment, setFulfillment] = useState<FulfillmentType | null>(null);
-  const [guestModal, setGuestModal] = useState(false);
 
   const [deadDrop, setDeadDrop] = useState<DeadDrop | null>(null);
   const [pickupPoints, setPickupPoints] = useState<PickupLoc[]>([]);
@@ -114,6 +114,15 @@ export function CheckoutFlow({
   }, [open, loadContext]);
 
   useEffect(() => {
+    if (!open) return;
+    if (userType === "guest") {
+      setPointsToUse(0);
+      setBeesToUse(0);
+      setRemainderPay("crypto");
+    }
+  }, [open, userType]);
+
+  useEffect(() => {
     if (!open || fulfillment !== "delivery") return;
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -128,22 +137,59 @@ export function CheckoutFlow({
 
   if (!open) return null;
 
+  if (!shopOpen) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <button type="button" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-label="Close" />
+        <div className="relative w-full max-w-md rounded-2xl border border-honey-border bg-surface p-6 shadow-2xl dark:bg-surface-dark">
+          <h2 className="font-display text-xl text-honey-text">Shop is closed</h2>
+          <p className="mt-2 text-sm text-honey-muted">
+            We&apos;re not taking new orders right now. Please try again later.
+          </p>
+          <button type="button" onClick={onClose} className="btn-primary mt-6 w-full py-3 text-sm font-semibold text-on-primary">
+            OK
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   function pickFulfillment(ft: FulfillmentType) {
     if (!userType) {
-      setError("Choose Team Member or Guest from the home page first.");
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
-    if (ft === "dead_drop" && !deadDrop) {
-      setError("No active dead drop.");
+    if (userType === "guest" && ft !== "dead_drop") {
       return;
     }
-    if (userType === "guest" && (ft === "pickup" || ft === "delivery")) {
-      setGuestModal(true);
+    if (ft === "dead_drop") {
+      if (!fulfillmentOptions.deadDrop) {
+        setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+        return;
+      }
+      if (!deadDrop) {
+        setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+        return;
+      }
+    }
+    if (ft === "pickup" && !fulfillmentOptions.pickup) {
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+      return;
+    }
+    if (ft === "delivery" && !fulfillmentOptions.delivery) {
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
     setFulfillment(ft);
     setStep(2);
   }
+
+  const showDeadDropCard =
+    userType === "team_member"
+      ? fulfillmentOptions.deadDrop
+      : fulfillmentOptions.deadDrop && Boolean(deadDrop);
+  const showPickupCard = userType === "team_member" && fulfillmentOptions.pickup;
+  const showDeliveryCard = userType === "team_member" && fulfillmentOptions.delivery;
 
   function canProceedStep2(): boolean {
     if (!fulfillment) return false;
@@ -157,6 +203,7 @@ export function CheckoutFlow({
   }
 
   function paymentMethodForSubmit(): string {
+    if (userType === "guest") return "crypto";
     if (remainderHuf <= 0.01) {
       if (beesToUse > 0 && pointsToUse === 0) return "bees";
       if (pointsToUse > 0) return "points";
@@ -167,11 +214,15 @@ export function CheckoutFlow({
 
   async function submitOrder() {
     if (!userType) return;
+    if (!shopOpen) {
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+      return;
+    }
     setError(null);
     const token = getOrCreateCustomerToken();
     const pm = paymentMethodForSubmit();
-    if (remainderHuf > 0.01 && userType === "guest" && pm === "revolut") {
-      setError("Guests cannot use Revolut.");
+    if (userType === "guest" && pm !== "crypto") {
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
     setLoading(true);
@@ -207,12 +258,12 @@ export function CheckoutFlow({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Could not place order");
+        setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
         return;
       }
       onSuccess({ orderId: data.order_id as string, paymentMethod: pm, remainderHuf });
     } catch {
-      setError("Network error");
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
     } finally {
       setLoading(false);
     }
@@ -252,59 +303,76 @@ export function CheckoutFlow({
         {step === 1 && (
           <div className="space-y-4">
             <h2 className="font-display text-xl text-honey-text">How would you like to receive your order?</h2>
+            {userType === "guest" && (
+              <p className="text-sm text-honey-muted">
+                As a guest, orders are fulfilled via <span className="font-medium text-honey-text">dead drop</span>{" "}
+                only. Team members can also use pickup or delivery when enabled.
+              </p>
+            )}
+            {userType === "guest" && (!fulfillmentOptions.deadDrop || !deadDrop) && (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
+                {fulfillmentOptions.deadDrop
+                  ? "There is no active dead drop location right now. Please try again later or contact support."
+                  : "Dead drop is temporarily unavailable. Please contact support."}
+              </div>
+            )}
             <div className="grid gap-3">
-              <button
-                type="button"
-                onClick={() => pickFulfillment("dead_drop")}
-                disabled={!deadDrop}
-                className={clsx(
-                  "flex items-start gap-3 rounded-xl border p-4 text-left transition",
-                  deadDrop
-                    ? "border-honey-border hover:border-primary/40"
-                    : "cursor-not-allowed border-honey-border/50 opacity-60"
-                )}
-              >
-                <MapPin className="mt-0.5 h-5 w-5 text-primary" />
-                <div>
-                  <p className="font-semibold text-honey-text">Dead drop</p>
-                  <p className="text-sm text-honey-muted">{deadDrop ? deadDrop.name : "No active dead drop right now."}</p>
-                </div>
-              </button>
+              {showDeadDropCard && (
+                <button
+                  type="button"
+                  onClick={() => pickFulfillment("dead_drop")}
+                  disabled={!deadDrop}
+                  className={clsx(
+                    "flex items-start gap-3 rounded-xl border p-4 text-left transition",
+                    deadDrop
+                      ? "border-honey-border hover:border-primary/40"
+                      : "cursor-not-allowed border-honey-border/50 opacity-60"
+                  )}
+                >
+                  <MapPin className="mt-0.5 h-5 w-5 text-primary" />
+                  <div>
+                    <p className="font-semibold text-honey-text">Dead drop</p>
+                    <p className="text-sm text-honey-muted">
+                      {deadDrop ? deadDrop.name : "No active dead drop right now."}
+                    </p>
+                  </div>
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => pickFulfillment("pickup")}
-                className={clsx(
-                  "flex items-start gap-3 rounded-xl border p-4 text-left transition",
-                  userType === "guest"
-                    ? "cursor-not-allowed border-dashed border-honey-border/60 opacity-70"
-                    : "border-honey-border hover:border-primary/40"
-                )}
-              >
-                <Package className="mt-0.5 h-5 w-5 text-primary" />
-                <div>
-                  <p className="font-semibold text-honey-text">Pickup {userType === "guest" && "(team only)"}</p>
-                  <p className="text-sm text-honey-muted">Collect at a shop pickup point.</p>
-                </div>
-              </button>
+              {showPickupCard && (
+                <button
+                  type="button"
+                  onClick={() => pickFulfillment("pickup")}
+                  className="flex items-start gap-3 rounded-xl border border-honey-border p-4 text-left transition hover:border-primary/40"
+                >
+                  <Package className="mt-0.5 h-5 w-5 text-primary" />
+                  <div>
+                    <p className="font-semibold text-honey-text">Pickup</p>
+                    <p className="text-sm text-honey-muted">Collect at a shop pickup point.</p>
+                  </div>
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => pickFulfillment("delivery")}
-                className={clsx(
-                  "flex items-start gap-3 rounded-xl border p-4 text-left transition",
-                  userType === "guest"
-                    ? "cursor-not-allowed border-dashed border-honey-border/60 opacity-70"
-                    : "border-honey-border hover:border-primary/40"
-                )}
-              >
-                <Truck className="mt-0.5 h-5 w-5 text-primary" />
-                <div>
-                  <p className="font-semibold text-honey-text">Delivery {userType === "guest" && "(team only)"}</p>
-                  <p className="text-sm text-honey-muted">We bring it to your address.</p>
-                </div>
-              </button>
+              {showDeliveryCard && (
+                <button
+                  type="button"
+                  onClick={() => pickFulfillment("delivery")}
+                  className="flex items-start gap-3 rounded-xl border border-honey-border p-4 text-left transition hover:border-primary/40"
+                >
+                  <Truck className="mt-0.5 h-5 w-5 text-primary" />
+                  <div>
+                    <p className="font-semibold text-honey-text">Delivery</p>
+                    <p className="text-sm text-honey-muted">We bring it to your address.</p>
+                  </div>
+                </button>
+              )}
             </div>
+            {userType === "team_member" &&
+              !showDeadDropCard &&
+              !showPickupCard &&
+              !showDeliveryCard && (
+                <p className="text-sm text-honey-muted">No fulfillment options are enabled. Please contact the shop.</p>
+              )}
           </div>
         )}
 
@@ -430,32 +498,45 @@ export function CheckoutFlow({
         {step === 3 && (
           <div className="space-y-4">
             <h3 className="font-display text-lg text-honey-text">Payment</h3>
-            <p className="text-sm text-honey-muted">
-              Order total {formatPrice(baseTotal)} · Wallet: {walletPoints} pts · {walletBees.toFixed(2)} Bees
-            </p>
-            <div>
-              <label className="text-xs font-semibold text-honey-muted">Points to apply (1 pt = 1 HUF)</label>
-              <input
-                type="number"
-                min={0}
-                max={Math.min(walletPoints, Math.floor(baseTotal))}
-                className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-                value={pointsToUse || ""}
-                onChange={(e) => setPointsToUse(Math.max(0, parseInt(e.target.value, 10) || 0))}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-honey-muted">Bees to apply (1 Bee = 10,000 HUF)</label>
-              <input
-                type="number"
-                min={0}
-                step={0.0001}
-                max={walletBees}
-                className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-                value={beesToUse || ""}
-                onChange={(e) => setBeesToUse(Math.max(0, parseFloat(e.target.value) || 0))}
-              />
-            </div>
+            {userType === "guest" ? (
+              <p className="text-sm text-honey-muted">
+                Order total {formatPrice(baseTotal)}. Guests pay with <span className="font-medium text-honey-text">cryptocurrency</span>{" "}
+                only (no Points or Bees at checkout).
+              </p>
+            ) : (
+              <p className="text-sm text-honey-muted">
+                Order total {formatPrice(baseTotal)} · Wallet: {walletPoints} pts · {walletBees.toFixed(2)} Bees.
+                After Points/Bees, you can pay the remainder with <span className="font-medium text-honey-text">Revolut</span>{" "}
+                or <span className="font-medium text-honey-text">cryptocurrency</span> — choose below.
+              </p>
+            )}
+            {userType === "team_member" && (
+              <>
+                <div>
+                  <label className="text-xs font-semibold text-honey-muted">Points to apply (1 pt = 1 HUF)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={Math.min(walletPoints, Math.floor(baseTotal))}
+                    className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                    value={pointsToUse || ""}
+                    onChange={(e) => setPointsToUse(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-honey-muted">Bees to apply (1 Bee = 10,000 HUF)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.0001}
+                    max={walletBees}
+                    className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                    value={beesToUse || ""}
+                    onChange={(e) => setBeesToUse(Math.max(0, parseFloat(e.target.value) || 0))}
+                  />
+                </div>
+              </>
+            )}
             {remainderHuf > 0.01 && (
               <div>
                 <p className="mb-2 text-xs font-semibold text-honey-muted">Pay remaining {formatPrice(remainderHuf)} with</p>
@@ -477,7 +558,9 @@ export function CheckoutFlow({
                     onClick={() => setRemainderPay("crypto")}
                     className={clsx(
                       "flex-1 rounded-full border py-2 text-sm font-medium",
-                      remainderPay === "crypto" ? "border-primary bg-primary/10 text-primary" : "border-honey-border"
+                      userType === "guest" || remainderPay === "crypto"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-honey-border"
                     )}
                   >
                     Crypto
@@ -533,24 +616,6 @@ export function CheckoutFlow({
           </div>
         )}
 
-        {guestModal && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <button type="button" className="absolute inset-0 bg-black/60" onClick={() => setGuestModal(false)} />
-            <div className="relative max-w-sm rounded-2xl border border-honey-border bg-surface p-6 text-center dark:bg-surface-dark">
-              <p className="text-sm text-honey-text">
-                This option is for Honey Well team members only. For access, please contact the admin via our Telegram
-                channel.
-              </p>
-              <button
-                type="button"
-                onClick={() => setGuestModal(false)}
-                className="mt-4 rounded-full bg-primary px-6 py-2 text-sm font-semibold text-white"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

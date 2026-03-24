@@ -1,3 +1,4 @@
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { sanitizePlainText } from "@/lib/sanitize";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -7,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const token = request.headers.get("x-customer-token");
   if (!token) {
-    return NextResponse.json({ error: "Missing token" }, { status: 401 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
 
   const supabase = createServiceClient();
@@ -18,7 +19,8 @@ export async function GET(request: Request) {
     .order("updated_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[tickets GET]", error);
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 
   return NextResponse.json({ tickets: rows ?? [] });
@@ -27,7 +29,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const token = request.headers.get("x-customer-token");
   if (!token) {
-    return NextResponse.json({ error: "Missing token" }, { status: 401 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
 
   try {
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
     const orderId = typeof body.order_id === "string" ? body.order_id : null;
 
     if (!subject.trim() || !message.trim()) {
-      return NextResponse.json({ error: "subject and message required" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const allowed = ["order", "payment", "pickup", "product", "other"];
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
         .eq("customer_token", token)
         .maybeSingle();
       if (!ord) {
-        return NextResponse.json({ error: "Invalid order" }, { status: 400 });
+        return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
       }
     }
 
@@ -71,7 +73,8 @@ export async function POST(request: Request) {
       .single();
 
     if (tErr || !ticket) {
-      return NextResponse.json({ error: tErr?.message ?? "Could not create ticket" }, { status: 500 });
+      console.error("[tickets POST]", tErr);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
     }
 
     const { error: mErr } = await supabase.from("ticket_messages").insert({
@@ -81,7 +84,8 @@ export async function POST(request: Request) {
     });
 
     if (mErr) {
-      return NextResponse.json({ error: mErr.message }, { status: 500 });
+      console.error("[tickets POST message]", mErr);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
     }
 
     await supabase
@@ -92,6 +96,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ticket });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 }

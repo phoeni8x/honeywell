@@ -1,5 +1,6 @@
 "use client";
 
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { X } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -19,7 +20,7 @@ export function PickupPhotoModal({ open, onClose, onSubmit }: PickupPhotoModalPr
   async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith("image/")) {
-      setError("Please choose an image file.");
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
     setError(null);
@@ -28,7 +29,7 @@ export function PickupPhotoModal({ open, onClose, onSubmit }: PickupPhotoModalPr
       await onSubmit(file);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
     } finally {
       setLoading(false);
       if (inputRef.current) inputRef.current.value = "";

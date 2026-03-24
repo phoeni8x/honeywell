@@ -1,3 +1,4 @@
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { sanitizePlainText } from "@/lib/sanitize";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -9,7 +10,7 @@ type Params = { params: Promise<{ ticketNumber: string }> };
 export async function POST(request: Request, context: Params) {
   const token = request.headers.get("x-customer-token");
   if (!token) {
-    return NextResponse.json({ error: "Missing token" }, { status: 401 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
 
   const { ticketNumber } = await context.params;
@@ -19,7 +20,7 @@ export async function POST(request: Request, context: Params) {
     const body = await request.json();
     const message = sanitizePlainText(String(body.message ?? ""), 8000);
     if (!message.trim()) {
-      return NextResponse.json({ error: "message required" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const supabase = createServiceClient();
@@ -31,10 +32,10 @@ export async function POST(request: Request, context: Params) {
       .maybeSingle();
 
     if (tErr || !ticket) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });
     }
     if (ticket.status === "closed") {
-      return NextResponse.json({ error: "Ticket is closed" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const { error: mErr } = await supabase.from("ticket_messages").insert({
@@ -44,7 +45,8 @@ export async function POST(request: Request, context: Params) {
     });
 
     if (mErr) {
-      return NextResponse.json({ error: mErr.message }, { status: 500 });
+      console.error("[ticket message insert]", mErr);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
     }
 
     await supabase
@@ -58,6 +60,6 @@ export async function POST(request: Request, context: Params) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 }

@@ -15,7 +15,8 @@ export async function GET() {
       .order("name", { ascending: true });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("[pickup-points]", error);
+      return NextResponse.json({ locations: [] });
     }
     return NextResponse.json({ locations: data ?? [] });
   } catch (e) {

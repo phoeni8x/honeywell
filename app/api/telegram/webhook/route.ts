@@ -1,3 +1,4 @@
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import {
   banChatMemberApi,
@@ -101,7 +102,7 @@ async function resolveTargetUserId(
     if (Number.isFinite(n) && n > 0) return { id: n };
   }
   const uname = r.replace(/^@/, "").toLowerCase();
-  if (!uname) return { error: "Missing user id or @username." };
+  if (!uname) return { error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST };
   const { data } = await supabase
     .from("telegram_verifications")
     .select("telegram_user_id")
@@ -110,9 +111,7 @@ async function resolveTargetUserId(
   if (data?.telegram_user_id != null) return { id: Number(data.telegram_user_id) };
   const tgId = await getTelegramUserIdByUsername(botToken, uname);
   if (tgId != null) return { id: tgId };
-  return {
-    error: `Could not resolve @${uname}. Try their numeric Telegram user id, or they must have messaged this bot at least once.`,
-  };
+  return { error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST };
 }
 
 async function handleBroadcast(
@@ -127,7 +126,7 @@ async function handleBroadcast(
     .eq("broadcast_opt_in", true);
 
   if (error) {
-    await sendBotMessage(botToken, adminChatId, "Could not load recipients. Run DB migration 006 if needed, or try again.");
+    await sendBotMessage(botToken, adminChatId, PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
     return;
   }
 
@@ -227,7 +226,7 @@ async function handleBroadcastList(
     .order("telegram_username");
 
   if (error) {
-    await sendBotMessage(botToken, adminChatId, "Could not load list. Run DB migration 006 if needed.");
+    await sendBotMessage(botToken, adminChatId, PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
     return;
   }
 
@@ -360,22 +359,22 @@ export async function POST(request: Request) {
 
   if (process.env.NODE_ENV === "production") {
     if (!webhookSecret || header !== webhookSecret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
     }
   } else if (webhookSecret && header !== webhookSecret) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
-    return NextResponse.json({ error: "Not configured" }, { status: 503 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 503 });
   }
 
   let update: TelegramUpdate;
   try {
     update = await request.json();
   } catch {
-    return NextResponse.json({ error: "Bad JSON" }, { status: 400 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
   }
 
   const msg = update.message;

@@ -1,6 +1,9 @@
 import { createServiceClient } from "@/lib/supabase/admin";
 import { processOrderConfirmed } from "@/lib/order-confirmation-server";
 import { sanitizePlainText } from "@/lib/sanitize";
+import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
+import { parseShopOpen } from "@/lib/shop-open";
 import type { PaymentMethod, UserType } from "@/types";
 import { NextResponse } from "next/server";
 
@@ -49,43 +52,75 @@ export async function handleCreateOrder(request: Request) {
     } & FulfillmentBody = body;
 
     if (!customer_token || !product_id || !quantity || !user_type || !payment_method) {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
     if (quantity < 1) {
-      return NextResponse.json({ error: "Invalid quantity" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
     if (user_type !== "team_member" && user_type !== "guest") {
-      return NextResponse.json({ error: "Invalid user type" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const pm = payment_method as string;
     const allowedPm = ["revolut", "crypto", "bees", "points"];
     if (!allowedPm.includes(pm)) {
-      return NextResponse.json({ error: "Invalid payment method" }, { status: 400 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     if (user_type === "guest" && pm === "revolut") {
       console.warn("[order] guest attempted revolut", { customer_token: customer_token?.slice(0, 8) });
-      return NextResponse.json({ error: "Revolut is for team members only" }, { status: 403 });
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
-    if (user_type === "guest" && !["crypto", "bees", "points"].includes(pm)) {
-      return NextResponse.json({ error: "Invalid payment method for guests" }, { status: 400 });
-    }
-
-    const ft = fulfillment_type as string | undefined;
-    if (ft && !["dead_drop", "pickup", "delivery"].includes(ft)) {
-      return NextResponse.json({ error: "Invalid fulfillment type" }, { status: 400 });
-    }
-    if (user_type === "guest" && ft && (ft === "pickup" || ft === "delivery")) {
-      return NextResponse.json({ error: "This fulfillment option is for team members only" }, { status: 403 });
+    if (user_type === "guest" && pm !== "crypto") {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
 
     const bUsed = typeof bees_used === "number" && bees_used > 0 ? bees_used : 0;
     const pUsed = typeof points_used === "number" && points_used > 0 ? Math.floor(points_used) : 0;
 
+    if (user_type === "guest" && (bUsed > 0 || pUsed > 0)) {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
+    }
+
+    const ft = fulfillment_type as string | undefined;
+    if (ft && !["dead_drop", "pickup", "delivery"].includes(ft)) {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+    }
+    if (user_type === "guest" && ft && (ft === "pickup" || ft === "delivery")) {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
+    }
+
     const refCode = referred_by ? sanitizePlainText(referred_by, 32) : "";
 
     const supabase = createServiceClient();
+
+    const { data: settingsRows } = await supabase
+      .from("settings")
+      .select("key, value")
+      .in("key", [
+        "shop_open",
+        "fulfillment_dead_drop_enabled",
+        "fulfillment_pickup_enabled",
+        "fulfillment_delivery_enabled",
+      ]);
+    const settingsMap = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value])) as Record<
+      string,
+      string
+    >;
+    if (!parseShopOpen(settingsMap.shop_open)) {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
+    }
+
+    if (ft === "dead_drop" && !parseFulfillmentOptionEnabled(settingsMap.fulfillment_dead_drop_enabled)) {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
+    }
+    if (ft === "pickup" && !parseFulfillmentOptionEnabled(settingsMap.fulfillment_pickup_enabled)) {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
+    }
+    if (ft === "delivery" && !parseFulfillmentOptionEnabled(settingsMap.fulfillment_delivery_enabled)) {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
+    }
+
     const { data, error } = await supabase.rpc("create_order_atomic", {
       p_customer_token: customer_token,
       p_product_id: product_id,
@@ -107,25 +142,8 @@ export async function handleCreateOrder(request: Request) {
 
     if (error) {
       const msg = error.message || "";
-      if (msg.includes("insufficient_stock")) {
-        return NextResponse.json({ error: "Not enough stock" }, { status: 409 });
-      }
-      if (msg.includes("product_not_found")) {
-        return NextResponse.json({ error: "Product not found" }, { status: 404 });
-      }
-      if (msg.includes("guest_revolut_forbidden")) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      if (msg.includes("guest_fulfillment_invalid") || msg.includes("pickup_team_only") || msg.includes("delivery_team_only")) {
-        return NextResponse.json({ error: "This fulfillment option is for team members only" }, { status: 403 });
-      }
-      if (msg.includes("remainder_payment_invalid")) {
-        return NextResponse.json(
-          { error: "Use Revolut or Crypto to pay any remaining balance after Bees/Points." },
-          { status: 400 }
-        );
-      }
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      console.error("[create_order_atomic]", msg);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const orderId = data as string;
@@ -167,6 +185,6 @@ export async function handleCreateOrder(request: Request) {
     return NextResponse.json({ order_id: orderId });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@
 
 import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { ORDER_STATUS_LABELS } from "@/lib/helpers";
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import type { OrderWithProduct } from "@/types";
 import clsx from "clsx";
 import { LifeBuoy, MapPin, Navigation, Truck } from "lucide-react";
@@ -70,7 +71,7 @@ export function OrderCard({
       body: form,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Upload failed");
+    if (!res.ok) throw new Error(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
     onPhotoUploaded?.();
   }
 

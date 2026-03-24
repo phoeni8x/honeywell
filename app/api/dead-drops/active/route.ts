@@ -14,7 +14,8 @@ export async function GET() {
       .maybeSingle();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("[dead-drops/active]", error);
+      return NextResponse.json({ dead_drop: null });
     }
     return NextResponse.json({ dead_drop: data });
   } catch (e) {

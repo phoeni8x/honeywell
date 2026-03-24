@@ -67,7 +67,7 @@ export function HomePageInner() {
     },
     {
       title: "3. Pay",
-      body: "Team members pay via Revolut. Guests follow the crypto instructions on the payment page.",
+      body: "Team members can pay the remainder with Revolut or cryptocurrency — your choice at checkout. Guests pay with cryptocurrency.",
     },
     {
       title: "4. Pick up",
@@ -111,7 +111,7 @@ export function HomePageInner() {
       {userType === "team_member" && (
         <div className="rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-accent/10 to-primary/5 px-6 py-5 text-center dark:from-primary/20 dark:via-accent/15">
           <p className="font-display text-lg text-honey-text">
-            Welcome back, team member! You have access to exclusive discounts and Revolut payments.
+            Welcome back, team member! You have access to exclusive discounts and can pay with Revolut or crypto.
           </p>
         </div>
       )}

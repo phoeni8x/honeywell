@@ -4,6 +4,7 @@ import { CheckoutFlow } from "@/components/CheckoutFlow";
 import { LS_USER_TYPE } from "@/lib/constants";
 import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { getPriceForUser } from "@/lib/helpers";
+import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createClient } from "@/lib/supabase/client";
 import type { Product, UserType } from "@/types";
 import { canDisplayProductImageUrl, ProductImage } from "@/components/ProductImage";
@@ -13,7 +14,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function ProductPage() {
-  const { formatPrice } = useShopCurrency();
+  const { formatPrice, shopOpen } = useShopCurrency();
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
@@ -148,8 +149,23 @@ export default function ProductPage() {
                 +
               </button>
             </div>
-            <button type="button" onClick={() => setCheckoutOpen(true)} className="btn-primary px-8 py-3 text-sm text-on-primary">
-              Proceed to checkout
+            <button
+              type="button"
+              disabled={!shopOpen}
+              onClick={() => {
+                if (!shopOpen) {
+                  setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+                  return;
+                }
+                setError(null);
+                setCheckoutOpen(true);
+              }}
+              className={clsx(
+                "px-8 py-3 text-sm text-on-primary",
+                shopOpen ? "btn-primary" : "cursor-not-allowed rounded-full bg-honey-border/80 text-honey-muted"
+              )}
+            >
+              {shopOpen ? "Proceed to checkout" : "Shop is closed"}
             </button>
           </div>
         )}
