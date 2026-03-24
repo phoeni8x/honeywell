@@ -53,7 +53,8 @@ export async function handleCreateOrder(request: Request) {
       referred_by?: string | null;
     } & FulfillmentBody = body;
 
-    if (!customer_token || !product_id || !quantity || !user_type || !payment_method) {
+    const token = typeof customer_token === "string" ? customer_token.trim() : "";
+    if (!token || !product_id || !quantity || !user_type || !payment_method) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
     if (quantity < 1) {
@@ -70,7 +71,7 @@ export async function handleCreateOrder(request: Request) {
     }
 
     if (user_type === "guest" && pm === "revolut") {
-      console.warn("[order] guest attempted revolut", { customer_token: customer_token?.slice(0, 8) });
+      console.warn("[order] guest attempted revolut", { customer_token: token.slice(0, 8) });
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
     if (user_type === "guest" && pm !== "crypto") {
@@ -132,7 +133,7 @@ export async function handleCreateOrder(request: Request) {
     }
 
     const { data, error } = await supabase.rpc("create_order_atomic", {
-      p_customer_token: customer_token,
+      p_customer_token: token,
       p_product_id: product_id,
       p_quantity: quantity,
       p_user_type: user_type,
@@ -152,16 +153,37 @@ export async function handleCreateOrder(request: Request) {
     });
 
     if (error) {
-      const msg = error.message || "";
-      console.error("[create_order_atomic]", msg);
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+      const err = error as { message?: string; code?: string; details?: string; hint?: string };
+      console.error("[create_order_atomic]", {
+        message: err.message,
+        code: err.code,
+        details: err.details,
+        hint: err.hint,
+      });
+      return NextResponse.json(
+        { error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, code: err.code ?? "rpc_error" },
+        { status: 400 }
+      );
     }
 
-    const orderId = data as string;
+    const orderId =
+      typeof data === "string"
+        ? data
+        : data != null
+          ? String(data)
+          : "";
+    if (!orderId) {
+      console.error("[create_order_atomic] empty return data", data);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, code: "empty_order_id" }, { status: 500 });
+    }
 
     const { data: ord } = await supabase.from("orders").select("status").eq("id", orderId).single();
     if (ord?.status === "confirmed" || ord?.status === "waiting") {
-      await processOrderConfirmed(orderId);
+      try {
+        await processOrderConfirmed(orderId);
+      } catch (postErr) {
+        console.error("[processOrderConfirmed] non-fatal", postErr);
+      }
     }
 
     if (refCode) {
@@ -172,7 +194,7 @@ export async function handleCreateOrder(request: Request) {
       const { count } = await supabase
         .from("orders")
         .select("*", { count: "exact", head: true })
-        .eq("customer_token", customer_token);
+        .eq("customer_token", token);
 
       if (count === 1) {
         const { data: refWallet } = await supabase
@@ -181,10 +203,10 @@ export async function handleCreateOrder(request: Request) {
           .eq("referral_code", refCode)
           .maybeSingle();
 
-        if (refWallet?.customer_token && refWallet.customer_token !== customer_token) {
+        if (refWallet?.customer_token && refWallet.customer_token !== token) {
           await supabase.from("referrals").insert({
             referrer_token: refWallet.customer_token,
-            referee_token: customer_token,
+            referee_token: token,
             referral_code: refCode,
             first_order_id: orderId,
             status: "pending",

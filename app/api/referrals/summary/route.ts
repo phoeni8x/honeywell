@@ -1,3 +1,4 @@
+import { getCustomerTokenFromRequest } from "@/lib/customer-request";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -5,7 +6,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const token = request.headers.get("x-customer-token");
+  const token = getCustomerTokenFromRequest(request);
   if (!token) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }

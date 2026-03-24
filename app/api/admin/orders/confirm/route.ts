@@ -1,5 +1,7 @@
+import { requireAdminUser } from "@/lib/admin-auth";
 import { processOrderConfirmed } from "@/lib/order-confirmation-server";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
+import { notifyCustomerPush } from "@/lib/push-notify";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
@@ -7,6 +9,11 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const admin = await requireAdminUser();
+    if (!admin) {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
+    }
+
     const body = await request.json();
     const orderId = body.order_id as string | undefined;
     if (!orderId) {
@@ -61,6 +68,20 @@ export async function POST(request: Request) {
     }
 
     const result = await processOrderConfirmed(orderId);
+
+    const customerToken = order.customer_token as string | undefined;
+    if (customerToken) {
+      const bodyText = isRevolutDeliveryPayNow
+        ? "Payment received — we're preparing your order."
+        : "Your order is confirmed.";
+      void notifyCustomerPush(customerToken, {
+        title: "Order update",
+        body: bodyText,
+        url: `/account/orders/${orderId}/track`,
+        tag: `order-${orderId}`,
+      });
+    }
+
     return NextResponse.json(result);
   } catch (e) {
     console.error(e);

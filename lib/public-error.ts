@@ -4,6 +4,8 @@
  */
 export const PUBLIC_ERROR_TRY_AGAIN_OR_GUEST = "Error try again please.";
 
+export const PUBLIC_ERROR_RATE_LIMIT_ORDERS = "Too many order attempts. Please wait a minute and try again.";
+
 /** Use for any client UI error that might otherwise echo API `error` strings — never pass through raw server text. */
 export function safeClientError(): string {
   return PUBLIC_ERROR_TRY_AGAIN_OR_GUEST;

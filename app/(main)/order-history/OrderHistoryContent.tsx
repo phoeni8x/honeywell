@@ -5,7 +5,7 @@ import { RevolutModal } from "@/components/RevolutModal";
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
 import type { OrderWithProduct } from "@/types";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function OrderHistoryContent() {
   const searchParams = useSearchParams();
@@ -18,9 +18,10 @@ export function OrderHistoryContent() {
   });
   const [loading, setLoading] = useState(true);
   const [revolutOpen, setRevolutOpen] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const loadOrders = useCallback(async (t: string) => {
-    setLoading(true);
+  const loadOrders = useCallback(async (t: string, opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setLoading(true);
     try {
       const res = await fetch("/api/orders/mine", {
         headers: { "x-customer-token": t },
@@ -28,13 +29,71 @@ export function OrderHistoryContent() {
       const data = await res.json();
       if (res.ok) setOrders(data.orders ?? []);
     } finally {
-      setLoading(false);
+      if (!opts?.quiet) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadOrders(getOrCreateCustomerToken());
+    void loadOrders(getOrCreateCustomerToken());
   }, [loadOrders]);
+
+  /** Refetch when returning to the tab (e.g. after admin marks delivered). */
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === "visible") {
+        void loadOrders(getOrCreateCustomerToken(), { quiet: true });
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [loadOrders]);
+
+  // After checkout redirect (?orderId=) — retry briefly so the new row appears even if the first request races the insert.
+  const orderId = searchParams.get("orderId");
+  useEffect(() => {
+    if (!orderId) return;
+    let n = 0;
+    const iv = setInterval(() => {
+      n += 1;
+      void loadOrders(getOrCreateCustomerToken(), { quiet: true });
+      if (n >= 8) clearInterval(iv);
+    }, 1500);
+    return () => clearInterval(iv);
+  }, [orderId, loadOrders]);
+
+  /** While any order is still in progress, refresh every 15s so completed/delivered states appear. */
+  useEffect(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    const terminal = new Set([
+      "delivered",
+      "picked_up",
+      "cancelled",
+      "payment_expired",
+    ]);
+    const hasOpen = orders.some((o) => !terminal.has(o.status));
+    if (!hasOpen || orders.length === 0) return;
+    pollRef.current = setInterval(() => {
+      void loadOrders(getOrCreateCustomerToken(), { quiet: true });
+    }, 15000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [orders, loadOrders]);
+
+  /** Scroll to the order highlighted in the URL. */
+  useEffect(() => {
+    const id = searchParams.get("orderId");
+    if (!id || orders.length === 0) return;
+    const found = orders.some((o) => o.id === id);
+    if (!found) return;
+    const t = window.setTimeout(() => {
+      document.getElementById(`order-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => window.clearTimeout(t);
+  }, [orders, searchParams]);
 
   useEffect(() => {
     fetch("/api/settings/public")
@@ -80,7 +139,7 @@ export function OrderHistoryContent() {
               appleMapsUrl={settings.apple_maps_url}
               revolutPaymentLink={settings.revolut_payment_link}
               customerToken={getOrCreateCustomerToken()}
-              onPhotoUploaded={() => loadOrders(getOrCreateCustomerToken())}
+              onPhotoUploaded={() => void loadOrders(getOrCreateCustomerToken(), { quiet: true })}
             />
           ))}
         </div>

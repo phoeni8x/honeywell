@@ -1,3 +1,4 @@
+import { requireAdminUser } from "@/lib/admin-auth";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -6,6 +7,11 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const admin = await requireAdminUser();
+    if (!admin) {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
+    }
+
     const body = await request.json();
     const latitude = body.latitude as number | undefined;
     const longitude = body.longitude as number | undefined;
@@ -33,6 +39,11 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
+    const admin = await requireAdminUser();
+    if (!admin) {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
+    }
+
     const supabase = createServiceClient();
     const { data, error } = await supabase.from("admin_location").select("*").eq("id", 1).maybeSingle();
     if (error) {

@@ -1,3 +1,4 @@
+import { getCustomerTokenFromRequest } from "@/lib/customer-request";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -6,8 +7,8 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ ticketNumber: string }> };
 
-export async function GET(_request: Request, context: Params) {
-  const token = _request.headers.get("x-customer-token");
+export async function GET(request: Request, context: Params) {
+  const token = getCustomerTokenFromRequest(request);
   if (!token) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
@@ -35,6 +36,7 @@ export async function GET(_request: Request, context: Params) {
     .from("ticket_messages")
     .select("*")
     .eq("ticket_id", ticket.id)
+    .not("sender", "eq", "admin_internal")
     .order("created_at", { ascending: true });
 
   if (mErr) {

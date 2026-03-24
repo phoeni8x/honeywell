@@ -3,6 +3,7 @@ import {
   coinSymbolFromActive,
   normalizeActiveCryptoCoin,
 } from "@/lib/crypto-coins";
+import { getCustomerTokenFromRequest } from "@/lib/customer-request";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -14,7 +15,7 @@ const HUF_FEE = 1000;
 /** GET ?orderId= — expects x-customer-token; returns expected crypto amount in active coin */
 export async function GET(request: Request) {
   try {
-    const token = request.headers.get("x-customer-token");
+    const token = getCustomerTokenFromRequest(request);
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get("orderId");
     if (!token || !orderId) {

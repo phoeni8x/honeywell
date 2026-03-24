@@ -1,4 +1,5 @@
 -- One-time tokens for t.me/bot?start=hw_<token> (links website username → Telegram user id)
+-- (Previously duplicated as 005_telegram_verify_tokens.sql; keep a single migration that creates this table.)
 -- Wrapped in a single statement so remote migration runner accepts it.
 do $migration$
 begin

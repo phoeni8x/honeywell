@@ -1,15 +1,21 @@
 "use client";
 
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useTicketRealtime } from "@/hooks/useTicketRealtime";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 
 type Message = {
   id: string;
   sender: string;
   message: string | null;
+  media_urls: string[] | null;
   created_at: string;
+  is_read?: boolean | null;
 };
 
 type Ticket = {
@@ -28,6 +34,10 @@ export default function SupportTicketPage() {
   const [reply, setReply] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxSlides, setLightboxSlides] = useState<{ src: string }[]>([]);
+  const { state: pushState, subscribe: subscribePush } = usePushNotifications();
 
   const load = useCallback(async () => {
     const t = getOrCreateCustomerToken();
@@ -45,6 +55,10 @@ export default function SupportTicketPage() {
       if (res.ok) {
         setTicket(data.ticket);
         setMessages(data.messages ?? []);
+        void fetch(`/api/account/tickets/${encodeURIComponent(ticketNumber)}/read`, {
+          method: "POST",
+          headers: { "x-customer-token": t },
+        });
       }
     } finally {
       setLoading(false);
@@ -52,8 +66,29 @@ export default function SupportTicketPage() {
   }, [ticketNumber]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
+
+  useTicketRealtime(ticketNumber, load, { enabled: Boolean(ticket), intervalMs: 4000 });
+
+  const vapidReady = Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+
+  const openLightbox = (urls: string[], start: number) => {
+    const slides = urls.filter((u) => /^https?:\/\//i.test(u)).map((src) => ({ src }));
+    if (slides.length === 0) return;
+    setLightboxSlides(slides);
+    setLightboxIndex(start);
+    setLightboxOpen(true);
+  };
+
+  const imageUrlsByMessage = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const m of messages) {
+      const urls = (m.media_urls ?? []).filter((u) => /^https?:\/\//i.test(u) && /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(u));
+      if (urls.length) map.set(m.id, urls);
+    }
+    return map;
+  }, [messages]);
 
   async function sendReply(e: React.FormEvent) {
     e.preventDefault();
@@ -69,7 +104,7 @@ export default function SupportTicketPage() {
       });
       if (res.ok) {
         setReply("");
-        load();
+        await load();
       }
     } finally {
       setSending(false);
@@ -93,6 +128,19 @@ export default function SupportTicketPage() {
 
   return (
     <div className="space-y-8">
+      {vapidReady && pushState !== "unsupported" && pushState !== "subscribed" && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+          <span className="text-honey-text">Get notified when we reply.</span>
+          <button
+            type="button"
+            onClick={() => void subscribePush()}
+            className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white"
+          >
+            Enable notifications
+          </button>
+        </div>
+      )}
+
       <div>
         <Link href="/support" className="text-sm text-primary hover:underline">
           ← All tickets
@@ -103,21 +151,67 @@ export default function SupportTicketPage() {
       </div>
 
       <div className="space-y-4 rounded-2xl border border-honey-border bg-surface p-4 dark:bg-surface-dark">
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={
-              m.sender === "admin"
-                ? "ml-0 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 md:ml-8"
-                : "mr-0 rounded-xl border border-honey-border bg-bg/80 px-4 py-3 md:mr-8"
-            }
-          >
-            <p className="text-xs font-semibold uppercase text-honey-muted">{m.sender}</p>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-honey-text">{m.message}</p>
-            <p className="mt-2 text-xs text-honey-muted">{new Date(m.created_at).toLocaleString("en-GB")}</p>
-          </div>
-        ))}
+        {messages.map((m) => {
+          const isAdmin = m.sender === "admin";
+          const imgs = imageUrlsByMessage.get(m.id) ?? [];
+          return (
+            <div
+              key={m.id}
+              className={
+                isAdmin
+                  ? "ml-0 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 md:ml-8"
+                  : "mr-0 rounded-xl border border-honey-border bg-bg/80 px-4 py-3 md:mr-8"
+              }
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase text-honey-muted">{m.sender}</p>
+                {isAdmin && m.is_read && (
+                  <span className="text-[10px] text-honey-muted" title="Seen">
+                    ✓ Read
+                  </span>
+                )}
+              </div>
+              {m.message && <p className="mt-1 whitespace-pre-wrap text-sm text-honey-text">{m.message}</p>}
+              {imgs.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {imgs.map((url, idx) => (
+                    <button
+                      key={url}
+                      type="button"
+                      onClick={() => openLightbox(imgs, idx)}
+                      className="relative h-24 w-24 overflow-hidden rounded-lg border border-honey-border"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {m.media_urls?.some((u) => !imgs.includes(u)) && (
+                <ul className="mt-2 space-y-1">
+                  {m.media_urls
+                    ?.filter((u) => !imgs.includes(u))
+                    .map((u) => (
+                      <li key={u}>
+                        <a href={u} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
+                          {u}
+                        </a>
+                      </li>
+                    ))}
+                </ul>
+              )}
+              <p className="mt-2 text-xs text-honey-muted">{new Date(m.created_at).toLocaleString("en-GB")}</p>
+            </div>
+          );
+        })}
       </div>
+
+      <Lightbox
+        open={lightboxOpen}
+        close={() => setLightboxOpen(false)}
+        index={lightboxIndex}
+        slides={lightboxSlides}
+      />
 
       {ticket.status !== "closed" ? (
         <form onSubmit={sendReply} className="space-y-3">

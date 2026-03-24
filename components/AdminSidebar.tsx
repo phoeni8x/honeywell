@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import {
   Headphones,
+  Inbox,
   LayoutDashboard,
   MapPin,
   Megaphone,
@@ -24,6 +25,7 @@ const tabs = [
   { id: "locations", label: "Locations", icon: MapPin, href: `${ADMIN_BASE_PATH}?tab=locations` },
   { id: "tickets", label: "Stock", icon: Ticket, href: `${ADMIN_BASE_PATH}?tab=tickets` },
   { id: "support", label: "Support", icon: Headphones, href: `${ADMIN_BASE_PATH}?tab=support` },
+  { id: "inbox", label: "Inbox", icon: Inbox, href: `${ADMIN_BASE_PATH}/tickets` },
   { id: "announcements", label: "Announcements", icon: Megaphone, href: `${ADMIN_BASE_PATH}?tab=announcements` },
   { id: "settings", label: "Settings", icon: Settings, href: `${ADMIN_BASE_PATH}?tab=settings` },
 ] as const;
@@ -43,7 +45,9 @@ export function AdminSidebar() {
     <aside className="flex w-full flex-col gap-1 border-b border-honey-border bg-surface p-4 dark:border-honey-border dark:bg-surface-dark md:w-56 md:border-b-0 md:border-r">
       <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-honey-muted">Honey Well</p>
       {tabs.map(({ id, label, icon: Icon, href }) => {
-        const active = pathname === ADMIN_BASE_PATH && tab === id;
+        const active = href.includes("?")
+          ? pathname === ADMIN_BASE_PATH && tab === id
+          : pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={id}

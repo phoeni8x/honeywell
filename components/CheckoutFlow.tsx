@@ -228,6 +228,26 @@ export function CheckoutFlow({
     }
     setError(null);
     const token = getOrCreateCustomerToken();
+    if (!token.trim()) {
+      setError("Could not save your session. Refresh the page or allow storage for this site.");
+      return;
+    }
+    if (!fulfillment) {
+      setError("Choose how to receive your order (step 1), then continue.");
+      return;
+    }
+    if (fulfillment === "delivery" && !deliveryAddress.trim()) {
+      setError("Enter a delivery address.");
+      return;
+    }
+    if (fulfillment === "dead_drop" && !selectedDeadDropId) {
+      setError("Dead drop is unavailable. Try again or pick another option.");
+      return;
+    }
+    if (fulfillment === "pickup" && !selectedPickupId) {
+      setError("Select a pickup point.");
+      return;
+    }
     const pm = paymentMethodForSubmit();
     if (userType === "guest" && pm !== "crypto") {
       setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
@@ -272,13 +292,26 @@ export function CheckoutFlow({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = (await res.json().catch(() => ({}))) as { order_id?: string; error?: string; code?: string };
       if (!res.ok) {
+        if (res.status === 429 && typeof data.error === "string") {
+          setError(data.error);
+        } else if (typeof data.error === "string" && data.error !== PUBLIC_ERROR_TRY_AGAIN_OR_GUEST) {
+          setError(data.error);
+        } else {
+          setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+        }
+        if (process.env.NODE_ENV === "development" && data.code) {
+          console.warn("[checkout] order create failed", res.status, data.code);
+        }
+        return;
+      }
+      if (!data.order_id) {
         setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
         return;
       }
       onSuccess({
-        orderId: data.order_id as string,
+        orderId: data.order_id,
         paymentMethod: pm,
         remainderHuf,
         revolutPayTiming:

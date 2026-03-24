@@ -199,7 +199,7 @@ export default function AdminDashboard() {
         <TicketsSection rows={ticketRows} />
       )}
 
-      {tab === "support" && !loading && <SupportTicketsSection supabase={supabase} />}
+      {tab === "support" && !loading && <SupportTicketsSection />}
 
       {tab === "settings" && !loading && (
         <SettingsSection settings={settings} onSave={upsertSetting} />
@@ -1041,27 +1041,34 @@ function LocationsSection({
   );
 }
 
-function SupportTicketsSection({ supabase }: { supabase: ReturnType<typeof createClient> }) {
+function SupportTicketsSection() {
   const [rows, setRows] = useState<SupportTicketRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState<Record<string, string>>({});
   const [statusPick, setStatusPick] = useState<Record<string, string>>({});
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("tickets")
-      .select("*")
-      .order("updated_at", { ascending: false })
-      .limit(200);
-    if (!error && data) {
-      setRows(data as SupportTicketRow[]);
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setLoading(true);
+    try {
+      const res = await fetch("/api/admin/tickets", { credentials: "include" });
+      const json = (await res.json().catch(() => ({}))) as { tickets?: SupportTicketRow[] };
+      if (res.ok && json.tickets) {
+        setRows(json.tickets);
+      }
+    } finally {
+      if (!opts?.quiet) setLoading(false);
     }
-    setLoading(false);
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
-    load();
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void load({ quiet: true });
+    }, 8000);
+    return () => window.clearInterval(id);
   }, [load]);
 
   async function sendReply(id: string) {
@@ -1081,7 +1088,7 @@ function SupportTicketsSection({ supabase }: { supabase: ReturnType<typeof creat
       return;
     }
     setReplyText((r) => ({ ...r, [id]: "" }));
-    load();
+    void load({ quiet: true });
   }
 
   if (loading) {
@@ -1090,6 +1097,13 @@ function SupportTicketsSection({ supabase }: { supabase: ReturnType<typeof creat
 
   return (
     <div className="space-y-6">
+      <p className="text-sm text-honey-muted">
+        For threaded chat and internal notes, use the{" "}
+        <Link href={`${ADMIN_BASE_PATH}/tickets`} className="font-medium text-primary underline">
+          support inbox
+        </Link>
+        .
+      </p>
       <div className="overflow-x-auto rounded-2xl border border-honey-border">
         <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="border-b border-honey-border bg-bg/80 text-xs uppercase text-honey-muted">

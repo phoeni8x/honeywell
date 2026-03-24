@@ -46,7 +46,9 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  if (path.startsWith(ADMIN_BASE_PATH)) {
+  const isAdminUi = path.startsWith(ADMIN_BASE_PATH);
+  const isAdminApi = path.startsWith("/api/admin");
+  if (isAdminUi || isAdminApi) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -64,5 +66,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin-080209", "/admin-080209/:path*"],
+  matcher: ["/admin-080209", "/admin-080209/:path*", "/api/admin/:path*"],
 };

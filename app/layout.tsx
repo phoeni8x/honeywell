@@ -1,3 +1,5 @@
+import { CustomerBootstrap } from "@/components/CustomerBootstrap";
+import { RegisterServiceWorker } from "@/components/RegisterServiceWorker";
 import { ShopCurrencyProvider } from "@/components/ShopCurrencyProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import type { Metadata } from "next";
@@ -34,6 +36,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${cinzel.variable} ${dmSans.variable} ${caveat.variable}`} suppressHydrationWarning>
       <body className="min-h-screen bg-bg font-body">
         <ThemeProvider>
+          <RegisterServiceWorker />
+          <CustomerBootstrap />
           <ShopCurrencyProvider>{children}</ShopCurrencyProvider>
         </ThemeProvider>
       </body>

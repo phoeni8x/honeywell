@@ -115,7 +115,10 @@ export function OrderCard({
   return (
     <>
       <ConfettiBurst active={celebrate} />
-      <article className="overflow-hidden rounded-2xl border border-honey-border bg-surface shadow-sm dark:bg-surface-dark">
+      <article
+        id={`order-${order.id}`}
+        className="overflow-hidden rounded-2xl border border-honey-border bg-surface shadow-sm dark:bg-surface-dark"
+      >
         <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start">
           <div className="relative h-28 w-full shrink-0 overflow-hidden rounded-xl bg-primary/5 sm:h-24 sm:w-32">
             {product?.image_url ? (

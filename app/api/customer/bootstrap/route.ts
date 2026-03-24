@@ -12,8 +12,10 @@ export const dynamic = "force-dynamic";
 /** Ensures bees_wallets + points_wallets rows and a unique referral_code */
 export async function POST(request: Request) {
   try {
-    const { customer_token } = await request.json();
-    if (!customer_token || typeof customer_token !== "string") {
+    const body = await request.json();
+    const raw = body.customer_token as string | undefined;
+    const customer_token = typeof raw === "string" ? raw.trim() : "";
+    if (!customer_token) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
