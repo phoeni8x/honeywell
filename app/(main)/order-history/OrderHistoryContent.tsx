@@ -3,6 +3,7 @@
 import { OrderCard } from "@/components/OrderCard";
 import { RevolutModal } from "@/components/RevolutModal";
 import { getOrCreateCustomerToken, setCustomerToken } from "@/lib/customer-token";
+import { syncCustomerTokenFromUrl } from "@/lib/sync-customer-token-from-url";
 import type { OrderWithProduct } from "@/types";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -12,10 +13,11 @@ export function OrderHistoryContent() {
   const orderId = searchParams.get("orderId");
   const ctParamRaw = searchParams.get("ct")?.trim() ?? "";
   const queryToken = ctParamRaw.length >= 8 ? ctParamRaw : "";
-  const currentToken = useCallback(
-    () => (queryToken ? setCustomerToken(queryToken) : getOrCreateCustomerToken()),
-    [queryToken]
-  );
+  const currentToken = useCallback(() => {
+    if (orderId) return getOrCreateCustomerToken();
+    if (queryToken) return setCustomerToken(queryToken);
+    return getOrCreateCustomerToken();
+  }, [orderId, queryToken]);
   const [orders, setOrders] = useState<OrderWithProduct[]>([]);
   const [settings, setSettings] = useState({
     shop_address: "",
@@ -49,20 +51,7 @@ export function OrderHistoryContent() {
     (async () => {
       setLoading(true);
       try {
-        if (queryToken) {
-          setCustomerToken(queryToken);
-        }
-        if (orderId && !queryToken) {
-          const r = await fetch("/api/orders/adopt-token", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ order_id: orderId }),
-          });
-          const body = (await r.json().catch(() => ({}))) as { customer_token?: string };
-          if (r.ok && body.customer_token) {
-            setCustomerToken(body.customer_token);
-          }
-        }
+        await syncCustomerTokenFromUrl(orderId, queryToken);
         if (cancelled) return;
         const t = getOrCreateCustomerToken();
         await loadOrders(t, { quiet: true });

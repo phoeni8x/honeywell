@@ -2,12 +2,13 @@
 
 import { CryptoTicker } from "@/components/CryptoTicker";
 import { coinSymbolFromActive } from "@/lib/crypto-coins";
-import { getOrCreateCustomerToken } from "@/lib/customer-token";
+import { getOrCreateCustomerToken, setCustomerToken } from "@/lib/customer-token";
+import { syncCustomerTokenFromUrl } from "@/lib/sync-customer-token-from-url";
 import { Bitcoin, Check, Copy, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export function CryptoPayContent() {
   const searchParams = useSearchParams();
@@ -26,6 +27,13 @@ export function CryptoPayContent() {
   const router = useRouter();
 
   const orderId = searchParams.get("orderId");
+  const ctParamRaw = searchParams.get("ct")?.trim() ?? "";
+  const queryToken = ctParamRaw.length >= 8 ? ctParamRaw : "";
+  const currentToken = useCallback(() => {
+    if (orderId) return getOrCreateCustomerToken();
+    if (queryToken) return setCustomerToken(queryToken);
+    return getOrCreateCustomerToken();
+  }, [orderId, queryToken]);
 
   useEffect(() => {
     fetch("/api/settings/public")
@@ -39,12 +47,20 @@ export function CryptoPayContent() {
 
   useEffect(() => {
     if (!orderId) return;
-    const token = getOrCreateCustomerToken();
-    fetch(`/api/calculate-crypto-amount?orderId=${encodeURIComponent(orderId)}`, {
-      headers: { "x-customer-token": token },
-    })
-      .then((r) => r.json())
-      .then((d) => {
+    let cancelled = false;
+    const end = Date.now() + 30 * 60 * 1000;
+    setDeadline(end);
+    const tick = setInterval(() => setDeadline((d) => (d && d < Date.now() ? null : d)), 1000);
+    void (async () => {
+      await syncCustomerTokenFromUrl(orderId, queryToken);
+      if (cancelled) return;
+      const token = getOrCreateCustomerToken();
+      try {
+        const r = await fetch(`/api/calculate-crypto-amount?orderId=${encodeURIComponent(orderId)}`, {
+          headers: { "x-customer-token": token },
+        });
+        const d = await r.json();
+        if (cancelled) return;
         if (d.expected_crypto) {
           setCalc({
             expected_crypto: d.expected_crypto,
@@ -56,23 +72,34 @@ export function CryptoPayContent() {
             crypto_network: typeof d.crypto_network === "string" ? d.crypto_network : "",
           });
         }
-      })
-      .catch(() => {});
-    const end = Date.now() + 30 * 60 * 1000;
-    setDeadline(end);
-    const t = setInterval(() => setDeadline((d) => (d && d < Date.now() ? null : d)), 1000);
-    return () => clearInterval(t);
-  }, [orderId]);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      clearInterval(tick);
+    };
+  }, [orderId, queryToken]);
 
   function sent() {
-    getOrCreateCustomerToken();
-    fetch("/api/verify-crypto-payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_id: orderId }),
-    }).finally(() => {
-      router.push("/order-history");
-    });
+    void (async () => {
+      if (orderId) await syncCustomerTokenFromUrl(orderId, queryToken);
+      else currentToken();
+      fetch("/api/verify-crypto-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: orderId }),
+      }).finally(() => {
+        if (orderId) {
+          router.push(`/order-history?orderId=${encodeURIComponent(orderId)}`);
+        } else if (queryToken) {
+          router.push(`/order-history?ct=${encodeURIComponent(queryToken)}`);
+        } else {
+          router.push("/order-history");
+        }
+      });
+    })();
   }
 
   const remaining =
