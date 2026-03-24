@@ -43,7 +43,12 @@ interface CheckoutFlowProps {
   product: Product;
   quantity: number;
   userType: UserType | null;
-  onSuccess: (payload: { orderId: string; paymentMethod: string; remainderHuf: number }) => void;
+  onSuccess: (payload: {
+    orderId: string;
+    paymentMethod: string;
+    remainderHuf: number;
+    revolutPayTiming?: "pay_now" | "pay_on_delivery" | null;
+  }) => void;
   loading?: boolean;
 }
 
@@ -74,6 +79,8 @@ export function CheckoutFlow({
   const [pointsToUse, setPointsToUse] = useState(0);
   const [beesToUse, setBeesToUse] = useState(0);
   const [remainderPay, setRemainderPay] = useState<"revolut" | "crypto">("crypto");
+  /** Delivery + Revolut remainder: pay on delivery vs pay now (admin link). */
+  const [revolutPayTiming, setRevolutPayTiming] = useState<"pay_now" | "pay_on_delivery">("pay_on_delivery");
   const [walletPoints, setWalletPoints] = useState(0);
   const [walletBees, setWalletBees] = useState(0);
 
@@ -111,6 +118,7 @@ export function CheckoutFlow({
     setStep(1);
     setFulfillment(null);
     setError(null);
+    setRevolutPayTiming("pay_on_delivery");
   }, [open, loadContext]);
 
   useEffect(() => {
@@ -250,6 +258,14 @@ export function CheckoutFlow({
         body.delivery_lat = deliveryLat;
         body.delivery_lon = deliveryLon;
       }
+      if (
+        fulfillment === "delivery" &&
+        userType === "team_member" &&
+        remainderHuf > 0.01 &&
+        pm === "revolut"
+      ) {
+        body.revolut_pay_timing = revolutPayTiming;
+      }
 
       const res = await fetch("/api/orders/create", {
         method: "POST",
@@ -261,7 +277,15 @@ export function CheckoutFlow({
         setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
         return;
       }
-      onSuccess({ orderId: data.order_id as string, paymentMethod: pm, remainderHuf });
+      onSuccess({
+        orderId: data.order_id as string,
+        paymentMethod: pm,
+        remainderHuf,
+        revolutPayTiming:
+          fulfillment === "delivery" && userType === "team_member" && remainderHuf > 0.01 && pm === "revolut"
+            ? revolutPayTiming
+            : null,
+      });
     } catch {
       setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
     } finally {
@@ -568,6 +592,46 @@ export function CheckoutFlow({
                 </div>
               </div>
             )}
+            {fulfillment === "delivery" &&
+              userType === "team_member" &&
+              remainderHuf > 0.01 &&
+              remainderPay === "revolut" && (
+                <div className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-3">
+                  <p className="text-xs font-semibold text-honey-text">When do you pay the Revolut remainder?</p>
+                  <p className="mt-1 text-xs text-honey-muted">
+                    Pay after receiving: we place your order and you pay on delivery. Pay right now: open the shop link
+                    after you place the order (set by admin).
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRevolutPayTiming("pay_on_delivery")}
+                      className={clsx(
+                        "rounded-xl border px-3 py-2 text-left text-sm",
+                        revolutPayTiming === "pay_on_delivery"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-honey-border text-honey-text"
+                      )}
+                    >
+                      <span className="font-semibold">Pay after receiving</span>
+                      <span className="mt-0.5 block text-xs text-honey-muted">Order is accepted; you&apos;ll pay when you receive it.</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRevolutPayTiming("pay_now")}
+                      className={clsx(
+                        "rounded-xl border px-3 py-2 text-left text-sm",
+                        revolutPayTiming === "pay_now"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-honey-border text-honey-text"
+                      )}
+                    >
+                      <span className="font-semibold">Pay right now</span>
+                      <span className="mt-0.5 block text-xs text-honey-muted">Use the admin payment link after placing the order.</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             <button
               type="button"
               onClick={() => setStep(4)}
@@ -594,6 +658,17 @@ export function CheckoutFlow({
                 <span>Payment</span>
                 <span className="text-honey-text">{paymentMethodForSubmit()}</span>
               </li>
+              {fulfillment === "delivery" &&
+                userType === "team_member" &&
+                remainderHuf > 0.01 &&
+                remainderPay === "revolut" && (
+                  <li className="flex justify-between text-xs">
+                    <span>Revolut timing</span>
+                    <span className="text-honey-text">
+                      {revolutPayTiming === "pay_now" ? "Pay right now" : "Pay after receiving"}
+                    </span>
+                  </li>
+                )}
               <li className="flex justify-between border-t border-honey-border pt-2 font-semibold text-honey-text">
                 <span>Remaining after Bees/Points</span>
                 <span>{formatPrice(remainderHuf)}</span>

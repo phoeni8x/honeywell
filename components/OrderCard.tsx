@@ -17,8 +17,16 @@ interface OrderCardProps {
   shopAddress: string;
   mapsUrl: string;
   appleMapsUrl: string;
+  /** Admin-configured Revolut link (settings). */
+  revolutPaymentLink?: string;
   customerToken: string;
   onPhotoUploaded?: () => void;
+}
+
+function customerCanCancelOrder(order: OrderWithProduct): boolean {
+  if (["cancelled", "delivered", "picked_up", "payment_expired"].includes(order.status)) return false;
+  if (order.revolut_pay_timing === "pay_now" && order.pay_now_payment_confirmed === true) return false;
+  return true;
 }
 
 export function OrderCard({
@@ -26,12 +34,15 @@ export function OrderCard({
   shopAddress,
   mapsUrl,
   appleMapsUrl,
+  revolutPaymentLink = "",
   customerToken,
   onPhotoUploaded,
 }: OrderCardProps) {
   const { formatPrice } = useShopCurrency();
   const [showPhoto, setShowPhoto] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const product = order.product;
   const statusLabel = ORDER_STATUS_LABELS[order.status] ?? order.status;
 
@@ -54,11 +65,37 @@ export function OrderCard({
   }, [order, shopAddress, mapsUrl, appleMapsUrl]);
 
   const showPickup =
-    order.status === "ready_for_pickup" ||
-    order.status === "ready_at_drop" ||
-    order.status === "confirmed" ||
-    order.status === "customer_arrived" ||
-    order.status === "pickup_submitted";
+    order.fulfillment_type !== "delivery" &&
+    (order.status === "ready_for_pickup" ||
+      order.status === "ready_at_drop" ||
+      order.status === "confirmed" ||
+      order.status === "customer_arrived" ||
+      order.status === "pickup_submitted");
+
+  async function cancelOrder() {
+    if (!customerCanCancelOrder(order)) return;
+    setCancelError(null);
+    setCancelLoading(true);
+    try {
+      const res = await fetch("/api/orders/cancel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-customer-token": customerToken,
+        },
+        body: JSON.stringify({ order_id: order.id }),
+      });
+      if (!res.ok) {
+        setCancelError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+        return;
+      }
+      onPhotoUploaded?.();
+    } catch {
+      setCancelError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+    } finally {
+      setCancelLoading(false);
+    }
+  }
 
   async function uploadPhoto(file: File) {
     const form = new FormData();
@@ -97,7 +134,8 @@ export function OrderCard({
                   order.status === "delivered" && "bg-primary/15 text-primary",
                   order.status === "cancelled" && "bg-red-500/10 text-red-600",
                   order.status === "payment_pending" && "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-                  !["picked_up", "delivered", "cancelled", "payment_pending"].includes(order.status) &&
+                  order.status === "waiting" && "bg-sky-500/15 text-sky-800 dark:text-sky-200",
+                  !["picked_up", "delivered", "cancelled", "payment_pending", "waiting"].includes(order.status) &&
                     "bg-honey-border/80 text-honey-muted"
                 )}
               >
@@ -126,6 +164,33 @@ export function OrderCard({
                 <Truck className="h-3.5 w-3.5" />
                 Track delivery
               </Link>
+            )}
+            {order.payment_method === "revolut" &&
+              order.revolut_pay_timing === "pay_now" &&
+              order.status === "payment_pending" &&
+              revolutPaymentLink &&
+              Number(order.total_price) > 0 && (
+                <a
+                  href={revolutPaymentLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex w-full items-center justify-center rounded-xl border-2 border-primary bg-primary/10 py-2.5 text-sm font-semibold text-primary hover:bg-primary/20"
+                >
+                  Open Revolut payment link
+                </a>
+              )}
+            {customerCanCancelOrder(order) && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  disabled={cancelLoading}
+                  onClick={() => void cancelOrder()}
+                  className="text-xs font-semibold text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                >
+                  {cancelLoading ? "Cancelling…" : "Cancel order"}
+                </button>
+                {cancelError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{cancelError}</p>}
+              </div>
             )}
             <Link
               href={`/support/new?orderId=${encodeURIComponent(order.id)}`}

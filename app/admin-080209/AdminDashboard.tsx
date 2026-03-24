@@ -51,6 +51,7 @@ type SupportTicketRow = {
 const ORDER_STATUSES = [
   "payment_pending",
   "payment_expired",
+  "waiting",
   "confirmed",
   "ready_at_drop",
   "ready_for_pickup",
@@ -524,7 +525,11 @@ function OrdersSection({
             className="text-left text-xs text-primary hover:underline"
             onClick={() => confirmOrder(o.id)}
           >
-            Confirm
+            {o.payment_method === "revolut" &&
+            o.fulfillment_type === "delivery" &&
+            o.revolut_pay_timing === "pay_now"
+              ? "Confirm payment received"
+              : "Confirm"}
           </button>
         )}
 
@@ -548,7 +553,7 @@ function OrdersSection({
           </button>
         )}
 
-        {isDelivery && o.status === "confirmed" && (
+        {isDelivery && (o.status === "confirmed" || o.status === "waiting") && (
           <button
             type="button"
             className="text-left text-xs text-primary hover:underline"
@@ -756,7 +761,10 @@ function SettingsSection({
   onSave: (k: string, v: string) => Promise<void>;
 }) {
   const keys = [
-    { key: "revolut_payment_link", label: "Revolut payment URL" },
+    {
+      key: "revolut_payment_link",
+      label: "Revolut payment URL (used when customers choose “Pay right now” on delivery)",
+    },
     { key: "crypto_tutorial_video_url", label: "Crypto guide — tutorial video embed URL (YouTube embed)" },
     { key: "crypto_wallet_app_name", label: "Crypto guide — recommended wallet app name" },
     { key: "crypto_wallet_app_url", label: "Crypto guide — wallet download link" },

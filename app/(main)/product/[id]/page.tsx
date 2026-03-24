@@ -66,10 +66,12 @@ export default function ProductPage() {
     orderId,
     paymentMethod,
     remainderHuf,
+    revolutPayTiming,
   }: {
     orderId: string;
     paymentMethod: string;
     remainderHuf: number;
+    revolutPayTiming?: "pay_now" | "pay_on_delivery" | null;
   }) {
     setCheckoutOpen(false);
     if (remainderHuf <= 0.01) {
@@ -80,7 +82,11 @@ export default function ProductPage() {
       router.push(`/pay/crypto?orderId=${encodeURIComponent(orderId)}`);
       return;
     }
-    router.push(`/order-history?revolut=1&orderId=${encodeURIComponent(orderId)}`);
+    if (paymentMethod === "revolut" && revolutPayTiming === "pay_now") {
+      router.push(`/order-history?revolut=1&orderId=${encodeURIComponent(orderId)}`);
+      return;
+    }
+    router.push(`/order-history?orderId=${encodeURIComponent(orderId)}`);
   }
 
   return (

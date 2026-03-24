@@ -19,7 +19,7 @@ export async function processOrderConfirmed(orderId: string): Promise<{ ok: bool
   }
 
   const { data: order, error: oErr } = await supabase.from("orders").select("*").eq("id", orderId).single();
-  if (oErr || !order || order.status !== "confirmed") {
+  if (oErr || !order || (order.status !== "confirmed" && order.status !== "waiting")) {
     return { ok: false };
   }
 

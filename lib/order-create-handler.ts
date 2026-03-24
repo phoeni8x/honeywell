@@ -19,6 +19,7 @@ type FulfillmentBody = {
   delivery_lon?: number | null;
   bees_used?: number;
   points_used?: number;
+  revolut_pay_timing?: string | null;
 };
 
 export async function handleCreateOrder(request: Request) {
@@ -42,6 +43,7 @@ export async function handleCreateOrder(request: Request) {
       delivery_lon,
       bees_used,
       points_used,
+      revolut_pay_timing,
     }: {
       customer_token?: string;
       product_id?: string;
@@ -92,6 +94,14 @@ export async function handleCreateOrder(request: Request) {
 
     const refCode = referred_by ? sanitizePlainText(referred_by, 32) : "";
 
+    let revolutTimingParam: string | null = null;
+    if (
+      typeof revolut_pay_timing === "string" &&
+      (revolut_pay_timing === "pay_now" || revolut_pay_timing === "pay_on_delivery")
+    ) {
+      revolutTimingParam = revolut_pay_timing;
+    }
+
     const supabase = createServiceClient();
 
     const { data: settingsRows } = await supabase
@@ -138,6 +148,7 @@ export async function handleCreateOrder(request: Request) {
       p_delivery_lon: delivery_lon ?? null,
       p_bees_used: bUsed,
       p_points_used: pUsed,
+      p_revolut_pay_timing: revolutTimingParam,
     });
 
     if (error) {
@@ -149,7 +160,7 @@ export async function handleCreateOrder(request: Request) {
     const orderId = data as string;
 
     const { data: ord } = await supabase.from("orders").select("status").eq("id", orderId).single();
-    if (ord?.status === "confirmed") {
+    if (ord?.status === "confirmed" || ord?.status === "waiting") {
       await processOrderConfirmed(orderId);
     }
 

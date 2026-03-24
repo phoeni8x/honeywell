@@ -78,6 +78,7 @@ export function OrderHistoryContent() {
               shopAddress={settings.shop_address}
               mapsUrl={settings.google_maps_url}
               appleMapsUrl={settings.apple_maps_url}
+              revolutPaymentLink={settings.revolut_payment_link}
               customerToken={getOrCreateCustomerToken()}
               onPhotoUploaded={() => loadOrders(getOrCreateCustomerToken())}
             />

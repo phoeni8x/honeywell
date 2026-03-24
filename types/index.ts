@@ -7,6 +7,7 @@ export type FulfillmentType = "dead_drop" | "pickup" | "delivery";
 export type OrderStatus =
   | "payment_pending"
   | "payment_expired"
+  | "waiting"
   | "confirmed"
   | "ready_at_drop"
   | "ready_for_pickup"
@@ -58,6 +59,9 @@ export interface Order {
   delivery_lon?: number | null;
   bees_used?: number | null;
   points_used?: number | null;
+  /** delivery + Revolut remainder only */
+  revolut_pay_timing?: "pay_now" | "pay_on_delivery" | null;
+  pay_now_payment_confirmed?: boolean | null;
 }
 
 export interface Announcement {
