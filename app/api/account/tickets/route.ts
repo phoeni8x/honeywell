@@ -1,12 +1,24 @@
+import { ADMIN_BASE_PATH } from "@/lib/constants";
+import { getCustomerTokenFromRequest } from "@/lib/customer-request";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
+import { notifyAdminPush } from "@/lib/push-notify";
 import { sanitizePlainText } from "@/lib/sanitize";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseOrderId(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const s = raw.trim();
+  if (!s || !UUID_RE.test(s)) return null;
+  return s;
+}
+
 export async function GET(request: Request) {
-  const token = request.headers.get("x-customer-token");
+  const token = getCustomerTokenFromRequest(request);
   if (!token) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
@@ -27,7 +39,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const token = request.headers.get("x-customer-token");
+  const token = getCustomerTokenFromRequest(request);
   if (!token) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
@@ -66,7 +78,7 @@ export async function POST(request: Request) {
         customer_token: token,
         subject: subject.trim(),
         category: cat,
-        order_id: orderId,
+        ...(orderId ? { order_id: orderId } : {}),
         status: "open",
       })
       .select("*")
@@ -92,6 +104,13 @@ export async function POST(request: Request) {
       .from("tickets")
       .update({ updated_at: new Date().toISOString() })
       .eq("id", ticket.id);
+
+    void notifyAdminPush({
+      title: "New support ticket",
+      body: `${ticket.ticket_number}: ${subject.trim()}`.slice(0, 140),
+      url: `${ADMIN_BASE_PATH}/tickets`,
+      tag: `ticket-${ticket.ticket_number}`,
+    });
 
     return NextResponse.json({ ticket });
   } catch (e) {

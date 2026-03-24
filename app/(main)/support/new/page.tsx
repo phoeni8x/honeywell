@@ -6,10 +6,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
+const ORDER_ID_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function SupportNewForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const orderId = searchParams.get("orderId") ?? "";
+  const orderIdRaw = searchParams.get("orderId")?.trim() ?? "";
+  const orderId = ORDER_ID_UUID.test(orderIdRaw) ? orderIdRaw : "";
   const subjectFromQuery = searchParams.get("subject") ?? "";
 
   const [subject, setSubject] = useState(
@@ -37,17 +41,28 @@ function SupportNewForm() {
           subject,
           category,
           message,
-          order_id: orderId || undefined,
+          ...(orderId ? { order_id: orderId } : {}),
         }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: { ticket?: { ticket_number?: string }; error?: string } = {};
+      if (text) {
+        try {
+          data = JSON.parse(text) as typeof data;
+        } catch {
+          setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+          return;
+        }
+      }
       if (!res.ok) {
-        setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+        setError(data.error ?? PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
         return;
       }
-      const num = data.ticket?.ticket_number as string | undefined;
+      const num = data.ticket?.ticket_number;
       if (num) router.push(`/support/${encodeURIComponent(num)}`);
       else router.push("/support");
+    } catch {
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
     } finally {
       setLoading(false);
     }
@@ -114,7 +129,6 @@ export default function SupportNewPage() {
     <div className="space-y-8">
       <div>
         <h1 className="font-display text-4xl text-honey-text">New support ticket</h1>
-        <p className="mt-2 text-honey-muted">We typically reply within one business day.</p>
       </div>
       <Suspense fallback={<p className="text-honey-muted">Loading…</p>}>
         <SupportNewForm />

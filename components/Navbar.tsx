@@ -14,6 +14,7 @@ const links = [
   { href: "/home", label: "Home" },
   { href: "/shop", label: "Shop" },
   { href: "/order-history", label: "My Orders" },
+  { href: "/support", label: "Support" },
   { href: "/crypto-rates", label: "Rates" },
   { href: "/crypto-guide", label: "Crypto guide" },
   { href: "/bees/buy", label: "Bees" },
