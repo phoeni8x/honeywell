@@ -2,6 +2,7 @@
 
 import { CheckoutFlow } from "@/components/CheckoutFlow";
 import { LS_USER_TYPE } from "@/lib/constants";
+import { setCustomerToken } from "@/lib/customer-token";
 import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { getPriceForUser } from "@/lib/helpers";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
@@ -67,26 +68,34 @@ export default function ProductPage() {
     paymentMethod,
     remainderHuf,
     revolutPayTiming,
+    customerToken,
   }: {
     orderId: string;
     paymentMethod: string;
     remainderHuf: number;
     revolutPayTiming?: "pay_now" | "pay_on_delivery" | null;
+    customerToken: string;
   }) {
+    const token = setCustomerToken(customerToken);
+    const withToken = (path: string, params: Record<string, string>) => {
+      const sp = new URLSearchParams(params);
+      if (token) sp.set("ct", token);
+      return `${path}?${sp.toString()}`;
+    };
     setCheckoutOpen(false);
     if (remainderHuf <= 0.01) {
-      router.push(`/order-history?orderId=${encodeURIComponent(orderId)}`);
+      router.push(withToken("/order-history", { orderId }));
       return;
     }
     if (paymentMethod === "crypto") {
-      router.push(`/pay/crypto?orderId=${encodeURIComponent(orderId)}`);
+      router.push(withToken("/pay/crypto", { orderId }));
       return;
     }
     if (paymentMethod === "revolut" && revolutPayTiming === "pay_now") {
-      router.push(`/order-history?revolut=1&orderId=${encodeURIComponent(orderId)}`);
+      router.push(withToken("/order-history", { revolut: "1", orderId }));
       return;
     }
-    router.push(`/order-history?orderId=${encodeURIComponent(orderId)}`);
+    router.push(withToken("/order-history", { orderId }));
   }
 
   return (

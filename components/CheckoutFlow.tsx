@@ -48,6 +48,7 @@ interface CheckoutFlowProps {
     paymentMethod: string;
     remainderHuf: number;
     revolutPayTiming?: "pay_now" | "pay_on_delivery" | null;
+    customerToken: string;
   }) => void;
   loading?: boolean;
 }
@@ -314,6 +315,7 @@ export function CheckoutFlow({
         orderId: data.order_id,
         paymentMethod: pm,
         remainderHuf,
+        customerToken: token,
         revolutPayTiming:
           fulfillment === "delivery" && userType === "team_member" && remainderHuf > 0.01 && pm === "revolut"
             ? revolutPayTiming

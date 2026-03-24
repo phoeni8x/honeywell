@@ -3,8 +3,8 @@
 import { useEffect, useRef } from "react";
 
 /**
- * Guest customers use token-based API access; Postgres Realtime is not available under current RLS.
- * This hook polls the ticket endpoint so the chat stays fresh.
+ * Guest customers use token-based API access; ticket data loads via API routes (service role).
+ * Polls the ticket endpoint so the thread stays fresh (Part 7: faster default interval).
  */
 export function useTicketRealtime(
   ticketNumber: string | undefined,

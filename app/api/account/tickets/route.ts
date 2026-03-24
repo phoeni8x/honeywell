@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     const subject = sanitizePlainText(String(body.subject ?? ""), 200);
     const message = sanitizePlainText(String(body.message ?? ""), 8000);
     const category = sanitizePlainText(String(body.category ?? "other"), 40);
-    const orderId = typeof body.order_id === "string" ? body.order_id : null;
+    const orderId = parseOrderId(body.order_id);
 
     if (!subject.trim() || !message.trim()) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });

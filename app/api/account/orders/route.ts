@@ -1,3 +1,4 @@
+import { enrichOrdersForCustomer } from "@/lib/order-fetch";
 import { getCustomerTokenFromRequest } from "@/lib/customer-request";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
@@ -20,10 +21,7 @@ export async function GET(request: Request) {
   const to = searchParams.get("to");
 
   const supabase = createServiceClient();
-  let q = supabase
-    .from("orders")
-    .select("*, products(*)", { count: "exact" })
-    .eq("customer_token", token);
+  let q = supabase.from("orders").select("*", { count: "exact" }).eq("customer_token", token);
 
   if (status && status !== "all") {
     q = q.eq("status", status);
@@ -45,10 +43,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 
-  const orders = (rows ?? []).map((row: Record<string, unknown>) => {
-    const { products: prod, ...rest } = row;
-    return { ...rest, product: prod };
-  });
+  const orders = await enrichOrdersForCustomer(supabase, rows ?? []);
 
   const { data: sumRows } = await supabase.from("orders").select("total_price").eq("customer_token", token);
   const totalSpent = (sumRows ?? []).reduce((a, r) => a + Number((r as { total_price: number }).total_price), 0);

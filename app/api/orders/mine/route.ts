@@ -1,7 +1,10 @@
+import { enrichOrdersForCustomer } from "@/lib/order-fetch";
 import { getCustomerTokenFromRequest } from "@/lib/customer-request";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const token = getCustomerTokenFromRequest(request);
@@ -12,14 +15,7 @@ export async function GET(request: Request) {
   const supabase = createServiceClient();
   const { data: rows, error } = await supabase
     .from("orders")
-    .select(
-      `
-      *,
-      products (*),
-      dead_drops (*),
-      shop_locations (*)
-    `
-    )
+    .select("*")
     .eq("customer_token", token)
     .order("created_at", { ascending: false });
 
@@ -28,10 +24,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 
-  const orders = (rows ?? []).map((o: Record<string, unknown>) => {
-    const { products: prod, dead_drops: dd, shop_locations: sl, ...rest } = o;
-    return { ...rest, product: prod, dead_drop: dd ?? null, pickup_location: sl ?? null };
-  });
+  const orders = await enrichOrdersForCustomer(supabase, rows ?? []);
 
   return NextResponse.json({ orders });
 }

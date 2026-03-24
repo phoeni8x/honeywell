@@ -1,3 +1,4 @@
+import { enrichOrdersForCustomer } from "@/lib/order-fetch";
 import { getCustomerTokenFromRequest } from "@/lib/customer-request";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
@@ -17,7 +18,7 @@ export async function GET(request: Request, context: Params) {
   const supabase = createServiceClient();
   const { data: order, error } = await supabase
     .from("orders")
-    .select("*, products(*)")
+    .select("*")
     .eq("id", orderId)
     .eq("customer_token", token)
     .maybeSingle();
@@ -30,6 +31,6 @@ export async function GET(request: Request, context: Params) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });
   }
 
-  const { products: prod, ...rest } = order as Record<string, unknown>;
-  return NextResponse.json({ order: { ...rest, product: prod } });
+  const [enriched] = await enrichOrdersForCustomer(supabase, [order]);
+  return NextResponse.json({ order: enriched });
 }

@@ -1,7 +1,10 @@
-import DOMPurify from "isomorphic-dompurify";
-
-/** Strip HTML; safe for usernames, notes, titles. */
+/**
+ * Server-safe plain text sanitizer.
+ * Removes HTML tags and control chars, then bounds length.
+ */
 export function sanitizePlainText(input: string, maxLength = 5000): string {
-  const trimmed = input.slice(0, maxLength);
-  return DOMPurify.sanitize(trimmed, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+  const bounded = String(input ?? "").slice(0, maxLength);
+  const withoutTags = bounded.replace(/<[^>]*>/g, " ");
+  const withoutControls = withoutTags.replace(/[\u0000-\u001F\u007F]/g, " ");
+  return withoutControls.replace(/\s+/g, " ").trim();
 }

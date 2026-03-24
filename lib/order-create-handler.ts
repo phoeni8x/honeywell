@@ -22,6 +22,27 @@ type FulfillmentBody = {
   revolut_pay_timing?: string | null;
 };
 
+const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
+  invalid_quantity: "Invalid quantity. Please choose at least 1 item.",
+  product_not_found: "This product is unavailable right now. Please refresh the shop.",
+  insufficient_stock: "Not enough stock for this quantity. Try a smaller amount.",
+  guest_no_wallet_spend: "Guests cannot pay with Bees or Points.",
+  guest_fulfillment_invalid: "Guests can only use dead drop fulfillment.",
+  guest_revolut_forbidden: "Guests cannot pay with Revolut.",
+  dead_drop_required: "Please choose an active dead drop location.",
+  dead_drop_inactive: "Selected dead drop is no longer active. Please refresh.",
+  pickup_team_only: "Pickup is available for team members only.",
+  pickup_location_required: "Please choose a pickup point.",
+  invalid_pickup_point: "Selected pickup point is invalid or inactive.",
+  delivery_team_only: "Delivery is available for team members only.",
+  delivery_address_required: "Please enter a delivery address.",
+  invalid_revolut_pay_timing: "Invalid Revolut timing selection. Please retry.",
+  points_insufficient: "You don't have enough points for this order.",
+  bees_insufficient: "You don't have enough Bees for this order.",
+  wallet_required: "Your wallet is not ready yet. Refresh and try again.",
+  invalid_payment_method: "Selected payment method is invalid for this order.",
+};
+
 export async function handleCreateOrder(request: Request) {
   try {
     const body = await request.json();
@@ -154,14 +175,17 @@ export async function handleCreateOrder(request: Request) {
 
     if (error) {
       const err = error as { message?: string; code?: string; details?: string; hint?: string };
+      const raw = String(err.message ?? "").trim();
+      const normalized = raw.toLowerCase().replace(/\s+/g, "_");
+      const safeError = ORDER_ERROR_MESSAGE_MAP[normalized] ?? PUBLIC_ERROR_TRY_AGAIN_OR_GUEST;
       console.error("[create_order_atomic]", {
-        message: err.message,
+        message: raw,
         code: err.code,
         details: err.details,
         hint: err.hint,
       });
       return NextResponse.json(
-        { error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, code: err.code ?? "rpc_error" },
+        { error: safeError, code: normalized || err.code || "rpc_error" },
         { status: 400 }
       );
     }
@@ -187,35 +211,49 @@ export async function handleCreateOrder(request: Request) {
     }
 
     if (refCode) {
-      await supabase.from("orders").update({ referral_code_used: refCode }).eq("id", orderId);
-    }
+      try {
+        await supabase.from("orders").update({ referral_code_used: refCode }).eq("id", orderId);
 
-    if (refCode) {
-      const { count } = await supabase
-        .from("orders")
-        .select("*", { count: "exact", head: true })
-        .eq("customer_token", token);
+        const { count } = await supabase
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("customer_token", token);
 
-      if (count === 1) {
-        const { data: refWallet } = await supabase
-          .from("bees_wallets")
-          .select("customer_token")
-          .eq("referral_code", refCode)
-          .maybeSingle();
+        if (count === 1) {
+          const { data: refWallet } = await supabase
+            .from("bees_wallets")
+            .select("customer_token")
+            .eq("referral_code", refCode)
+            .maybeSingle();
 
-        if (refWallet?.customer_token && refWallet.customer_token !== token) {
-          await supabase.from("referrals").insert({
-            referrer_token: refWallet.customer_token,
-            referee_token: token,
-            referral_code: refCode,
-            first_order_id: orderId,
-            status: "pending",
-          });
+          if (refWallet?.customer_token && refWallet.customer_token !== token) {
+            await supabase.from("referrals").insert({
+              referrer_token: refWallet.customer_token,
+              referee_token: token,
+              referral_code: refCode,
+              first_order_id: orderId,
+              status: "pending",
+            });
+          }
         }
+      } catch (refErr) {
+        console.error("[order referral]", refErr);
       }
     }
 
-    return NextResponse.json({ order_id: orderId });
+    const res = NextResponse.json({ order_id: orderId });
+    const host = request.headers.get("host")?.split(":")[0] ?? "";
+    const secure = request.headers.get("x-forwarded-proto") === "https" || host !== "localhost";
+    const cookieDomain = host.endsWith("teamruby.net") ? ".teamruby.net" : undefined;
+    res.cookies.set("honeywell_customer_token", token, {
+      path: "/",
+      httpOnly: false,
+      sameSite: "lax",
+      secure,
+      maxAge: 60 * 60 * 24 * 400,
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
+    });
+    return res;
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
