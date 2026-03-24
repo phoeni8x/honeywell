@@ -2,13 +2,20 @@
 
 import { OrderCard } from "@/components/OrderCard";
 import { RevolutModal } from "@/components/RevolutModal";
-import { getOrCreateCustomerToken } from "@/lib/customer-token";
+import { getOrCreateCustomerToken, setCustomerToken } from "@/lib/customer-token";
 import type { OrderWithProduct } from "@/types";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export function OrderHistoryContent() {
   const searchParams = useSearchParams();
+  const orderId = searchParams.get("orderId");
+  const ctParamRaw = searchParams.get("ct")?.trim() ?? "";
+  const queryToken = ctParamRaw.length >= 8 ? ctParamRaw : "";
+  const currentToken = useCallback(
+    () => (queryToken ? setCustomerToken(queryToken) : getOrCreateCustomerToken()),
+    [queryToken]
+  );
   const [orders, setOrders] = useState<OrderWithProduct[]>([]);
   const [settings, setSettings] = useState({
     shop_address: "",
@@ -33,33 +40,72 @@ export function OrderHistoryContent() {
     }
   }, []);
 
+  /**
+   * When `orderId` is in the URL, adopt that order's customer_token first so localStorage
+   * matches (cookie alone was not enough — getOrCreateCustomerToken prefers storage).
+   */
   useEffect(() => {
-    void loadOrders(getOrCreateCustomerToken());
-  }, [loadOrders]);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        if (queryToken) {
+          setCustomerToken(queryToken);
+        }
+        if (orderId && !queryToken) {
+          const r = await fetch("/api/orders/adopt-token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order_id: orderId }),
+          });
+          const body = (await r.json().catch(() => ({}))) as { customer_token?: string };
+          if (r.ok && body.customer_token) {
+            setCustomerToken(body.customer_token);
+          }
+        }
+        if (cancelled) return;
+        const t = getOrCreateCustomerToken();
+        await loadOrders(t, { quiet: true });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, queryToken, loadOrders]);
+
+  // Remove token from URL after syncing to storage/cookie.
+  useEffect(() => {
+    if (!queryToken || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("ct")) return;
+    url.searchParams.delete("ct");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [queryToken]);
 
   /** Refetch when returning to the tab (e.g. after admin marks delivered). */
   useEffect(() => {
     function onVisibility() {
       if (document.visibilityState === "visible") {
-        void loadOrders(getOrCreateCustomerToken(), { quiet: true });
+        void loadOrders(currentToken(), { quiet: true });
       }
     }
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [loadOrders]);
+  }, [loadOrders, currentToken]);
 
   // After checkout redirect (?orderId=) — retry briefly so the new row appears even if the first request races the insert.
-  const orderId = searchParams.get("orderId");
   useEffect(() => {
     if (!orderId) return;
     let n = 0;
     const iv = setInterval(() => {
       n += 1;
-      void loadOrders(getOrCreateCustomerToken(), { quiet: true });
+      void loadOrders(currentToken(), { quiet: true });
       if (n >= 8) clearInterval(iv);
     }, 1500);
     return () => clearInterval(iv);
-  }, [orderId, loadOrders]);
+  }, [orderId, loadOrders, currentToken]);
 
   /** While any order is still in progress, refresh every 15s so completed/delivered states appear. */
   useEffect(() => {
@@ -76,12 +122,12 @@ export function OrderHistoryContent() {
     const hasOpen = orders.some((o) => !terminal.has(o.status));
     if (!hasOpen || orders.length === 0) return;
     pollRef.current = setInterval(() => {
-      void loadOrders(getOrCreateCustomerToken(), { quiet: true });
+      void loadOrders(currentToken(), { quiet: true });
     }, 15000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [orders, loadOrders]);
+  }, [orders, loadOrders, currentToken]);
 
   /** Scroll to the order highlighted in the URL. */
   useEffect(() => {
@@ -138,8 +184,8 @@ export function OrderHistoryContent() {
               mapsUrl={settings.google_maps_url}
               appleMapsUrl={settings.apple_maps_url}
               revolutPaymentLink={settings.revolut_payment_link}
-              customerToken={getOrCreateCustomerToken()}
-              onPhotoUploaded={() => void loadOrders(getOrCreateCustomerToken(), { quiet: true })}
+              customerToken={currentToken()}
+              onPhotoUploaded={() => void loadOrders(currentToken(), { quiet: true })}
             />
           ))}
         </div>
