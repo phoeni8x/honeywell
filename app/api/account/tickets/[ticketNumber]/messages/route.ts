@@ -14,7 +14,7 @@ type Params = { params: Promise<{ ticketNumber: string }> };
 
 export async function POST(request: Request, context: Params) {
   const token = getCustomerTokenFromRequest(request);
-  if (!token) {
+  if (!token || token.length < 8) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
   if (await isCustomerBanned(token)) {
@@ -64,29 +64,17 @@ export async function POST(request: Request, context: Params) {
       .eq("customer_token", token)
       .maybeSingle();
 
-    let resolvedTicket = ticket;
-    let resolvedErr = tErr;
-    if (!resolvedTicket) {
-      const fallback = await supabase
-        .from("tickets")
-        .select("id, status, ticket_number")
-        .eq("ticket_number", decoded)
-        .maybeSingle();
-      resolvedTicket = fallback.data ?? null;
-      if (!resolvedErr && fallback.error) resolvedErr = fallback.error;
-    }
-
-    if (resolvedErr || !resolvedTicket) {
+    if (tErr || !ticket) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });
     }
-    if (resolvedTicket.status === "closed") {
+    if (ticket.status === "closed") {
       return NextResponse.json({ error: "Ticket is closed" }, { status: 403 });
     }
 
     const { data: insertedMessage, error: mErr } = await supabase
       .from("ticket_messages")
       .insert({
-        ticket_id: resolvedTicket.id,
+        ticket_id: ticket.id,
         sender: "customer",
         message: message.trim() || "(attachment)",
         media_urls: mediaUrls ?? null,
@@ -103,16 +91,16 @@ export async function POST(request: Request, context: Params) {
       .from("tickets")
       .update({
         updated_at: new Date().toISOString(),
-        status: resolvedTicket.status === "open" ? "in_progress" : resolvedTicket.status,
+        status: ticket.status === "open" ? "in_progress" : ticket.status,
       })
-      .eq("id", resolvedTicket.id);
+      .eq("id", ticket.id);
 
     const preview = message.trim() || "New attachment";
     void notifyAdminPush({
       title: "New customer message",
       body: preview.slice(0, 140),
       url: `${ADMIN_BASE_PATH}/tickets`,
-      tag: `ticket-${resolvedTicket.ticket_number}`,
+      tag: `ticket-${ticket.ticket_number}`,
     });
 
     return NextResponse.json({ message: insertedMessage });

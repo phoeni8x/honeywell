@@ -21,44 +21,33 @@ type Ticket = {
   ticket_number: string;
   subject: string;
   status: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
-function normalizeServerMessage(raw: unknown): Message | null {
-  if (!raw || typeof raw !== "object") return null;
-  const rec = raw as Record<string, unknown>;
-  const id =
-    typeof rec.id === "string"
-      ? rec.id
-      : typeof rec.id === "number"
-      ? String(rec.id)
-      : "";
-  if (!id) return null;
-  return {
-    id,
-    sender: typeof rec.sender === "string" ? rec.sender : "customer",
-    message: typeof rec.message === "string" || rec.message === null ? rec.message : null,
-    media_urls: Array.isArray(rec.media_urls)
-      ? rec.media_urls.filter((u): u is string => typeof u === "string")
-      : null,
-    created_at: typeof rec.created_at === "string" ? rec.created_at : new Date().toISOString(),
-    is_read: typeof rec.is_read === "boolean" ? rec.is_read : null,
-  };
-}
-
-function mergeMessagesById(prev: Message[], incomingRaw: unknown[]): Message[] {
-  const byId = new Map<string, Message>();
-  for (const m of prev) {
-    if (m?.id) byId.set(m.id, m);
-  }
-  for (const raw of incomingRaw) {
-    const normalized = normalizeServerMessage(raw);
-    if (!normalized) continue;
-    byId.set(normalized.id, normalized);
-  }
-  const merged = Array.from(byId.values()).sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  );
-  return merged;
+function normalizeMessageList(raw: unknown): Message[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item): Message | null => {
+      if (!item || typeof item !== "object") return null;
+      const rec = item as Record<string, unknown>;
+      const id =
+        typeof rec.id === "string" ? rec.id : typeof rec.id === "number" ? String(rec.id) : "";
+      if (!id) return null;
+      return {
+        id,
+        sender: typeof rec.sender === "string" ? rec.sender : "customer",
+        message: typeof rec.message === "string" || rec.message === null ? rec.message : null,
+        media_urls: Array.isArray(rec.media_urls)
+          ? rec.media_urls.filter((u): u is string => typeof u === "string")
+          : null,
+        created_at:
+          typeof rec.created_at === "string" ? rec.created_at : new Date().toISOString(),
+        is_read: typeof rec.is_read === "boolean" ? rec.is_read : null,
+      };
+    })
+    .filter((m): m is Message => Boolean(m))
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 }
 
 export default function SupportTicketPage() {
@@ -74,20 +63,20 @@ export default function SupportTicketPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [supportEnabled, setSupportEnabled] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { state: pushState, subscribe: subscribePush } = usePushNotifications();
-  const prevMessageCount = useRef(0);
-  const currentTicketNumberRef = useRef(ticketNumber);
+  const mountedTicketRef = useRef(ticketNumber);
 
   useEffect(() => {
-    currentTicketNumberRef.current = ticketNumber;
+    mountedTicketRef.current = ticketNumber;
     setTicket(null);
     setMessages([]);
     setReply("");
     setSelectedImages([]);
     setInitialLoading(true);
-    prevMessageCount.current = 0;
+    setLoadError(null);
   }, [ticketNumber]);
 
   function showFeedback(msg: string, ok = true) {
@@ -101,38 +90,42 @@ export default function SupportTicketPage() {
       setInitialLoading(false);
       return;
     }
+    setLoadError(null);
     if (!opts?.silent) setInitialLoading(true);
     try {
       const url = `/api/account/tickets/${encodeURIComponent(ticketNumber)}?t=${Date.now()}`;
-      const res = await fetch(
-        url,
-        { headers: { "x-customer-token": t }, cache: "no-store" }
-      );
+      const res = await fetch(url, {
+        headers: { "x-customer-token": t },
+        cache: "no-store",
+      });
       if (res.status === 404) {
         setTicket(null);
+        setMessages([]);
         if (!opts?.silent) setInitialLoading(false);
         return;
       }
-      const data = await res.json();
-      if (res.ok && data.ticket) {
-        if (currentTicketNumberRef.current !== ticketNumber) return;
+      const data = (await res.json().catch(() => ({}))) as {
+        ticket?: Ticket;
+        messages?: unknown;
+        error?: string;
+      };
+      if (!res.ok) {
+        if (!opts?.silent) setLoadError(data.error ?? "Failed to load thread.");
+        return;
+      }
+      if (data.ticket) {
+        if (mountedTicketRef.current !== ticketNumber) return;
         setTicket(data.ticket);
-        setMessages((prev) => {
-          const incoming = Array.isArray(data.messages) ? data.messages : [];
-          const mergedMessages = mergeMessagesById(prev, incoming);
-          const newJson = JSON.stringify(mergedMessages);
-          const prevJson = JSON.stringify(prev);
-          if (newJson === prevJson) return prev;
-          return mergedMessages;
-        });
-        // Mark admin messages as read
+        setMessages(normalizeMessageList(data.messages));
         void fetch(`/api/account/tickets/${encodeURIComponent(ticketNumber)}/read`, {
           method: "POST",
           headers: { "x-customer-token": t },
+          cache: "no-store",
         });
       }
     } catch (e) {
       console.error("[ticket load]", e);
+      if (!opts?.silent) setLoadError("Failed to load thread.");
     } finally {
       if (!opts?.silent) setInitialLoading(false);
     }
@@ -151,18 +144,16 @@ export default function SupportTicketPage() {
     void load();
     const interval = window.setInterval(() => {
       void load({ silent: true });
-    }, 6000);
+    }, 5000);
     return () => window.clearInterval(interval);
   }, [load]);
 
   useEffect(() => {
-    if (messages.length > prevMessageCount.current) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
-    }
-    prevMessageCount.current = messages.length;
-  }, [messages.length]);
+    if (messages.length === 0) return;
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 80);
+  }, [messages]);
 
   const vapidReady = Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
 
@@ -172,22 +163,9 @@ export default function SupportTicketPage() {
     const t = getOrCreateCustomerToken();
     if (!t) return;
 
-    const tempId = `temp-${Date.now()}`;
-    const optimisticMsg: Message = {
-      id: tempId,
-      sender: "customer",
-      message: trimmed || "(attachment)",
-      created_at: new Date().toISOString(),
-      is_read: false,
-      media_urls: selectedImages.map((f) => URL.createObjectURL(f)),
-    };
-    setMessages((prev) => [...prev, optimisticMsg]);
-    setReply("");
-    const imagesToUpload = [...selectedImages];
-    setSelectedImages([]);
-
     setSending(true);
     try {
+      const imagesToUpload = [...selectedImages];
       let mediaUrls: string[] | null = null;
       let failedUploads = 0;
       if (imagesToUpload.length > 0) {
@@ -211,9 +189,6 @@ export default function SupportTicketPage() {
         if (uploaded.length > 0) mediaUrls = uploaded;
         setUploadingImages(false);
         if (uploaded.length === 0) {
-          setMessages((prev) => prev.filter((m) => m.id !== tempId));
-          setReply(trimmed);
-          setSelectedImages(imagesToUpload);
           showFeedback("Could not upload image(s). Please try again.", false);
           return;
         }
@@ -238,46 +213,14 @@ export default function SupportTicketPage() {
       );
 
       if (res.ok) {
-        const payload = (await res.json().catch(() => ({}))) as {
-          message?: {
-            id?: string;
-            sender?: string;
-            message?: string | null;
-            media_urls?: string[] | null;
-            created_at?: string;
-            is_read?: boolean | null;
-          };
-        };
-        const serverMsg = payload.message;
-        if (serverMsg?.id) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === tempId
-                ? {
-                    id: String(serverMsg.id),
-                    sender: String(serverMsg.sender ?? "customer"),
-                    message:
-                      typeof serverMsg.message === "string" || serverMsg.message === null
-                        ? serverMsg.message
-                        : trimmed || "(attachment)",
-                    media_urls: Array.isArray(serverMsg.media_urls) ? serverMsg.media_urls : mediaUrls,
-                    created_at: String(serverMsg.created_at ?? new Date().toISOString()),
-                    is_read: Boolean(serverMsg.is_read ?? false),
-                  }
-                : m
-            )
-          );
-        } else {
-          await load({ silent: true });
-        }
+        setReply("");
+        setSelectedImages([]);
+        await load({ silent: true });
       } else {
-        setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        setReply(trimmed);
-        setSelectedImages(imagesToUpload);
+        showFeedback("Failed to send reply. Please try again.", false);
       }
     } catch {
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      setReply(trimmed);
+      showFeedback("Network error. Please try again.", false);
     } finally {
       setSending(false);
       setUploadingImages(false);
@@ -338,10 +281,18 @@ export default function SupportTicketPage() {
         </p>
       )}
 
+      {loadError && (
+        <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+          {loadError}
+        </p>
+      )}
+
       <div className="flex flex-col gap-3 overflow-y-auto rounded-2xl border border-honey-border bg-surface p-4 dark:bg-surface-dark">
+        {messages.length === 0 && (
+          <p className="text-sm text-honey-muted">No messages yet.</p>
+        )}
         {messages.map((m) => {
           const isAdmin = m.sender === "admin";
-          const isOptimistic = m.id?.startsWith("temp-");
           const mediaUrls: string[] = Array.isArray(m.media_urls) ? m.media_urls : [];
           return (
             <div
@@ -349,8 +300,6 @@ export default function SupportTicketPage() {
               className={`rounded-2xl px-4 py-3 ${
                 isAdmin
                   ? "mr-auto border border-primary/30 bg-primary/10 dark:bg-primary/15"
-                  : isOptimistic
-                  ? "ml-auto max-w-[85%] border border-honey-border/40 bg-surface/60 opacity-70 dark:bg-surface-dark/60"
                   : "ml-auto max-w-[85%] border border-honey-border bg-surface dark:bg-surface-dark"
               }`}
             >
@@ -359,8 +308,7 @@ export default function SupportTicketPage() {
                   isAdmin ? "text-primary" : "text-honey-muted"
                 }`}
               >
-                {isAdmin ? "🍯 Honey Well" : "You"}
-                {isOptimistic && <span className="ml-2 font-normal normal-case opacity-60">sending...</span>}
+                {isAdmin ? "ADMIN" : "YOU"}
               </p>
               {m.message && m.message !== "(attachment)" && (
                 <p className="whitespace-pre-wrap text-sm text-honey-text">
