@@ -6,7 +6,7 @@ import { CRYPTO_COIN_OPTIONS, normalizeActiveCryptoCoin } from "@/lib/crypto-coi
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
 import { parseShopOpen } from "@/lib/shop-open";
-import { formatPrice, truncateToken } from "@/lib/helpers";
+import { formatPrice, ORDER_STATUS_LABELS, truncateToken } from "@/lib/helpers";
 import { PendingApprovalQueue } from "@/components/admin/PendingApprovalQueue";
 import { createClient } from "@/lib/supabase/client";
 import type { Announcement, Order, Product } from "@/types";
@@ -29,6 +29,15 @@ type ShopLocationRow = {
   is_active: boolean;
 };
 
+type ProductCategoryRow = {
+  id: string;
+  slug: string;
+  name: string;
+  is_active: boolean;
+  sort_order?: number;
+  created_at: string;
+};
+
 type TicketRow = {
   id: string;
   stock_quantity: number;
@@ -43,6 +52,7 @@ type SupportTicketRow = {
   id: string;
   ticket_number: string;
   customer_token: string;
+  customer_username?: string | null;
   subject: string;
   status: string;
   updated_at: string;
@@ -51,6 +61,7 @@ type SupportTicketRow = {
 
 const ORDER_STATUSES = [
   "payment_pending",
+  "pre_ordered",
   "payment_expired",
   "waiting",
   "confirmed",
@@ -71,6 +82,7 @@ export default function AdminDashboard() {
   const tab = searchParams.get("tab") ?? "overview";
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [productCategories, setProductCategories] = useState<ProductCategoryRow[]>([]);
   const [orders, setOrders] = useState<(Order & { product?: Product | null })[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -82,8 +94,13 @@ export default function AdminDashboard() {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    const [pRes, oRes, aRes, sRes] = await Promise.all([
+    const [pRes, cRes, oRes, aRes, sRes] = await Promise.all([
       supabase.from("products").select("*").order("created_at", { ascending: false }),
+      supabase
+        .from("product_categories")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }),
       supabase
         .from("orders")
         .select("*, products(*)")
@@ -94,6 +111,7 @@ export default function AdminDashboard() {
     ]);
 
     if (pRes.data) setProducts(pRes.data as Product[]);
+    if (cRes.data) setProductCategories(cRes.data as ProductCategoryRow[]);
     if (oRes.data) {
       setOrders(
         (oRes.data as Record<string, unknown>[]).map((row) => {
@@ -150,6 +168,16 @@ export default function AdminDashboard() {
   }
 
   const shopCurrency = parseShopCurrency(settings.shop_currency);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const deliveredStatuses = new Set(["delivered", "picked_up"]);
+  const salesToday = orders.filter((o) => o.created_at?.slice(0, 10) === todayKey).length;
+  const cancelledTotal = orders.filter((o) => o.status === "cancelled").length;
+  const cancelledToday = orders.filter(
+    (o) => o.status === "cancelled" && o.created_at?.slice(0, 10) === todayKey
+  ).length;
+  const completedRevenueToday = orders
+    .filter((o) => deliveredStatuses.has(String(o.status)) && o.created_at?.slice(0, 10) === todayKey)
+    .reduce((sum, o) => sum + Number(o.total_price ?? 0), 0);
 
   return (
     <div className="space-y-8">
@@ -173,15 +201,35 @@ export default function AdminDashboard() {
       )}
 
       {tab === "overview" && !loading && (
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Products" value={products.length} />
           <Stat label="Orders" value={orders.length} />
           <Stat label="Announcements" value={announcements.length} />
+          <Stat label="Sales today" value={salesToday} />
+          <Stat label="Cancelled (today)" value={cancelledToday} />
+          <Stat label="Cancelled (all)" value={cancelledTotal} />
+          <div className="card-hive flex gap-4 rounded-xl p-6 sm:col-span-3 lg:col-span-2">
+            <div className="hex-border relative flex h-14 w-12 shrink-0 items-center justify-center bg-bg-secondary hex-clip">
+              <span className="font-display text-lg font-bold text-primary">Ft</span>
+            </div>
+            <div>
+              <p className="text-sm text-honey-muted">Completed revenue today</p>
+              <p className="mt-1 font-display text-3xl text-honey-text">
+                {formatPrice(Math.round(completedRevenueToday), shopCurrency)}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
       {tab === "products" && !loading && (
-        <ProductsSection products={products} onRefresh={loadAll} supabase={supabase} shopCurrency={shopCurrency} />
+        <ProductsSection
+          products={products}
+          categories={productCategories}
+          onRefresh={loadAll}
+          supabase={supabase}
+          shopCurrency={shopCurrency}
+        />
       )}
 
       {tab === "orders" && !loading && (
@@ -225,28 +273,53 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 function ProductsSection({
   products,
+  categories,
   onRefresh,
   supabase,
   shopCurrency,
 }: {
   products: Product[];
+  categories: ProductCategoryRow[];
   onRefresh: () => void;
   supabase: ReturnType<typeof createClient>;
   shopCurrency: ShopCurrency;
 }) {
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categorySaving, setCategorySaving] = useState<string | null>(null);
+  const [categoryOrderIds, setCategoryOrderIds] = useState<string[]>([]);
+  const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null);
+
+  const activeCategories = categories.filter((c) => c.is_active);
+  const fallbackCategory = activeCategories[0]?.slug ?? categories[0]?.slug ?? "flower";
+  const orderedCategories = categoryOrderIds
+    .map((id) => categories.find((c) => c.id === id))
+    .filter((c): c is ProductCategoryRow => Boolean(c));
+
+  useEffect(() => {
+    setCategoryOrderIds(categories.map((c) => c.id));
+  }, [categories]);
+
+  function slugifyCategoryName(name: string): string {
+    return name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
 
   async function saveProduct() {
     if (!editing?.name) return;
     const payload = {
       name: editing.name,
       description: editing.description ?? null,
-      category: editing.category ?? "flower",
+      category: editing.category ?? fallbackCategory,
       price_regular: Number(editing.price_regular ?? 0),
       price_team_member: Number(editing.price_team_member ?? 0),
       stock_quantity: Number(editing.stock_quantity ?? 0),
       image_url: editing.image_url ?? null,
       is_active: editing.is_active ?? true,
+      allow_preorder: Boolean(editing.allow_preorder),
     };
     if (editing.id) {
       await supabase.from("products").update(payload).eq("id", editing.id);
@@ -254,6 +327,113 @@ function ProductsSection({
       await supabase.from("products").insert(payload);
     }
     setEditing(null);
+    onRefresh();
+  }
+
+  async function addCategory() {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    const slug = slugifyCategoryName(name);
+    if (!slug) return;
+    setCategorySaving("add");
+    await supabase
+      .from("product_categories")
+      .upsert(
+        {
+          slug,
+          name,
+          is_active: true,
+          sort_order: categories.length + 1,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "slug" }
+      );
+    setNewCategoryName("");
+    setCategorySaving(null);
+    onRefresh();
+  }
+
+  async function toggleCategory(cat: ProductCategoryRow, isActive: boolean) {
+    setCategorySaving(cat.id + String(isActive));
+    await supabase
+      .from("product_categories")
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq("id", cat.id);
+    setCategorySaving(null);
+    onRefresh();
+  }
+
+  async function renameCategory(cat: ProductCategoryRow) {
+    const next = prompt("Rename category", cat.name)?.trim();
+    if (!next || next === cat.name) return;
+    setCategorySaving("rename" + cat.id);
+    await supabase
+      .from("product_categories")
+      .update({ name: next, updated_at: new Date().toISOString() })
+      .eq("id", cat.id);
+    setCategorySaving(null);
+    onRefresh();
+  }
+
+  async function deleteCategory(cat: ProductCategoryRow) {
+    if (!confirm(`Delete category "${cat.name}"?`)) return;
+    const { count } = await supabase
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("category", cat.slug);
+    if ((count ?? 0) > 0) {
+      alert("Cannot delete this category because products are still using it.");
+      return;
+    }
+    setCategorySaving("del" + cat.id);
+    await supabase.from("product_categories").delete().eq("id", cat.id);
+    setCategorySaving(null);
+    onRefresh();
+  }
+
+  function moveCategory(dragId: string, targetId: string) {
+    if (!dragId || !targetId || dragId === targetId) return;
+    setCategoryOrderIds((prev) => {
+      const next = [...prev];
+      const from = next.indexOf(dragId);
+      const to = next.indexOf(targetId);
+      if (from < 0 || to < 0) return prev;
+      next.splice(from, 1);
+      next.splice(to, 0, dragId);
+      return next;
+    });
+  }
+
+  function moveCategoryByStep(id: string, step: -1 | 1) {
+    setCategoryOrderIds((prev) => {
+      const idx = prev.indexOf(id);
+      if (idx < 0) return prev;
+      const nextIdx = idx + step;
+      if (nextIdx < 0 || nextIdx >= prev.length) return prev;
+      const next = [...prev];
+      const temp = next[idx];
+      next[idx] = next[nextIdx]!;
+      next[nextIdx] = temp!;
+      return next;
+    });
+  }
+
+  async function saveCategoryOrder() {
+    setCategorySaving("order");
+    const payload = categoryOrderIds.map((id, idx) => ({
+      id,
+      sort_order: idx + 1,
+      updated_at: new Date().toISOString(),
+    }));
+    await Promise.all(
+      payload.map((p) =>
+        supabase
+          .from("product_categories")
+          .update({ sort_order: p.sort_order, updated_at: p.updated_at })
+          .eq("id", p.id)
+      )
+    );
+    setCategorySaving(null);
     onRefresh();
   }
 
@@ -274,16 +454,112 @@ function ProductsSection({
 
   return (
     <div className="space-y-6">
+      <div className="rounded-2xl border border-honey-border p-4">
+        <h2 className="font-display text-lg">Manage categories</h2>
+        <div className="mt-3 flex gap-2">
+          <input
+            className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            placeholder="New category name (e.g. Extracts)"
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+          />
+          <button
+            type="button"
+            onClick={() => void addCategory()}
+            disabled={categorySaving === "add"}
+            className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {categorySaving === "add" ? "Adding..." : "Add"}
+          </button>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <p className="text-xs text-honey-muted">Drag categories to reorder shop filter buttons.</p>
+          <button
+            type="button"
+            disabled={categorySaving === "order"}
+            onClick={() => void saveCategoryOrder()}
+            className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {categorySaving === "order" ? "Saving..." : "Save order"}
+          </button>
+        </div>
+        <div className="mt-2 space-y-2">
+          {orderedCategories.map((c) => (
+            <div
+              key={c.id}
+              draggable
+              onDragStart={() => setDraggingCategoryId(c.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => {
+                if (draggingCategoryId) moveCategory(draggingCategoryId, c.id);
+                setDraggingCategoryId(null);
+              }}
+              onDragEnd={() => setDraggingCategoryId(null)}
+              className="flex items-center gap-2 rounded-xl border border-honey-border px-3 py-2"
+            >
+              <span className="cursor-grab text-sm text-honey-muted">::</span>
+              <span className="text-xs font-medium text-honey-text">
+                {c.name} <span className="text-honey-muted">({c.slug})</span>
+              </span>
+              <span className="ml-auto text-[10px] text-honey-muted">{c.is_active ? "active" : "inactive"}</span>
+              <button
+                type="button"
+                disabled={categorySaving !== null}
+                onClick={() => void renameCategory(c)}
+                className="text-xs text-primary hover:underline disabled:opacity-60"
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                disabled={categorySaving !== null}
+                onClick={() => moveCategoryByStep(c.id, -1)}
+                className="text-xs text-honey-muted hover:underline disabled:opacity-60"
+                aria-label={`Move ${c.name} up`}
+              >
+                Up
+              </button>
+              <button
+                type="button"
+                disabled={categorySaving !== null}
+                onClick={() => moveCategoryByStep(c.id, 1)}
+                className="text-xs text-honey-muted hover:underline disabled:opacity-60"
+                aria-label={`Move ${c.name} down`}
+              >
+                Down
+              </button>
+              <button
+                type="button"
+                disabled={categorySaving !== null}
+                onClick={() => void toggleCategory(c, !c.is_active)}
+                className="text-xs text-amber-700 hover:underline disabled:opacity-60 dark:text-amber-400"
+              >
+                {c.is_active ? "Deactivate" : "Activate"}
+              </button>
+              <button
+                type="button"
+                disabled={categorySaving !== null}
+                onClick={() => void deleteCategory(c)}
+                className="text-xs text-red-600 hover:underline disabled:opacity-60"
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <button
         type="button"
         onClick={() =>
           setEditing({
             name: "",
-            category: "flower",
+            category: fallbackCategory,
             price_regular: 0,
             price_team_member: 0,
             stock_quantity: 0,
             is_active: true,
+            allow_preorder: false,
           })
         }
         className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
@@ -297,7 +573,9 @@ function ProductsSection({
             <tr>
               <th className="p-3">Image</th>
               <th className="p-3">Name</th>
+              <th className="p-3">Category</th>
               <th className="p-3">Stock</th>
+              <th className="p-3">Pre-order</th>
               <th className="p-3">Prices</th>
               <th className="p-3">Active</th>
               <th className="p-3">Actions</th>
@@ -316,7 +594,9 @@ function ProductsSection({
                   </div>
                 </td>
                 <td className="p-3 font-medium">{p.name}</td>
+                <td className="p-3 text-xs">{categories.find((c) => c.slug === p.category)?.name ?? p.category}</td>
                 <td className="p-3">{p.stock_quantity}</td>
+                <td className="p-3">{p.allow_preorder ? "Enabled" : "Disabled"}</td>
                 <td className="p-3">
                   {formatPrice(Number(p.price_regular), shopCurrency)} /{" "}
                   {formatPrice(Number(p.price_team_member), shopCurrency)}
@@ -350,13 +630,19 @@ function ProductsSection({
               <label className="text-xs font-semibold text-honey-muted">Category</label>
               <select
                 className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-                value={editing.category ?? "flower"}
+                value={editing.category ?? fallbackCategory}
                 onChange={(e) =>
                   setEditing({ ...editing, category: e.target.value as Product["category"] })
                 }
               >
-                <option value="flower">Flower</option>
-                <option value="vitamin">Vitamin</option>
+                {[...activeCategories, ...categories.filter((c) => !c.is_active && c.slug === editing.category)].map(
+                  (c) => (
+                    <option key={c.id} value={c.slug}>
+                      {c.name}
+                      {!c.is_active ? " (inactive)" : ""}
+                    </option>
+                  )
+                )}
               </select>
               <Field
                 label={`Regular price (${shopCurrency})`}
@@ -383,6 +669,14 @@ function ProductsSection({
                   onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })}
                 />
                 Active
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={Boolean(editing.allow_preorder)}
+                  onChange={(e) => setEditing({ ...editing, allow_preorder: e.target.checked })}
+                />
+                Allow pre-order when stock is empty
               </label>
               {editing.id && (
                 <div>
@@ -461,27 +755,65 @@ function OrdersSection({
   shopCurrency: ShopCurrency;
 }) {
   const [filter, setFilter] = useState<string>("all");
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  function showToast(msg: string, ok = true) {
+    setToast({ msg, ok });
+    window.setTimeout(() => setToast(null), 3000);
+  }
 
   const filtered = filter === "all" ? orders : orders.filter((o) => o.status === filter);
 
   async function setStatus(id: string, status: (typeof ORDER_STATUSES)[number]) {
-    await supabase.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
-    onRefresh();
+    const key = id + status;
+    setActionLoading(key);
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) {
+        showToast("Failed to update status. Try again.", false);
+        return;
+      }
+      showToast("Status updated ✓");
+      onRefresh();
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   async function confirmOrder(id: string) {
-    const res = await fetch("/api/admin/orders/confirm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ order_id: id }),
-    });
-    if (!res.ok) {
-      await res.json().catch(() => ({}));
-      alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
-      return;
+    setActionLoading(id + "confirm");
+    try {
+      const res = await fetch("/api/admin/orders/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ order_id: id }),
+      });
+      if (!res.ok) {
+        showToast("Could not confirm order. Try again.", false);
+        return;
+      }
+      const data = (await res.json().catch(() => ({}))) as {
+        points_earned?: number;
+        leveled_up?: boolean;
+        level_name?: string;
+      };
+      let msg = "Order confirmed ✓";
+      if (typeof data.points_earned === "number" && data.points_earned > 0) {
+        msg += ` +${data.points_earned} pts awarded.`;
+      }
+      if (data.leveled_up && data.level_name) {
+        msg += ` Customer reached ${data.level_name}!`;
+      }
+      showToast(msg);
+      onRefresh();
+    } finally {
+      setActionLoading(null);
     }
-    onRefresh();
   }
 
   async function cancelOrder(order: Order & { product?: Product | null }) {
@@ -491,22 +823,31 @@ function OrdersSection({
       ? "Cancel this order? (No stock was deducted yet.)"
       : "Cancel this order and restore stock?";
     if (!confirm(msg)) return;
-    if (!skipRestore) {
-      const { error: rpcErr } = await supabase.rpc("restore_product_stock", {
-        p_product_id: order.product_id,
-        p_quantity: order.quantity,
-      });
-      if (rpcErr) {
-        console.error("[cancelOrder]", rpcErr);
-        alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+    setActionLoading(order.id + "cancel");
+    try {
+      if (!skipRestore) {
+        const { error: rpcErr } = await supabase.rpc("restore_product_stock", {
+          p_product_id: order.product_id,
+          p_quantity: order.quantity,
+        });
+        if (rpcErr) {
+          showToast("Failed to restore stock. Try again.", false);
+          return;
+        }
+      }
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("id", order.id);
+      if (error) {
+        showToast("Failed to cancel order. Try again.", false);
         return;
       }
+      showToast("Order cancelled and stock restored ✓");
+      onRefresh();
+    } finally {
+      setActionLoading(null);
     }
-    await supabase
-      .from("orders")
-      .update({ status: "cancelled", updated_at: new Date().toISOString() })
-      .eq("id", order.id);
-    onRefresh();
   }
 
   async function rejectOrderApi(id: string, reason: string) {
@@ -518,14 +859,16 @@ function OrdersSection({
     });
     if (!res.ok) {
       await res.json().catch(() => ({}));
-      throw new Error("reject");
+      showToast(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, false);
+      return;
     }
+    showToast("Order rejected ✓");
     onRefresh();
   }
 
   async function markPickedUp(order: Order & { product?: Product | null }) {
     if (!order.pickup_photo_url) {
-      alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+      showToast(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, false);
       return;
     }
     await setStatus(order.id, "picked_up");
@@ -544,21 +887,40 @@ function OrdersSection({
         {o.status === "payment_pending" && (
           <button
             type="button"
-            className="text-left text-xs text-primary hover:underline"
+            disabled={actionLoading !== null}
+            className="text-left text-xs text-primary hover:underline disabled:opacity-50"
             onClick={() => confirmOrder(o.id)}
           >
-            {o.payment_method === "revolut" &&
-            o.fulfillment_type === "delivery" &&
-            o.revolut_pay_timing === "pay_now"
-              ? "Confirm payment received"
-              : "Confirm"}
+            {o.payment_method === "revolut" ? "Approve payment successful" : "Confirm"}
           </button>
+        )}
+
+        {o.status === "pre_ordered" && (
+          <>
+            <button
+              type="button"
+              disabled={actionLoading !== null}
+              className="text-left text-xs text-primary hover:underline disabled:opacity-50"
+              onClick={() => setStatus(o.id, "confirmed")}
+            >
+              Pre-order accepted
+            </button>
+            <button
+              type="button"
+              disabled={actionLoading !== null}
+              className="text-left text-xs text-red-600 hover:underline disabled:opacity-50"
+              onClick={() => setStatus(o.id, "cancelled")}
+            >
+              Pre-order rejected/cancelled
+            </button>
+          </>
         )}
 
         {(isPickup || legacyPickup) && o.status === "confirmed" && (
           <button
             type="button"
-            className="text-left text-xs text-primary hover:underline"
+            disabled={actionLoading !== null}
+            className="text-left text-xs text-primary hover:underline disabled:opacity-50"
             onClick={() => setStatus(o.id, "ready_for_pickup")}
           >
             Ready for pickup
@@ -568,7 +930,8 @@ function OrdersSection({
         {isDeadDrop && o.status === "confirmed" && (
           <button
             type="button"
-            className="text-left text-xs text-primary hover:underline"
+            disabled={actionLoading !== null}
+            className="text-left text-xs text-primary hover:underline disabled:opacity-50"
             onClick={() => setStatus(o.id, "ready_at_drop")}
           >
             Ready at drop
@@ -578,7 +941,8 @@ function OrdersSection({
         {isDelivery && (o.status === "confirmed" || o.status === "waiting") && (
           <button
             type="button"
-            className="text-left text-xs text-primary hover:underline"
+            disabled={actionLoading !== null}
+            className="text-left text-xs text-primary hover:underline disabled:opacity-50"
             onClick={() => setStatus(o.id, "out_for_delivery")}
           >
             Out for delivery
@@ -588,7 +952,8 @@ function OrdersSection({
         {isDelivery && o.status === "out_for_delivery" && (
           <button
             type="button"
-            className="text-left text-xs text-primary hover:underline"
+            disabled={actionLoading !== null}
+            className="text-left text-xs text-primary hover:underline disabled:opacity-50"
             onClick={() => setStatus(o.id, "delivered")}
           >
             Delivered
@@ -598,7 +963,8 @@ function OrdersSection({
         {canPickupFlow && o.status === "pickup_submitted" && (
           <button
             type="button"
-            className="text-left text-xs text-amber-700 hover:underline dark:text-amber-400"
+            disabled={actionLoading !== null}
+            className="text-left text-xs text-amber-700 hover:underline disabled:opacity-50 dark:text-amber-400"
             onClick={() => setStatus(o.id, "pickup_flagged")}
           >
             Flag proof for review
@@ -615,7 +981,8 @@ function OrdersSection({
           !["payment_pending", "picked_up", "cancelled", "payment_expired", "delivered"].includes(o.status) && (
             <button
               type="button"
-              className="text-left text-xs text-primary hover:underline"
+              disabled={actionLoading !== null}
+              className="text-left text-xs text-primary hover:underline disabled:opacity-50"
               onClick={() => markPickedUp(o)}
             >
               Picked up
@@ -625,7 +992,8 @@ function OrdersSection({
         {o.status !== "cancelled" && o.status !== "picked_up" && o.status !== "delivered" && (
           <button
             type="button"
-            className="text-left text-xs text-red-600 hover:underline"
+            disabled={actionLoading !== null}
+            className="text-left text-xs text-red-600 hover:underline disabled:opacity-50"
             onClick={() => cancelOrder(o)}
           >
             Cancel + restore stock
@@ -636,34 +1004,49 @@ function OrdersSection({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
+      {toast && (
+        <div
+          className={`fixed right-4 top-4 z-50 rounded-xl px-5 py-3 text-sm font-semibold shadow-xl transition-all ${
+            toast.ok ? "bg-green-600 text-white" : "bg-red-600 text-white"
+          }`}
+        >
+          {toast.msg}
+        </div>
+      )}
       <PendingApprovalQueue
         orders={orders}
         shopCurrency={shopCurrency}
         onApproved={async (id) => {
-          const res = await fetch("/api/admin/orders/confirm", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ order_id: id }),
-          });
-          const data = (await res.json().catch(() => ({}))) as {
-            points_earned?: number;
-            leveled_up?: boolean;
-            level_name?: string;
-          };
-          if (!res.ok) {
-            throw new Error("confirm");
+          setActionLoading(id + "confirm");
+          try {
+            const res = await fetch("/api/admin/orders/confirm", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ order_id: id }),
+            });
+            const data = (await res.json().catch(() => ({}))) as {
+              points_earned?: number;
+              leveled_up?: boolean;
+              level_name?: string;
+            };
+            if (!res.ok) {
+              showToast(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, false);
+              return;
+            }
+            let msg = "Order approved.";
+            if (typeof data.points_earned === "number" && data.points_earned > 0) {
+              msg += ` +${data.points_earned} pts awarded to customer.`;
+            }
+            if (data.leveled_up && data.level_name) {
+              msg += ` Customer reached ${data.level_name}.`;
+            }
+            showToast(msg);
+            onRefresh();
+          } finally {
+            setActionLoading(null);
           }
-          let msg = "Order approved.";
-          if (typeof data.points_earned === "number" && data.points_earned > 0) {
-            msg += ` +${data.points_earned} pts awarded to customer.`;
-          }
-          if (data.leveled_up && data.level_name) {
-            msg += ` Customer reached ${data.level_name}.`;
-          }
-          alert(msg);
-          onRefresh();
         }}
         onRejected={rejectOrderApi}
       />
@@ -688,7 +1071,7 @@ function OrdersSection({
               filter === s ? "bg-primary text-white" : "border border-honey-border"
             )}
           >
-            {s}
+            {ORDER_STATUS_LABELS[s] ?? s.replace(/_/g, " ")}
           </button>
         ))}
       </div>
@@ -698,9 +1081,11 @@ function OrdersSection({
           <thead className="border-b border-honey-border bg-bg/80 text-xs uppercase text-honey-muted">
             <tr>
               <th className="p-2">Customer</th>
+              <th className="p-2">Username</th>
               <th className="p-2">Product</th>
               <th className="p-2">Qty</th>
               <th className="p-2">Total</th>
+              <th className="p-2">Points Used</th>
               <th className="p-2">Fulfillment</th>
               <th className="p-2">Type</th>
               <th className="p-2">Pay</th>
@@ -712,9 +1097,15 @@ function OrdersSection({
             {filtered.map((o) => (
               <tr key={o.id} className="border-b border-honey-border/60 align-top">
                 <td className="p-2 font-mono text-xs">{truncateToken(o.customer_token)}</td>
+                <td className="p-2 text-xs">
+                  {o.customer_username ? `@${o.customer_username}` : "—"}
+                </td>
                 <td className="p-2">{o.product?.name ?? "—"}</td>
                 <td className="p-2">{o.quantity}</td>
                 <td className="p-2">{formatPrice(Number(o.total_price), shopCurrency)}</td>
+                <td className="p-2 text-xs">
+                  {Number(o.points_used ?? 0) > 0 ? `${Number(o.points_used)} pts` : "No"}
+                </td>
                 <td className="p-2 text-xs">
                   {o.fulfillment_type ?? "—"}
                   {o.fulfillment_type === "delivery" && o.delivery_address && (
@@ -723,7 +1114,7 @@ function OrdersSection({
                 </td>
                 <td className="p-2">{o.user_type}</td>
                 <td className="p-2">{o.payment_method ?? "—"}</td>
-                <td className="p-2 text-xs">{o.status}</td>
+                <td className="p-2 text-xs">{ORDER_STATUS_LABELS[o.status] ?? o.status}</td>
                 <td className="p-2">
                   <div className="flex flex-col gap-1">{fulfillmentActions(o)}</div>
                 </td>
@@ -747,6 +1138,10 @@ function AnnouncementsSection({
 }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [editingBody, setEditingBody] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   async function add() {
     if (!title.trim() || !body.trim()) return;
@@ -759,6 +1154,42 @@ function AnnouncementsSection({
   async function remove(id: string) {
     if (!confirm("Delete announcement?")) return;
     await supabase.from("announcements").delete().eq("id", id);
+    onRefresh();
+  }
+
+  function beginEdit(a: Announcement) {
+    setEditingId(a.id);
+    setEditingTitle(a.title);
+    setEditingBody(a.body);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editingTitle.trim() || !editingBody.trim()) return;
+    setBusyId(id);
+    await supabase
+      .from("announcements")
+      .update({ title: editingTitle.trim(), body: editingBody.trim() })
+      .eq("id", id);
+    setEditingId(null);
+    setBusyId(null);
+    onRefresh();
+  }
+
+  async function toggleActive(id: string, next: boolean) {
+    setBusyId(id);
+    await supabase.from("announcements").update({ is_active: next }).eq("id", id);
+    setBusyId(null);
+    onRefresh();
+  }
+
+  async function resend(a: Announcement) {
+    setBusyId(a.id);
+    await supabase.from("announcements").insert({
+      title: a.title,
+      body: a.body,
+      is_active: true,
+    });
+    setBusyId(null);
     onRefresh();
   }
 
@@ -791,13 +1222,79 @@ function AnnouncementsSection({
       <ul className="space-y-3">
         {items.map((a) => (
           <li key={a.id} className="flex items-start justify-between gap-4 rounded-2xl border border-honey-border p-4">
-            <div>
-              <p className="font-medium">{a.title}</p>
-              <p className="mt-1 text-sm text-honey-muted whitespace-pre-wrap">{a.body}</p>
+            <div className="flex-1">
+              {editingId === a.id ? (
+                <div className="space-y-2">
+                  <input
+                    className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                    value={editingTitle}
+                    onChange={(e) => setEditingTitle(e.target.value)}
+                  />
+                  <textarea
+                    className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                    rows={4}
+                    value={editingBody}
+                    onChange={(e) => setEditingBody(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void saveEdit(a.id)}
+                      className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                      className="rounded-full border border-honey-border px-4 py-1.5 text-xs"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="font-medium">{a.title}</p>
+                  <p className="mt-1 text-sm text-honey-muted whitespace-pre-wrap">{a.body}</p>
+                  <p className="mt-1 text-xs text-honey-muted">{a.is_active ? "Active" : "Inactive"}</p>
+                </>
+              )}
             </div>
-            <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => remove(a.id)}>
-              Delete
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                type="button"
+                disabled={busyId === a.id}
+                className="text-xs text-honey-text hover:underline disabled:opacity-60"
+                onClick={() => beginEdit(a)}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                disabled={busyId === a.id}
+                className="text-xs text-primary hover:underline disabled:opacity-60"
+                onClick={() => void resend(a)}
+              >
+                Send again
+              </button>
+              <button
+                type="button"
+                disabled={busyId === a.id}
+                className="text-xs text-amber-700 hover:underline disabled:opacity-60 dark:text-amber-400"
+                onClick={() => void toggleActive(a.id, !a.is_active)}
+              >
+                {a.is_active ? "Deactivate" : "Activate"}
+              </button>
+              <button
+                type="button"
+                disabled={busyId === a.id}
+                className="text-xs text-red-600 hover:underline disabled:opacity-60"
+                onClick={() => void remove(a.id)}
+              >
+                Delete
+              </button>
+            </div>
           </li>
         ))}
       </ul>
@@ -812,6 +1309,25 @@ function SettingsSection({
   settings: Record<string, string>;
   onSave: (k: string, v: string) => Promise<void>;
 }) {
+  const [draft, setDraft] = useState<Record<string, string>>(settings);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(settings);
+  }, [settings]);
+
+  async function saveOne(key: string) {
+    setSavingKey(key);
+    try {
+      await onSave(key, draft[key] ?? "");
+      setSavedKey(key);
+      window.setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1800);
+    } finally {
+      setSavingKey(null);
+    }
+  }
+
   const keys = [
     {
       key: "revolut_payment_link",
@@ -840,28 +1356,124 @@ function SettingsSection({
         <p className="mt-1 text-xs text-honey-muted">
           Product and order amounts are stored as numbers; this only changes how prices are shown (shop, checkout, admin).
         </p>
-        <select
-          className="mt-2 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-          value={settings.shop_currency === "EUR" ? "EUR" : "HUF"}
-          onChange={(e) => onSave("shop_currency", e.target.value)}
-        >
-          <option value="HUF">Hungarian Forint (HUF)</option>
-          <option value="EUR">Euro (EUR)</option>
-        </select>
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            value={(draft.shop_currency === "EUR" ? "EUR" : "HUF")}
+            onChange={(e) => setDraft((d) => ({ ...d, shop_currency: e.target.value }))}
+          >
+            <option value="HUF">Hungarian Forint (HUF)</option>
+            <option value="EUR">Euro (EUR)</option>
+          </select>
+          <button
+            type="button"
+            disabled={savingKey === "shop_currency"}
+            onClick={() => saveOne("shop_currency")}
+            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {savingKey === "shop_currency" ? "Saving..." : "Save"}
+          </button>
+        </div>
+        {savedKey === "shop_currency" && <p className="mt-1 text-xs text-green-600">Saved</p>}
       </div>
       <div>
         <label className="text-xs font-semibold text-honey-muted">Shop status</label>
         <p className="mt-1 text-xs text-honey-muted">
           When closed, customers cannot start checkout or place new orders.
         </p>
-        <select
-          className="mt-2 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-          value={parseShopOpen(settings.shop_open) ? "1" : "0"}
-          onChange={(e) => onSave("shop_open", e.target.value)}
-        >
-          <option value="1">Open</option>
-          <option value="0">Closed</option>
-        </select>
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            value={parseShopOpen(draft.shop_open) ? "1" : "0"}
+            onChange={(e) => setDraft((d) => ({ ...d, shop_open: e.target.value }))}
+          >
+            <option value="1">Open</option>
+            <option value="0">Closed</option>
+          </select>
+          <button
+            type="button"
+            disabled={savingKey === "shop_open"}
+            onClick={() => saveOne("shop_open")}
+            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {savingKey === "shop_open" ? "Saving..." : "Save"}
+          </button>
+        </div>
+        {savedKey === "shop_open" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-honey-muted">Maintenance mode</label>
+        <p className="mt-1 text-xs text-honey-muted">
+          When enabled, customers are blocked and only see an under-development message. Admin pages stay available for testing.
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            value={(draft.maintenance_mode === "1" ? "1" : "0")}
+            onChange={(e) => setDraft((d) => ({ ...d, maintenance_mode: e.target.value }))}
+          >
+            <option value="0">Off</option>
+            <option value="1">On</option>
+          </select>
+          <button
+            type="button"
+            disabled={savingKey === "maintenance_mode"}
+            onClick={() => saveOne("maintenance_mode")}
+            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {savingKey === "maintenance_mode" ? "Saving..." : "Save"}
+          </button>
+        </div>
+        {savedKey === "maintenance_mode" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-honey-muted">Maintenance message</label>
+        <p className="mt-1 text-xs text-honey-muted">
+          Main text customers see while maintenance mode is enabled.
+        </p>
+        <div className="mt-2 space-y-2">
+          <textarea
+            className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            rows={3}
+            value={
+              draft.maintenance_message ??
+              "Honey Well is currently under maintenance and testing. Please check back later."
+            }
+            onChange={(e) => setDraft((d) => ({ ...d, maintenance_message: e.target.value }))}
+            onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+          />
+          <button
+            type="button"
+            disabled={savingKey === "maintenance_message"}
+            onClick={() => saveOne("maintenance_message")}
+            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {savingKey === "maintenance_message" ? "Saving..." : "Save"}
+          </button>
+          {savedKey === "maintenance_message" && <p className="text-xs text-green-600">Saved</p>}
+        </div>
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-honey-muted">Maintenance ETA / time (optional)</label>
+        <p className="mt-1 text-xs text-honey-muted">
+          Optional second line, for example: &quot;Back around 18:30 CET&quot;.
+        </p>
+        <div className="mt-2 space-y-2">
+          <input
+            className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            value={draft.maintenance_eta ?? ""}
+            onChange={(e) => setDraft((d) => ({ ...d, maintenance_eta: e.target.value }))}
+          />
+          <button
+            type="button"
+            disabled={savingKey === "maintenance_eta"}
+            onClick={() => saveOne("maintenance_eta")}
+            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {savingKey === "maintenance_eta" ? "Saving..." : "Save"}
+          </button>
+          {savedKey === "maintenance_eta" && <p className="text-xs text-green-600">Saved</p>}
+        </div>
       </div>
       <div>
         <label className="text-xs font-semibold text-honey-muted">Active crypto coin</label>
@@ -869,17 +1481,28 @@ function SettingsSection({
           Checkout and crypto payment pages use this asset for the exact amount to send. Use a wallet address on the
           same network (e.g. Solana address for SOL).
         </p>
-        <select
-          className="mt-2 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-          value={normalizeActiveCryptoCoin(settings.active_crypto_coin)}
-          onChange={(e) => onSave("active_crypto_coin", e.target.value)}
-        >
-          {CRYPTO_COIN_OPTIONS.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label} ({c.symbol})
-            </option>
-          ))}
-        </select>
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            value={normalizeActiveCryptoCoin(draft.active_crypto_coin)}
+            onChange={(e) => setDraft((d) => ({ ...d, active_crypto_coin: e.target.value }))}
+          >
+            {CRYPTO_COIN_OPTIONS.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label} ({c.symbol})
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={savingKey === "active_crypto_coin"}
+            onClick={() => saveOne("active_crypto_coin")}
+            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {savingKey === "active_crypto_coin" ? "Saving..." : "Save"}
+          </button>
+        </div>
+        {savedKey === "active_crypto_coin" && <p className="mt-1 text-xs text-green-600">Saved</p>}
       </div>
       <div>
         <label className="text-xs font-semibold text-honey-muted">Crypto network</label>
@@ -887,24 +1510,48 @@ function SettingsSection({
           Shown on the payment page so customers send on the correct chain (e.g. Ethereum mainnet, Solana, Bitcoin
           network, Arbitrum, TRC20 for USDT).
         </p>
-        <textarea
-          className="mt-2 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-          rows={2}
-          defaultValue={settings.crypto_network ?? ""}
-          onBlur={(e) => onSave("crypto_network", e.target.value)}
-          placeholder="e.g. Ethereum mainnet (ERC-20)"
-        />
+        <div className="mt-2 space-y-2">
+          <textarea
+            className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            rows={2}
+            value={draft.crypto_network ?? ""}
+            onChange={(e) => setDraft((d) => ({ ...d, crypto_network: e.target.value }))}
+            onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+            placeholder="e.g. Ethereum mainnet (ERC-20)"
+          />
+          <button
+            type="button"
+            disabled={savingKey === "crypto_network"}
+            onClick={() => saveOne("crypto_network")}
+            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {savingKey === "crypto_network" ? "Saving..." : "Save"}
+          </button>
+          {savedKey === "crypto_network" && <p className="text-xs text-green-600">Saved</p>}
+        </div>
       </div>
       <div>
         <label className="text-xs font-semibold text-honey-muted">Crypto wallet address (receiving)</label>
         <p className="mt-1 text-xs text-honey-muted">Must match the coin and network above. Customers can copy this on the payment page.</p>
-        <textarea
-          className="mt-2 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-          rows={2}
-          defaultValue={settings.crypto_wallet_address ?? ""}
-          onBlur={(e) => onSave("crypto_wallet_address", e.target.value)}
-          placeholder="Paste the deposit address"
-        />
+        <div className="mt-2 space-y-2">
+          <textarea
+            className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            rows={2}
+            value={draft.crypto_wallet_address ?? ""}
+            onChange={(e) => setDraft((d) => ({ ...d, crypto_wallet_address: e.target.value }))}
+            onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+            placeholder="Paste the deposit address"
+          />
+          <button
+            type="button"
+            disabled={savingKey === "crypto_wallet_address"}
+            onClick={() => saveOne("crypto_wallet_address")}
+            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {savingKey === "crypto_wallet_address" ? "Saving..." : "Save"}
+          </button>
+          {savedKey === "crypto_wallet_address" && <p className="text-xs text-green-600">Saved</p>}
+        </div>
       </div>
       <div>
         <label className="text-xs font-semibold text-honey-muted">Team fulfillment options</label>
@@ -915,36 +1562,69 @@ function SettingsSection({
         <div className="mt-3 space-y-3">
           <div>
             <label className="text-xs text-honey-muted">Dead drop</label>
-            <select
-              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-              value={parseFulfillmentOptionEnabled(settings.fulfillment_dead_drop_enabled) ? "1" : "0"}
-              onChange={(e) => onSave("fulfillment_dead_drop_enabled", e.target.value)}
-            >
-              <option value="1">Enabled</option>
-              <option value="0">Disabled</option>
-            </select>
+            <div className="mt-1 flex items-center gap-2">
+              <select
+                className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                value={parseFulfillmentOptionEnabled(draft.fulfillment_dead_drop_enabled) ? "1" : "0"}
+                onChange={(e) => setDraft((d) => ({ ...d, fulfillment_dead_drop_enabled: e.target.value }))}
+              >
+                <option value="1">Enabled</option>
+                <option value="0">Disabled</option>
+              </select>
+              <button
+                type="button"
+                disabled={savingKey === "fulfillment_dead_drop_enabled"}
+                onClick={() => saveOne("fulfillment_dead_drop_enabled")}
+                className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {savingKey === "fulfillment_dead_drop_enabled" ? "Saving..." : "Save"}
+              </button>
+            </div>
+            {savedKey === "fulfillment_dead_drop_enabled" && <p className="mt-1 text-xs text-green-600">Saved</p>}
           </div>
           <div>
             <label className="text-xs text-honey-muted">Pickup</label>
-            <select
-              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-              value={parseFulfillmentOptionEnabled(settings.fulfillment_pickup_enabled) ? "1" : "0"}
-              onChange={(e) => onSave("fulfillment_pickup_enabled", e.target.value)}
-            >
-              <option value="1">Enabled</option>
-              <option value="0">Disabled</option>
-            </select>
+            <div className="mt-1 flex items-center gap-2">
+              <select
+                className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                value={parseFulfillmentOptionEnabled(draft.fulfillment_pickup_enabled) ? "1" : "0"}
+                onChange={(e) => setDraft((d) => ({ ...d, fulfillment_pickup_enabled: e.target.value }))}
+              >
+                <option value="1">Enabled</option>
+                <option value="0">Disabled</option>
+              </select>
+              <button
+                type="button"
+                disabled={savingKey === "fulfillment_pickup_enabled"}
+                onClick={() => saveOne("fulfillment_pickup_enabled")}
+                className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {savingKey === "fulfillment_pickup_enabled" ? "Saving..." : "Save"}
+              </button>
+            </div>
+            {savedKey === "fulfillment_pickup_enabled" && <p className="mt-1 text-xs text-green-600">Saved</p>}
           </div>
           <div>
             <label className="text-xs text-honey-muted">Delivery</label>
-            <select
-              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-              value={parseFulfillmentOptionEnabled(settings.fulfillment_delivery_enabled) ? "1" : "0"}
-              onChange={(e) => onSave("fulfillment_delivery_enabled", e.target.value)}
-            >
-              <option value="1">Enabled</option>
-              <option value="0">Disabled</option>
-            </select>
+            <div className="mt-1 flex items-center gap-2">
+              <select
+                className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                value={parseFulfillmentOptionEnabled(draft.fulfillment_delivery_enabled) ? "1" : "0"}
+                onChange={(e) => setDraft((d) => ({ ...d, fulfillment_delivery_enabled: e.target.value }))}
+              >
+                <option value="1">Enabled</option>
+                <option value="0">Disabled</option>
+              </select>
+              <button
+                type="button"
+                disabled={savingKey === "fulfillment_delivery_enabled"}
+                onClick={() => saveOne("fulfillment_delivery_enabled")}
+                className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {savingKey === "fulfillment_delivery_enabled" ? "Saving..." : "Save"}
+              </button>
+            </div>
+            {savedKey === "fulfillment_delivery_enabled" && <p className="mt-1 text-xs text-green-600">Saved</p>}
           </div>
         </div>
       </div>
@@ -953,10 +1633,20 @@ function SettingsSection({
           <label className="text-xs font-semibold text-honey-muted">{label}</label>
           <textarea
             className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-            rows={key.includes("TOKEN") || key.includes("address") ? 2 : 2}
-            defaultValue={settings[key] ?? ""}
-            onBlur={(e) => onSave(key, e.target.value)}
+            rows={2}
+            value={draft[key] ?? ""}
+            onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+            onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
           />
+          <button
+            type="button"
+            disabled={savingKey === key}
+            onClick={() => saveOne(key)}
+            className="mt-2 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {savingKey === key ? "Saving..." : "Save"}
+          </button>
+          {savedKey === key && <p className="mt-1 text-xs text-green-600">Saved</p>}
         </div>
       ))}
     </div>
@@ -1098,6 +1788,7 @@ function SupportTicketsSection() {
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState<Record<string, string>>({});
   const [statusPick, setStatusPick] = useState<Record<string, string>>({});
+  const [replyError, setReplyError] = useState<Record<string, string>>({});
 
   const load = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!opts?.quiet) setLoading(true);
@@ -1126,6 +1817,7 @@ function SupportTicketsSection() {
   async function sendReply(id: string) {
     const message = replyText[id]?.trim();
     if (!message) return;
+    setReplyError((e) => ({ ...e, [id]: "" }));
     const row = rows.find((r) => r.id === id);
     const nextStatus = statusPick[id] ?? row?.status ?? "open";
     const res = await fetch("/api/admin/tickets/reply", {
@@ -1136,10 +1828,27 @@ function SupportTicketsSection() {
     });
     if (!res.ok) {
       await res.json().catch(() => ({}));
-      alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+      setReplyError((e) => ({ ...e, [id]: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }));
       return;
     }
     setReplyText((r) => ({ ...r, [id]: "" }));
+    setReplyError((e) => ({ ...e, [id]: "" }));
+    void load({ quiet: true });
+  }
+
+  async function deleteChat(id: string) {
+    if (!confirm("Delete this chat history now? This cannot be undone.")) return;
+    const res = await fetch("/api/admin/tickets", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ mode: "ticket", ticket_id: id }),
+    });
+    if (!res.ok) {
+      setReplyError((e) => ({ ...e, [id]: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }));
+      return;
+    }
+    setReplyError((e) => ({ ...e, [id]: "" }));
     void load({ quiet: true });
   }
 
@@ -1162,6 +1871,7 @@ function SupportTicketsSection() {
             <tr>
               <th className="p-3">Ticket</th>
               <th className="p-3">Customer</th>
+              <th className="p-3">Username</th>
               <th className="p-3">Subject</th>
               <th className="p-3">Updated</th>
               <th className="p-3">Reply</th>
@@ -1172,6 +1882,7 @@ function SupportTicketsSection() {
               <tr key={row.id} className="border-b border-honey-border/60 align-top">
                 <td className="p-3 font-mono text-xs">{row.ticket_number}</td>
                 <td className="p-3 font-mono text-xs">{truncateToken(row.customer_token)}</td>
+                <td className="p-3 text-xs">{row.customer_username ? `@${row.customer_username}` : "—"}</td>
                 <td className="p-3 max-w-[220px]">{row.subject}</td>
                 <td className="p-3 text-xs text-honey-muted">
                   {new Date(row.updated_at).toLocaleString("en-GB")}
@@ -1201,6 +1912,16 @@ function SupportTicketsSection() {
                   >
                     Send reply
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => void deleteChat(row.id)}
+                    className="mt-1 block text-xs font-semibold text-red-600 hover:underline"
+                  >
+                    Delete chat
+                  </button>
+                  {replyError[row.id] && (
+                    <p className="mt-1 text-xs text-red-600">{replyError[row.id]}</p>
+                  )}
                 </td>
               </tr>
             ))}
