@@ -15,7 +15,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const raw = body.customer_token as string | undefined;
     const customer_token = typeof raw === "string" ? raw.trim() : "";
-    if (!customer_token) {
+    // Accept any stable token format (UUID or tg_<telegramId>) as long as it is non-trivial.
+    if (!customer_token || customer_token.length < 8) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 

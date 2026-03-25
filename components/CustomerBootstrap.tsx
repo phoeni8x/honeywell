@@ -10,6 +10,15 @@ export function CustomerBootstrap() {
   useEffect(() => {
     if (ran.current) return;
     ran.current = true;
+
+    // FIRST: detect and lock in the Telegram token if available.
+    // This must happen before API calls so all requests use the same token.
+    const tg = (window as { Telegram?: { WebApp?: { ready?: () => void; expand?: () => void } } }).Telegram?.WebApp;
+    if (tg) {
+      tg.ready?.();
+      tg.expand?.();
+    }
+
     const token = getOrCreateCustomerToken();
     if (!token) return;
     void fetch("/api/customer/bootstrap", {
