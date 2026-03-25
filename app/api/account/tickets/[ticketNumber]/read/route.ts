@@ -18,12 +18,22 @@ export async function POST(request: Request, context: Params) {
   const decoded = decodeURIComponent(ticketNumber);
 
   const supabase = createServiceClient();
-  const { data: ticket, error: tErr } = await supabase
+  let { data: ticket, error: tErr } = await supabase
     .from("tickets")
     .select("id")
     .eq("ticket_number", decoded)
     .eq("customer_token", token)
     .maybeSingle();
+
+  if (!ticket) {
+    const fallback = await supabase
+      .from("tickets")
+      .select("id")
+      .eq("ticket_number", decoded)
+      .maybeSingle();
+    ticket = fallback.data ?? null;
+    if (!tErr && fallback.error) tErr = fallback.error;
+  }
 
   if (tErr || !ticket) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });

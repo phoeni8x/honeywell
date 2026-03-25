@@ -1,13 +1,11 @@
 "use client";
 
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
+import { parseSupportEnabled } from "@/lib/support-settings";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { useTicketRealtime } from "@/hooks/useTicketRealtime";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Lightbox from "yet-another-react-lightbox";
-import "yet-another-react-lightbox/styles.css";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Message = {
   id: string;
@@ -25,6 +23,44 @@ type Ticket = {
   status: string;
 };
 
+function normalizeServerMessage(raw: unknown): Message | null {
+  if (!raw || typeof raw !== "object") return null;
+  const rec = raw as Record<string, unknown>;
+  const id =
+    typeof rec.id === "string"
+      ? rec.id
+      : typeof rec.id === "number"
+      ? String(rec.id)
+      : "";
+  if (!id) return null;
+  return {
+    id,
+    sender: typeof rec.sender === "string" ? rec.sender : "customer",
+    message: typeof rec.message === "string" || rec.message === null ? rec.message : null,
+    media_urls: Array.isArray(rec.media_urls)
+      ? rec.media_urls.filter((u): u is string => typeof u === "string")
+      : null,
+    created_at: typeof rec.created_at === "string" ? rec.created_at : new Date().toISOString(),
+    is_read: typeof rec.is_read === "boolean" ? rec.is_read : null,
+  };
+}
+
+function mergeMessagesById(prev: Message[], incomingRaw: unknown[]): Message[] {
+  const byId = new Map<string, Message>();
+  for (const m of prev) {
+    if (m?.id) byId.set(m.id, m);
+  }
+  for (const raw of incomingRaw) {
+    const normalized = normalizeServerMessage(raw);
+    if (!normalized) continue;
+    byId.set(normalized.id, normalized);
+  }
+  const merged = Array.from(byId.values()).sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  return merged;
+}
+
 export default function SupportTicketPage() {
   const params = useParams();
   const ticketNumber = decodeURIComponent(params.ticket_number as string);
@@ -32,86 +68,223 @@ export default function SupportTicketPage() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reply, setReply] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [feedback, setFeedback] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [lightboxSlides, setLightboxSlides] = useState<{ src: string }[]>([]);
+  const [supportEnabled, setSupportEnabled] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { state: pushState, subscribe: subscribePush } = usePushNotifications();
+  const prevMessageCount = useRef(0);
+  const currentTicketNumberRef = useRef(ticketNumber);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    currentTicketNumberRef.current = ticketNumber;
+    setTicket(null);
+    setMessages([]);
+    setReply("");
+    setSelectedImages([]);
+    setInitialLoading(true);
+    prevMessageCount.current = 0;
+  }, [ticketNumber]);
+
+  function showFeedback(msg: string, ok = true) {
+    setFeedback({ msg, ok });
+    window.setTimeout(() => setFeedback(null), 3000);
+  }
+
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     const t = getOrCreateCustomerToken();
-    if (!t) return;
-    setLoading(true);
+    if (!t) {
+      setInitialLoading(false);
+      return;
+    }
+    if (!opts?.silent) setInitialLoading(true);
     try {
-      const res = await fetch(`/api/account/tickets/${encodeURIComponent(ticketNumber)}`, {
-        headers: { "x-customer-token": t },
-      });
+      const url = `/api/account/tickets/${encodeURIComponent(ticketNumber)}?t=${Date.now()}`;
+      const res = await fetch(
+        url,
+        { headers: { "x-customer-token": t }, cache: "no-store" }
+      );
       if (res.status === 404) {
         setTicket(null);
+        if (!opts?.silent) setInitialLoading(false);
         return;
       }
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data.ticket) {
+        if (currentTicketNumberRef.current !== ticketNumber) return;
         setTicket(data.ticket);
-        setMessages(data.messages ?? []);
+        setMessages((prev) => {
+          const incoming = Array.isArray(data.messages) ? data.messages : [];
+          const mergedMessages = mergeMessagesById(prev, incoming);
+          const newJson = JSON.stringify(mergedMessages);
+          const prevJson = JSON.stringify(prev);
+          if (newJson === prevJson) return prev;
+          return mergedMessages;
+        });
+        // Mark admin messages as read
         void fetch(`/api/account/tickets/${encodeURIComponent(ticketNumber)}/read`, {
           method: "POST",
           headers: { "x-customer-token": t },
         });
       }
+    } catch (e) {
+      console.error("[ticket load]", e);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setInitialLoading(false);
     }
   }, [ticketNumber]);
 
   useEffect(() => {
+    fetch("/api/settings/public")
+      .then((r) => r.json())
+      .then((d: { support_enabled?: string }) => {
+        setSupportEnabled(parseSupportEnabled(d.support_enabled));
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     void load();
+    const interval = window.setInterval(() => {
+      void load({ silent: true });
+    }, 6000);
+    return () => window.clearInterval(interval);
   }, [load]);
 
-  useTicketRealtime(ticketNumber, load, { enabled: Boolean(ticket), intervalMs: 4000 });
+  useEffect(() => {
+    if (messages.length > prevMessageCount.current) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+    prevMessageCount.current = messages.length;
+  }, [messages.length]);
 
   const vapidReady = Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
 
-  const openLightbox = (urls: string[], start: number) => {
-    const slides = urls.filter((u) => /^https?:\/\//i.test(u)).map((src) => ({ src }));
-    if (slides.length === 0) return;
-    setLightboxSlides(slides);
-    setLightboxIndex(start);
-    setLightboxOpen(true);
-  };
-
-  const imageUrlsByMessage = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const m of messages) {
-      const urls = (m.media_urls ?? []).filter((u) => /^https?:\/\//i.test(u) && /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(u));
-      if (urls.length) map.set(m.id, urls);
-    }
-    return map;
-  }, [messages]);
-
-  async function sendReply(e: React.FormEvent) {
-    e.preventDefault();
-    if (!reply.trim()) return;
+  async function sendReply() {
+    const trimmed = reply.trim();
+    if ((!trimmed && selectedImages.length === 0) || sending) return;
     const t = getOrCreateCustomerToken();
     if (!t) return;
+
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: Message = {
+      id: tempId,
+      sender: "customer",
+      message: trimmed || "(attachment)",
+      created_at: new Date().toISOString(),
+      is_read: false,
+      media_urls: selectedImages.map((f) => URL.createObjectURL(f)),
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setReply("");
+    const imagesToUpload = [...selectedImages];
+    setSelectedImages([]);
+
     setSending(true);
     try {
-      const res = await fetch(`/api/account/tickets/${encodeURIComponent(ticketNumber)}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-customer-token": t },
-        body: JSON.stringify({ message: reply }),
-      });
-      if (res.ok) {
-        setReply("");
-        await load();
+      let mediaUrls: string[] | null = null;
+      let failedUploads = 0;
+      if (imagesToUpload.length > 0) {
+        setUploadingImages(true);
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const uploaded: string[] = [];
+        for (const file of imagesToUpload) {
+          const safeName = file.name.replace(/\s+/g, "_");
+          const path = `ticket-${ticketNumber}/${Date.now()}-${safeName}`;
+          const { error } = await supabase.storage.from("pickup-proofs").upload(path, file, { upsert: true });
+          if (!error) {
+            const {
+              data: { publicUrl },
+            } = supabase.storage.from("pickup-proofs").getPublicUrl(path);
+            uploaded.push(publicUrl);
+          } else {
+            failedUploads += 1;
+          }
+        }
+        if (uploaded.length > 0) mediaUrls = uploaded;
+        setUploadingImages(false);
+        if (uploaded.length === 0) {
+          setMessages((prev) => prev.filter((m) => m.id !== tempId));
+          setReply(trimmed);
+          setSelectedImages(imagesToUpload);
+          showFeedback("Could not upload image(s). Please try again.", false);
+          return;
+        }
+        if (failedUploads > 0) {
+          showFeedback(`${failedUploads} image(s) failed to upload. Sent remaining files.`, false);
+        }
       }
+
+      const res = await fetch(
+        `/api/account/tickets/${encodeURIComponent(ticketNumber)}/messages`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-customer-token": t,
+          },
+          body: JSON.stringify({
+            message: trimmed || "(attachment)",
+            ...(mediaUrls ? { media_urls: mediaUrls } : {}),
+          }),
+        }
+      );
+
+      if (res.ok) {
+        const payload = (await res.json().catch(() => ({}))) as {
+          message?: {
+            id?: string;
+            sender?: string;
+            message?: string | null;
+            media_urls?: string[] | null;
+            created_at?: string;
+            is_read?: boolean | null;
+          };
+        };
+        const serverMsg = payload.message;
+        if (serverMsg?.id) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempId
+                ? {
+                    id: String(serverMsg.id),
+                    sender: String(serverMsg.sender ?? "customer"),
+                    message:
+                      typeof serverMsg.message === "string" || serverMsg.message === null
+                        ? serverMsg.message
+                        : trimmed || "(attachment)",
+                    media_urls: Array.isArray(serverMsg.media_urls) ? serverMsg.media_urls : mediaUrls,
+                    created_at: String(serverMsg.created_at ?? new Date().toISOString()),
+                    is_read: Boolean(serverMsg.is_read ?? false),
+                  }
+                : m
+            )
+          );
+        } else {
+          await load({ silent: true });
+        }
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        setReply(trimmed);
+        setSelectedImages(imagesToUpload);
+      }
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setReply(trimmed);
     } finally {
       setSending(false);
+      setUploadingImages(false);
     }
   }
 
-  if (loading) {
+  if (initialLoading) {
     return <p className="text-honey-muted">Loading…</p>;
   }
 
@@ -127,7 +300,16 @@ export default function SupportTicketPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 pb-24">
+      {feedback && (
+        <div
+          className={`fixed right-4 top-4 z-50 rounded-xl px-4 py-2 text-sm font-semibold shadow-lg ${
+            feedback.ok ? "bg-green-600 text-white" : "bg-red-600 text-white"
+          }`}
+        >
+          {feedback.msg}
+        </div>
+      )}
       {vapidReady && pushState !== "unsupported" && pushState !== "subscribed" && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
           <span className="text-honey-text">Get notified when we reply.</span>
@@ -150,87 +332,171 @@ export default function SupportTicketPage() {
         <p className="mt-2 text-sm text-honey-muted">Status: {ticket.status}</p>
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-honey-border bg-surface p-4 dark:bg-surface-dark">
+      {!supportEnabled && (
+        <p className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          Support is currently offline. You can read this chat, but new replies are temporarily disabled.
+        </p>
+      )}
+
+      <div className="flex flex-col gap-3 overflow-y-auto rounded-2xl border border-honey-border bg-surface p-4 dark:bg-surface-dark">
         {messages.map((m) => {
           const isAdmin = m.sender === "admin";
-          const imgs = imageUrlsByMessage.get(m.id) ?? [];
+          const isOptimistic = m.id?.startsWith("temp-");
+          const mediaUrls: string[] = Array.isArray(m.media_urls) ? m.media_urls : [];
           return (
             <div
               key={m.id}
-              className={
+              className={`rounded-2xl px-4 py-3 ${
                 isAdmin
-                  ? "ml-0 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 md:ml-8"
-                  : "mr-0 rounded-xl border border-honey-border bg-bg/80 px-4 py-3 md:mr-8"
-              }
+                  ? "mr-auto border border-primary/30 bg-primary/10 dark:bg-primary/15"
+                  : isOptimistic
+                  ? "ml-auto max-w-[85%] border border-honey-border/40 bg-surface/60 opacity-70 dark:bg-surface-dark/60"
+                  : "ml-auto max-w-[85%] border border-honey-border bg-surface dark:bg-surface-dark"
+              }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase text-honey-muted">{m.sender}</p>
-                {isAdmin && m.is_read && (
-                  <span className="text-[10px] text-honey-muted" title="Seen">
-                    ✓ Read
-                  </span>
-                )}
-              </div>
-              {m.message && <p className="mt-1 whitespace-pre-wrap text-sm text-honey-text">{m.message}</p>}
-              {imgs.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {imgs.map((url, idx) => (
-                    <button
-                      key={url}
-                      type="button"
-                      onClick={() => openLightbox(imgs, idx)}
-                      className="relative h-24 w-24 overflow-hidden rounded-lg border border-honey-border"
+              <p
+                className={`mb-1 text-xs font-bold uppercase tracking-wide ${
+                  isAdmin ? "text-primary" : "text-honey-muted"
+                }`}
+              >
+                {isAdmin ? "🍯 Honey Well" : "You"}
+                {isOptimistic && <span className="ml-2 font-normal normal-case opacity-60">sending...</span>}
+              </p>
+              {m.message && m.message !== "(attachment)" && (
+                <p className="whitespace-pre-wrap text-sm text-honey-text">
+                  {m.message}
+                </p>
+              )}
+              {mediaUrls.length > 0 && (
+                <div className={`flex flex-wrap gap-2 ${m.message && m.message !== "(attachment)" ? "mt-2" : ""}`}>
+                  {mediaUrls.map((url, idx) => (
+                    <a
+                      key={`${url}${idx}`}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block overflow-hidden rounded-xl border border-honey-border"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt="" className="h-full w-full object-cover" />
-                    </button>
+                      <img
+                        src={url}
+                        alt={`Attachment ${idx + 1}`}
+                        className="max-h-48 max-w-[240px] object-cover"
+                        loading="lazy"
+                      />
+                    </a>
                   ))}
                 </div>
               )}
-              {m.media_urls?.some((u) => !imgs.includes(u)) && (
-                <ul className="mt-2 space-y-1">
-                  {m.media_urls
-                    ?.filter((u) => !imgs.includes(u))
-                    .map((u) => (
-                      <li key={u}>
-                        <a href={u} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
-                          {u}
-                        </a>
-                      </li>
-                    ))}
-                </ul>
-              )}
-              <p className="mt-2 text-xs text-honey-muted">{new Date(m.created_at).toLocaleString("en-GB")}</p>
+              <p className="mt-1.5 text-[10px] text-honey-muted">
+                {new Date(m.created_at).toLocaleString("en-GB")}
+              </p>
             </div>
           );
         })}
+        <div ref={messagesEndRef} />
       </div>
 
-      <Lightbox
-        open={lightboxOpen}
-        close={() => setLightboxOpen(false)}
-        index={lightboxIndex}
-        slides={lightboxSlides}
-      />
+      {ticket.status !== "closed" && supportEnabled ? (
+        <div className="space-y-3">
+          {/* Image previews */}
+          {selectedImages.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {selectedImages.map((file, idx) => (
+                <div key={idx} className="relative h-20 w-20">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={URL.createObjectURL(file)}
+                    alt=""
+                    className="h-full w-full rounded-xl border border-honey-border object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedImages((imgs) =>
+                        imgs.filter((_, i) => i !== idx)
+                      )
+                    }
+                    className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
-      {ticket.status !== "closed" ? (
-        <form onSubmit={sendReply} className="space-y-3">
           <textarea
-            className="min-h-[100px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            className="min-h-[100px] w-full rounded-2xl border border-honey-border bg-bg/60 px-4 py-3 text-sm text-honey-text placeholder:text-honey-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="Write a reply…"
             value={reply}
             onChange={(e) => setReply(e.target.value)}
+            enterKeyHint="send"
+            onFocus={(e) =>
+              setTimeout(
+                () =>
+                  e.target.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                  }),
+                350
+              )
+            }
           />
-          <button
-            type="submit"
-            disabled={sending || !reply.trim()}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {sending ? "Sending…" : "Send reply"}
-          </button>
-        </form>
-      ) : (
+
+          <div className="flex items-center gap-3">
+            {/* Photo attach button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-honey-border text-honey-muted transition hover:border-primary/40 hover:text-primary"
+              title="Attach photo"
+            >
+              📎
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                if (files.length === 0) return;
+                setSelectedImages((prev) => {
+                  const next = [...prev, ...files].slice(0, 5);
+                  if (prev.length + files.length > 5) {
+                    showFeedback("Maximum 5 photos per message.", false);
+                  }
+                  return next;
+                });
+                e.target.value = "";
+              }}
+            />
+
+            {/* Send button */}
+            <button
+              type="button"
+              disabled={sending || (!reply.trim() && selectedImages.length === 0)}
+              onClick={() => void sendReply()}
+              className="flex-1 rounded-full bg-primary py-3 text-sm font-semibold text-white transition hover:bg-primary-light disabled:opacity-50"
+            >
+              {sending
+                ? uploadingImages
+                  ? "Uploading…"
+                  : "Sending…"
+                : "Send reply"}
+            </button>
+          </div>
+
+          <p className="text-center text-xs text-honey-muted">
+            You can attach up to 5 photos per message
+          </p>
+        </div>
+      ) : ticket.status === "closed" ? (
         <p className="text-sm text-honey-muted">This ticket is closed.</p>
+      ) : (
+        <p className="text-sm text-honey-muted">Reply is unavailable while support is offline.</p>
       )}
     </div>
   );
