@@ -166,7 +166,16 @@ export default function AdminDashboard() {
   }
 
   async function upsertSetting(key: string, value: string) {
-    await supabase.from("settings").upsert({ key, value });
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ key, value }),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error ?? PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+    }
     setSettings((s) => ({ ...s, [key]: value }));
   }
 
@@ -1375,6 +1384,9 @@ function SettingsSection({
       await onSave(key, draft[key] ?? "");
       setSavedKey(key);
       window.setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1800);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : PUBLIC_ERROR_TRY_AGAIN_OR_GUEST;
+      alert(msg);
     } finally {
       setSavingKey(null);
     }
