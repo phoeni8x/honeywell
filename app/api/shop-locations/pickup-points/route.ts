@@ -7,11 +7,18 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const supabase = createServiceClient();
+    const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("shop_locations")
       .select("*")
       .eq("is_active", true)
       .eq("is_pickup_point", true)
+      .or(
+        `pickup_available_from.is.null,pickup_available_from.lte.${nowIso}`
+      )
+      .or(
+        `pickup_available_until.is.null,pickup_available_until.gte.${nowIso}`
+      )
       .order("name", { ascending: true });
 
     if (error) {

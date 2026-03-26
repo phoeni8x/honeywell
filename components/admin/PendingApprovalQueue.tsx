@@ -91,6 +91,19 @@ export function PendingApprovalQueue({
               </div>
               <div className="min-w-0">
                 <p className="font-mono text-xs font-semibold text-primary">{o.order_number ?? o.id.slice(0, 8)}</p>
+                <p className="text-xs text-honey-muted">
+                  {new Date(o.created_at).toLocaleString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+                {o.customer_username ? (
+                  <p className="text-sm font-semibold text-honey-text">@{o.customer_username}</p>
+                ) : (
+                  <p className="text-xs italic text-honey-muted">Guest / unverified</p>
+                )}
                 <p className="truncate text-sm font-medium text-honey-text">{o.product?.name ?? "—"}</p>
                 <p className="text-xs text-honey-muted">Qty {o.quantity}</p>
               </div>

@@ -31,17 +31,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });
     }
 
-    const terminal = ["cancelled", "delivered", "picked_up", "payment_expired"];
-    if (terminal.includes(order.status as string)) {
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+    // Only allow customer cancellation for revolut pay-after-delivery orders
+    const isRevolutPayAfterDelivery =
+      order.payment_method === "revolut" && order.pay_after_delivery === true;
+    const cancellableStatuses = ["waiting", "confirmed", "out_for_delivery", "payment_pending"];
+
+    if (!isRevolutPayAfterDelivery) {
+      return NextResponse.json(
+        { error: "This order cannot be cancelled by the customer." },
+        { status: 403 }
+      );
     }
 
-    if (order.revolut_pay_timing === "pay_now" && order.pay_now_payment_confirmed === true) {
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
+    if (!cancellableStatuses.includes(String(order.status))) {
+      return NextResponse.json(
+        { error: "Order is no longer cancellable." },
+        { status: 403 }
+      );
     }
 
     const deferStock = Boolean((order as { defer_stock_until_approval?: boolean }).defer_stock_until_approval);
-    const skipStockRestore = order.status === "payment_pending" && deferStock;
+    const skipStockRestore = (order.status === "payment_pending" || order.status === "pre_ordered") && deferStock;
 
     if (!skipStockRestore) {
       const { error: rpcErr } = await supabase.rpc("restore_product_stock", {

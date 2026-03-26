@@ -2,7 +2,7 @@
 
 import { BeeSvg } from "@/components/BeeSvg";
 import { HoneycombBg } from "@/components/HoneycombBg";
-import { LS_USER_TYPE } from "@/lib/constants";
+import { LS_TELEGRAM_USERNAME, LS_USER_TYPE } from "@/lib/constants";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import clsx from "clsx";
 import Link from "next/link";
@@ -20,6 +20,7 @@ export default function SplashPage() {
 
   function continueGuest() {
     localStorage.setItem(LS_USER_TYPE, "guest");
+    localStorage.removeItem(LS_TELEGRAM_USERNAME);
     router.push("/home");
   }
 
@@ -67,6 +68,10 @@ export default function SplashPage() {
         setBotUrl(null);
         setInfo(null);
         localStorage.setItem(LS_USER_TYPE, "team_member");
+        localStorage.setItem(
+          LS_TELEGRAM_USERNAME,
+          username.trim().replace(/^@/, "").toLowerCase()
+        );
         setModalOpen(false);
         router.push("/home");
       } else {

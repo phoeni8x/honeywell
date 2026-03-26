@@ -10,14 +10,27 @@ import { canDisplayProductImageUrl, ProductImage } from "./ProductImage";
 interface ProductCardProps {
   product: Product;
   userType: UserType | null;
+  categoryLabel?: string;
 }
 
-export function ProductCard({ product, userType }: ProductCardProps) {
+function prettyCategory(raw: string | null | undefined): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "Product";
+  return s
+    .split(/[_-\s]+/g)
+    .filter(Boolean)
+    .map((w) => w[0]!.toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+export function ProductCard({ product, userType, categoryLabel }: ProductCardProps) {
   const { formatPrice } = useShopCurrency();
   const { unit, isDiscounted } = getPriceForUser(product, userType);
   const stockRaw = Number(product.stock_quantity);
   const stock = Number.isFinite(stockRaw) ? stockRaw : 0;
   const out = stock <= 0;
+  const preorderEnabled = out && Boolean(product.allow_preorder);
+  const canOrder = !out || preorderEnabled;
   const low = stock > 0 && stock <= 5;
   const title = product.name?.trim() ? product.name : "Product";
 
@@ -25,10 +38,14 @@ export function ProductCard({ product, userType }: ProductCardProps) {
     <div
       className={clsx(
         "card-hive group flex flex-col overflow-hidden rounded-lg transition duration-300",
-        out ? "opacity-60" : ""
+        !canOrder ? "opacity-60" : "",
+        preorderEnabled && "ring-2 ring-amber-400/80 shadow-[0_0_0_1px_rgba(251,191,36,0.35)]"
       )}
     >
-      <Link href={out ? "#" : `/product/${product.id}`} className={clsx("relative mx-auto mt-4 block w-[88%]", out && "pointer-events-none")}>
+      <Link
+        href={canOrder ? `/product/${product.id}` : "#"}
+        className={clsx("relative mx-auto mt-4 block w-[88%]", !canOrder && "pointer-events-none")}
+      >
         <div className="hex-border relative aspect-square w-full max-w-[220px] mx-auto">
           <div className="relative h-full w-full overflow-hidden hex-clip bg-bg-secondary">
             {canDisplayProductImageUrl(product.image_url) ? (
@@ -44,9 +61,14 @@ export function ProductCard({ product, userType }: ProductCardProps) {
                 {title}
               </div>
             )}
-            {out && (
+            {out && !preorderEnabled && (
               <span className="absolute left-2 top-2 rounded-sm bg-neutral-800 px-2 py-0.5 text-[10px] font-medium text-white">
                 Out of Stock
+              </span>
+            )}
+            {preorderEnabled && (
+              <span className="absolute left-2 top-2 rounded-sm bg-primary px-2 py-0.5 text-[10px] font-semibold text-white">
+                Pre-order open
               </span>
             )}
             {!out && (
@@ -58,13 +80,18 @@ export function ProductCard({ product, userType }: ProductCardProps) {
         </div>
       </Link>
       <div className="flex flex-1 flex-col p-4">
+        {preorderEnabled && (
+          <span className="mb-2 inline-flex w-fit items-center rounded-full border border-amber-400/70 bg-amber-500/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+            Pre-order
+          </span>
+        )}
         <span
           className={clsx(
             "mb-1 inline-block w-fit rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-            product.category === "flower" ? "bg-primary/15 text-honey-text" : "bg-primary/20 text-primary"
+            "bg-primary/15 text-honey-text"
           )}
         >
-          {product.category === "flower" ? "Flower" : "Vitamin"}
+          {categoryLabel ?? prettyCategory(product.category)}
         </span>
         <h3 className="font-display text-lg font-semibold text-honey-text">{title}</h3>
         <div className="mt-1 flex flex-wrap items-baseline gap-2">
@@ -79,14 +106,14 @@ export function ProductCard({ product, userType }: ProductCardProps) {
           <p className="mt-2 text-sm font-medium text-primary">Only {stock} left — order soon!</p>
         )}
         <Link
-          href={out ? "#" : `/product/${product.id}`}
+          href={canOrder ? `/product/${product.id}` : "#"}
           className={clsx(
             "btn-primary mt-4 inline-flex w-full items-center justify-center rounded px-4 py-2.5 text-center text-sm font-semibold",
-            out ? "cursor-not-allowed opacity-50" : ""
+            !canOrder ? "cursor-not-allowed opacity-50" : ""
           )}
-          aria-disabled={out}
+          aria-disabled={!canOrder}
         >
-          Order Now
+          {preorderEnabled ? "Pre-order now" : canOrder ? "Order now" : "Out of stock"}
         </Link>
       </div>
     </div>

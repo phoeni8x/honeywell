@@ -11,9 +11,16 @@ import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Filter = "all" | ProductCategory;
+type ProductCategoryRow = {
+  id: string;
+  slug: string;
+  name: string;
+  is_active: boolean;
+};
 
 export default function ShopPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<ProductCategoryRow[]>([]);
   const [userType, setUserType] = useState<UserType | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
@@ -21,14 +28,24 @@ export default function ShopPage() {
   const load = useCallback(async () => {
     try {
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false });
+      const [{ data, error }, { data: cats }] = await Promise.all([
+        supabase
+          .from("products")
+          .select("*")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("product_categories")
+          .select("*")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true }),
+      ]);
       if (!error && data) setProducts(data as Product[]);
+      setCategories((cats as ProductCategoryRow[]) ?? []);
     } catch {
       setProducts([]);
+      setCategories([]);
     }
   }, []);
 
@@ -46,6 +63,16 @@ export default function ShopPage() {
   }, [load]);
 
   useEffect(() => {
+    if (filter === "all") return;
+    const exists = categories.some((c) => c.slug === filter);
+    if (!exists) setFilter("all");
+  }, [categories, filter]);
+
+  const categoryLabelBySlug = useMemo(() => {
+    return Object.fromEntries(categories.map((c) => [c.slug, c.name])) as Record<string, string>;
+  }, [categories]);
+
+  useEffect(() => {
     let supabase: ReturnType<typeof createClient> | null = null;
     try {
       supabase = createClient();
@@ -59,6 +86,13 @@ export default function ShopPage() {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "products" },
+          () => {
+            load();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "product_categories" },
           () => {
             load();
           }
@@ -89,6 +123,16 @@ export default function ShopPage() {
     });
   }, [products, filter, search]);
 
+  const hasPreorderProducts = useMemo(
+    () => products.some((p) => Boolean(p.allow_preorder) && Number(p.stock_quantity) <= 0),
+    [products]
+  );
+
+  const filterOptions = useMemo(
+    () => [{ slug: "all", name: "All" }, ...categories.map((c) => ({ slug: c.slug, name: c.name }))],
+    [categories]
+  );
+
   return (
     <div className="space-y-8">
       <LocationBanner />
@@ -96,27 +140,32 @@ export default function ShopPage() {
         <div className="honeycomb-bg pointer-events-none absolute inset-0 opacity-40" />
         <div className="relative z-10">
           <h1 className="font-display text-4xl text-honey-text">Shop</h1>
-          <p className="mt-2 text-honey-muted">Flowers and vitamins — live stock, boutique feel.</p>
+          <p className="mt-2 text-honey-muted">Browse categories with live stock and boutique feel.</p>
         </div>
       </div>
 
       <FulfillmentLocationsInfo />
+      {hasPreorderProducts && (
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+          Pre-order available on selected products. Items marked with a Pre-order chip can be ordered even when out of stock.
+        </div>
+      )}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
-          {(["all", "flower", "vitamin"] as const).map((f) => (
+          {filterOptions.map((f) => (
             <button
-              key={f}
+              key={f.slug}
               type="button"
-              onClick={() => setFilter(f)}
+              onClick={() => setFilter(f.slug)}
               className={clsx(
                 "rounded-full px-4 py-2 text-sm font-medium transition",
-                filter === f
+                filter === f.slug
                   ? "bg-primary text-white shadow-md"
                   : "border border-honey-border bg-surface text-honey-muted hover:border-primary/30 dark:bg-surface-dark"
               )}
             >
-              {f === "all" ? "All" : f === "flower" ? "Flowers" : "Vitamins"}
+              {f.name}
             </button>
           ))}
         </div>
@@ -139,7 +188,12 @@ export default function ShopPage() {
       ) : (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {filtered.map((p) => (
-            <ProductCard key={p.id} product={p} userType={userType} />
+            <ProductCard
+              key={p.id}
+              product={p}
+              userType={userType}
+              categoryLabel={categoryLabelBySlug[p.category]}
+            />
           ))}
         </div>
       )}

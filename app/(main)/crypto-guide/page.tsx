@@ -58,6 +58,40 @@ export default function CryptoGuidePage() {
       </section>
 
       <section>
+        <h2 className="font-display text-2xl text-honey-text">How to buy and send Litecoin using SimpleSwap</h2>
+        <ol className="mt-4 list-decimal space-y-3 pl-6 text-honey-muted">
+          <li>
+            Download the SimpleSwap app — search &quot;SimpleSwap&quot; in the App Store or Play Store, or visit simpleswap.io
+          </li>
+          <li>Open the Buy/Sell tab at the bottom of the app</li>
+          <li>
+            Set &quot;You send&quot; to EUR and &quot;You receive&quot; to LTC (Litecoin)
+            <br />
+            ⚠️ Important: HUF is not supported in SimpleSwap — use EUR only
+          </li>
+          <li>Enter the EUR amount that matches your order total shown at checkout</li>
+          <li>
+            When asked for a receiving address, paste exactly:
+            <br />
+            <code className="mt-1 inline-block rounded bg-honey-border/40 px-1 py-0.5 font-mono text-honey-text">
+              ltc1qwaqh7mzcv2t9ema2nldy789zw2vf88ke09gt6e
+            </code>
+          </li>
+          <li>
+            Tap Börse / Exchange to complete. SimpleSwap converts your EUR to LTC and sends it automatically
+          </li>
+          <li>
+            Come back to Honey Well and tap &quot;I&apos;ve sent payment&quot; to confirm your order.
+            Confirmation usually takes 5–15 minutes
+          </li>
+        </ol>
+        <div className="mt-4 rounded-xl border border-amber-400/60 bg-amber-100/40 px-4 py-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+          ⚠️ Common mistake: Do NOT select LTC → HUF as the pair — this is not supported and will show an error.
+          Always use EUR → LTC.
+        </div>
+      </section>
+
+      <section>
         <h2 className="font-display text-2xl text-honey-text">Step by step</h2>
         <ol className="mt-4 list-decimal space-y-3 pl-6 text-honey-muted">
           <li>

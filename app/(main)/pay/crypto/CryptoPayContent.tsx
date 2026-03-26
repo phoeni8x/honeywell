@@ -161,6 +161,9 @@ export function CryptoPayContent() {
 
       <div className="mt-10 rounded-2xl border border-honey-border bg-surface p-6 text-left dark:bg-surface-dark">
         <p className="text-xs font-semibold uppercase tracking-wide text-honey-muted">Receiving wallet address</p>
+        <p className="mt-1 inline-flex rounded-full border border-amber-400/60 bg-amber-100/50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+          SimpleSwap recommended
+        </p>
         <p className="mt-2 break-all font-mono text-sm text-honey-text">
           {wallet || "Configure address in admin settings"}
         </p>

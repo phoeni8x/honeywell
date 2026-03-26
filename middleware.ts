@@ -4,6 +4,24 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const ADMIN_LOGIN_PATH = `${ADMIN_BASE_PATH}/login`;
 
+async function isMaintenanceMode(request: NextRequest): Promise<boolean> {
+  try {
+    const url = request.nextUrl.clone();
+    url.pathname = "/api/public/maintenance";
+    url.search = "";
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      cache: "no-store",
+      headers: { "x-maintenance-probe": "1" },
+    });
+    if (!res.ok) return false;
+    const json = (await res.json().catch(() => ({}))) as { maintenance_mode?: boolean };
+    return Boolean(json.maintenance_mode);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Admin is gated only by the obscured path. No login screen.
  * If ADMIN_EMAIL + ADMIN_PASSWORD are set, middleware signs into Supabase so RLS (authenticated) still works for the dashboard.
@@ -21,13 +39,34 @@ export async function middleware(request: NextRequest) {
   });
 
   const path = request.nextUrl.pathname;
+  const isAdminUi = path.startsWith(ADMIN_BASE_PATH);
+  const isAdminApi = path.startsWith("/api/admin");
+  const isMaintenanceApi = path.startsWith("/api/public/maintenance");
+  const isUnderDevelopmentPage = path === "/under-development";
+  const isTelegramWebhook = path.startsWith("/api/telegram/webhook");
+
+  if (!isMaintenanceApi) {
+    const maintenanceOn = await isMaintenanceMode(request);
+    if (maintenanceOn && !isAdminUi && !isAdminApi && !isUnderDevelopmentPage && !isTelegramWebhook) {
+      if (path.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "Website under development. Please check back later." },
+          { status: 503 }
+        );
+      }
+      const u = request.nextUrl.clone();
+      u.pathname = "/under-development";
+      u.search = "";
+      return NextResponse.rewrite(u);
+    }
+  }
 
   const needsCustomerTokenParam = path === "/order-history" || path === "/pay/crypto";
   const hasOrderId = Boolean(request.nextUrl.searchParams.get("orderId")?.trim());
   if (needsCustomerTokenParam && !request.nextUrl.searchParams.get("ct")) {
     const cookieToken = request.cookies.get("honeywell_customer_token")?.value?.trim() ?? "";
     /** Do not append stale `ct` when linking to a specific order — client uses adopt-token instead. */
-    if (cookieToken && !hasOrderId) {
+    if (cookieToken && cookieToken.length >= 8 && !hasOrderId) {
       const u = request.nextUrl.clone();
       u.searchParams.set("ct", cookieToken);
       return NextResponse.redirect(u, 307);
@@ -41,11 +80,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  const isAdminUi = path.startsWith(ADMIN_BASE_PATH);
-  const isAdminApi = path.startsWith("/api/admin");
   if (!isAdminUi && !isAdminApi) {
     return supabaseResponse;
   }
+
+  // Obscured admin path is the primary gate in this project.
+  // Set an admin-access cookie so /api/admin routes can verify the same browser session
+  // even if Supabase auth session cookies are not durable on every request.
+  supabaseResponse.cookies.set("honeywell_admin_access", "1", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 12,
+  });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

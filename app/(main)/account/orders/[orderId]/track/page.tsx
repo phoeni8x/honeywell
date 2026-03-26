@@ -2,6 +2,7 @@
 
 import { ConfettiBurst } from "@/components/ConfettiBurst";
 import { HoneycombBg } from "@/components/HoneycombBg";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
 import { LS_USER_TYPE } from "@/lib/constants";
 import { calculateETA } from "@/lib/eta";
@@ -53,6 +54,7 @@ export default function DeliveryTrackPage() {
   const [loading, setLoading] = useState(true);
   const [showConfetti, setShowConfetti] = useState(false);
   const [view, setView] = useState<"game" | "map">("game");
+  const { state: pushState, subscribe: subscribePush } = usePushNotifications();
 
   useEffect(() => {
     const ut = localStorage.getItem(LS_USER_TYPE);
@@ -226,6 +228,18 @@ export default function DeliveryTrackPage() {
           {view === "game" ? "Map" : "Game"}
         </button>
       </div>
+      {pushState !== "unsupported" && pushState !== "subscribed" && (
+        <div className="relative z-10 flex items-center justify-between border-b border-primary/30 bg-primary/10 px-4 py-2 text-xs text-honey-text">
+          <span>Enable push notifications for delivery updates.</span>
+          <button
+            type="button"
+            onClick={() => void subscribePush()}
+            className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white"
+          >
+            Enable
+          </button>
+        </div>
+      )}
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
         <div

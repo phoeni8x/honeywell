@@ -69,7 +69,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const tick = window.setInterval(() => {
       if (document.visibilityState === "visible") void fetchWallet();
-    }, 4000);
+    }, 30000);
     const onVis = () => {
       if (document.visibilityState === "visible") void fetchWallet();
     };

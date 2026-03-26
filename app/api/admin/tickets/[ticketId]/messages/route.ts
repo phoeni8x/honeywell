@@ -23,7 +23,7 @@ export async function GET(_request: Request, context: Params) {
     const svc = createServiceClient();
     const { data, error } = await svc
       .from("ticket_messages")
-      .select("*")
+      .select("id, ticket_id, sender, message, media_urls, created_at, is_read")
       .eq("ticket_id", ticketId)
       .order("created_at", { ascending: true });
 
@@ -32,7 +32,19 @@ export async function GET(_request: Request, context: Params) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
     }
 
-    return NextResponse.json({ messages: data ?? [] });
+    const messages = data ?? [];
+    const unreadCustomerIds = messages
+      .filter((m) => m.sender === "customer" && !m.is_read)
+      .map((m) => m.id);
+
+    if (unreadCustomerIds.length > 0) {
+      await svc
+        .from("ticket_messages")
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .in("id", unreadCustomerIds);
+    }
+
+    return NextResponse.json({ messages });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });

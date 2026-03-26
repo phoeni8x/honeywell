@@ -6,8 +6,10 @@ import { CRYPTO_COIN_OPTIONS, normalizeActiveCryptoCoin } from "@/lib/crypto-coi
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
 import { parseShopOpen } from "@/lib/shop-open";
+import { parseSupportEnabled } from "@/lib/support-settings";
 import { formatPrice, ORDER_STATUS_LABELS, truncateToken } from "@/lib/helpers";
 import { PendingApprovalQueue } from "@/components/admin/PendingApprovalQueue";
+import { useAdminPushNotifications } from "@/hooks/useAdminPushNotifications";
 import { createClient } from "@/lib/supabase/client";
 import type { Announcement, Order, Product } from "@/types";
 import clsx from "clsx";
@@ -89,6 +91,7 @@ export default function AdminDashboard() {
   const [shopLocations, setShopLocations] = useState<ShopLocationRow[]>([]);
   const [ticketRows, setTicketRows] = useState<TicketRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const { state: adminPushState, subscribe: subscribeAdminPush } = useAdminPushNotifications();
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -183,14 +186,25 @@ export default function AdminDashboard() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="font-display text-3xl text-honey-text">Dashboard</h1>
-        <button
-          type="button"
-          onClick={leaveAdmin}
-          className="inline-flex items-center gap-2 rounded-full border border-honey-border px-4 py-2 text-sm font-medium text-honey-muted transition hover:bg-honey-border/30"
-        >
-          <LogOut className="h-4 w-4" />
-          Back to site
-        </button>
+        <div className="flex items-center gap-2">
+          {adminPushState !== "unsupported" && adminPushState !== "subscribed" && (
+            <button
+              type="button"
+              onClick={() => void subscribeAdminPush()}
+              className="rounded-full border border-honey-border px-4 py-2 text-xs font-semibold text-honey-text hover:bg-honey-border/30"
+            >
+              Enable admin push alerts
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={leaveAdmin}
+            className="inline-flex items-center gap-2 rounded-full border border-honey-border px-4 py-2 text-sm font-medium text-honey-muted transition hover:bg-honey-border/30"
+          >
+            <LogOut className="h-4 w-4" />
+            Back to site
+          </button>
+        </div>
       </div>
 
       {loading && (
@@ -777,7 +791,24 @@ function OrdersSection({
         showToast("Failed to update status. Try again.", false);
         return;
       }
-      showToast("Status updated ✓");
+      if (status === "delivered" || status === "picked_up") {
+        const rewardsRes = await fetch("/api/admin/orders/process-completed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ order_id: id }),
+        });
+        const rewardsData = (await rewardsRes.json().catch(() => ({}))) as { points_earned?: number };
+        if (!rewardsRes.ok) {
+          showToast("Status updated, but rewards processing failed. Please retry.", false);
+          onRefresh();
+          return;
+        }
+        const earned = Number(rewardsData.points_earned ?? 0);
+        showToast(earned > 0 ? `Status updated ✓ +${earned} pts awarded.` : "Status updated ✓");
+      } else {
+        showToast("Status updated ✓");
+      }
       onRefresh();
     } finally {
       setActionLoading(null);
@@ -1076,15 +1107,17 @@ function OrdersSection({
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-honey-border">
-        <table className="w-full min-w-[900px] text-left text-sm">
+      <div className="w-full overflow-x-auto rounded-2xl border border-honey-border">
+        <table className="w-full min-w-[800px] text-left text-sm">
           <thead className="border-b border-honey-border bg-bg/80 text-xs uppercase text-honey-muted">
             <tr>
+              <th className="p-2 whitespace-nowrap">Order</th>
               <th className="p-2">Customer</th>
               <th className="p-2">Username</th>
               <th className="p-2">Product</th>
               <th className="p-2">Qty</th>
               <th className="p-2">Total</th>
+              <th className="p-2">Time</th>
               <th className="p-2">Points Used</th>
               <th className="p-2">Fulfillment</th>
               <th className="p-2">Type</th>
@@ -1096,6 +1129,11 @@ function OrdersSection({
           <tbody>
             {filtered.map((o) => (
               <tr key={o.id} className="border-b border-honey-border/60 align-top">
+                <td className="p-2">
+                  <span className="font-mono text-xs font-bold text-primary whitespace-nowrap">
+                    {o.order_number ?? "—"}
+                  </span>
+                </td>
                 <td className="p-2 font-mono text-xs">{truncateToken(o.customer_token)}</td>
                 <td className="p-2 text-xs">
                   {o.customer_username ? `@${o.customer_username}` : "—"}
@@ -1103,6 +1141,20 @@ function OrdersSection({
                 <td className="p-2">{o.product?.name ?? "—"}</td>
                 <td className="p-2">{o.quantity}</td>
                 <td className="p-2">{formatPrice(Number(o.total_price), shopCurrency)}</td>
+                <td className="p-2 text-xs text-honey-muted">
+                  <span className="block font-medium text-honey-text">
+                    {new Date(o.created_at).toLocaleDateString("en-GB", {
+                      day: "2-digit",
+                      month: "short",
+                    })}
+                  </span>
+                  <span className="block text-[11px] text-honey-muted">
+                    {new Date(o.created_at).toLocaleTimeString("en-GB", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </td>
                 <td className="p-2 text-xs">
                   {Number(o.points_used ?? 0) > 0 ? `${Number(o.points_used)} pts` : "No"}
                 </td>
@@ -1400,6 +1452,31 @@ function SettingsSection({
           </button>
         </div>
         {savedKey === "shop_open" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-honey-muted">Support system</label>
+        <p className="mt-1 text-xs text-honey-muted">
+          Turn this off when the team is unavailable. Customers can still view old tickets, but cannot open new tickets or send replies.
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            value={parseSupportEnabled(draft.support_enabled) ? "1" : "0"}
+            onChange={(e) => setDraft((d) => ({ ...d, support_enabled: e.target.value }))}
+          >
+            <option value="1">Enabled</option>
+            <option value="0">Disabled</option>
+          </select>
+          <button
+            type="button"
+            disabled={savingKey === "support_enabled"}
+            onClick={() => saveOne("support_enabled")}
+            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {savingKey === "support_enabled" ? "Saving..." : "Save"}
+          </button>
+        </div>
+        {savedKey === "support_enabled" && <p className="mt-1 text-xs text-green-600">Saved</p>}
       </div>
       <div>
         <label className="text-xs font-semibold text-honey-muted">Maintenance mode</label>

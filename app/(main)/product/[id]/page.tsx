@@ -21,6 +21,7 @@ export default function ProductPage() {
   const router = useRouter();
 
   const [product, setProduct] = useState<Product | null>(null);
+  const [categoryName, setCategoryName] = useState<string | null>(null);
   const [userType, setUserType] = useState<UserType | null>(null);
   const [qty, setQty] = useState(1);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -44,8 +45,24 @@ export default function ProductPage() {
   }, [id]);
 
   useEffect(() => {
+    if (!product?.category) return;
+    const supabase = createClient();
+    (async () => {
+      const { data } = await supabase
+        .from("product_categories")
+        .select("name")
+        .eq("slug", product.category)
+        .maybeSingle();
+      setCategoryName(typeof data?.name === "string" ? data.name : null);
+    })();
+  }, [product?.category]);
+
+  useEffect(() => {
     if (!product) return;
-    setQty((q) => Math.min(Math.max(1, q), Math.max(1, product.stock_quantity)));
+    const out = product.stock_quantity <= 0;
+    const preorderEnabled = out && Boolean(product.allow_preorder);
+    const max = preorderEnabled ? 10 : Math.max(1, product.stock_quantity);
+    setQty((q) => Math.min(Math.max(1, q), max));
   }, [product]);
 
   if (!product) {
@@ -60,8 +77,9 @@ export default function ProductPage() {
   }
 
   const { unit, isDiscounted } = getPriceForUser(product, userType);
-  const maxQty = Math.max(1, product.stock_quantity);
   const out = product.stock_quantity <= 0;
+  const preorderEnabled = out && Boolean(product.allow_preorder);
+  const maxQty = preorderEnabled ? 10 : Math.max(1, product.stock_quantity);
 
   function handleCheckoutSuccess({
     orderId,
@@ -98,6 +116,16 @@ export default function ProductPage() {
     router.push(withToken("/order-history", { orderId }));
   }
 
+  function prettyCategory(raw: string | null | undefined): string {
+    const s = String(raw ?? "").trim();
+    if (!s) return "Product";
+    return s
+      .split(/[_-\s]+/g)
+      .filter(Boolean)
+      .map((w) => w[0]!.toUpperCase() + w.slice(1))
+      .join(" ");
+  }
+
   return (
     <div className="grid gap-10 lg:grid-cols-2">
       <div className="relative mx-auto w-full max-w-md">
@@ -118,12 +146,10 @@ export default function ProductPage() {
         <span
           className={clsx(
             "inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase",
-            product.category === "flower"
-              ? "bg-blush/80 text-honey-text"
-              : "bg-primary/10 text-primary"
+            "bg-primary/10 text-primary"
           )}
         >
-          {product.category === "flower" ? "Flower" : "Vitamin"}
+          {categoryName ?? prettyCategory(product.category)}
         </span>
         <h1 className="mt-3 font-display text-4xl text-honey-text md:text-5xl">{product.name}</h1>
         {product.description && (
@@ -141,11 +167,15 @@ export default function ProductPage() {
           </span>
         </div>
 
-        <p className={clsx("mt-4 text-sm", out ? "text-honey-muted" : "text-honey-muted")}>
-          {out ? "Out of Stock" : `${product.stock_quantity} available`}
+        <p className={clsx("mt-4 text-sm", "text-honey-muted")}>
+          {preorderEnabled
+            ? "Out of stock now, but pre-order is available."
+            : out
+              ? "Out of stock"
+              : `${product.stock_quantity} available`}
         </p>
 
-        {!out && (
+        {(!out || preorderEnabled) && (
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <div className="flex items-center rounded-full border border-honey-border bg-surface dark:bg-surface-dark">
               <button

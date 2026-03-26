@@ -45,7 +45,11 @@ export async function GET(request: Request) {
 
   const orders = await enrichOrdersForCustomer(supabase, rows ?? []);
 
-  const { data: sumRows } = await supabase.from("orders").select("total_price").eq("customer_token", token);
+  const { data: sumRows } = await supabase
+    .from("orders")
+    .select("total_price")
+    .eq("customer_token", token)
+    .in("status", ["delivered", "picked_up"]);
   const totalSpent = (sumRows ?? []).reduce((a, r) => a + Number((r as { total_price: number }).total_price), 0);
 
   return NextResponse.json({

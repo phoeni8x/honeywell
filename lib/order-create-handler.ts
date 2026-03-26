@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/admin";
-import { processOrderConfirmed } from "@/lib/order-confirmation-server";
+import { isCustomerBanned } from "@/lib/customer-moderation";
+import { notifyAdminPush } from "@/lib/push-notify";
 import { sanitizePlainText } from "@/lib/sanitize";
 import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
@@ -26,17 +27,18 @@ const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
   invalid_quantity: "Invalid quantity. Please choose at least 1 item.",
   product_not_found: "This product is unavailable right now. Please refresh the shop.",
   insufficient_stock: "Not enough stock for this quantity. Try a smaller amount.",
-  guest_no_wallet_spend: "Guests cannot pay with Bees or Points.",
+  guest_no_wallet_spend: "Guests cannot use this wallet option.",
   guest_fulfillment_invalid: "Guests can only use dead drop fulfillment.",
   guest_revolut_forbidden: "Guests cannot pay with Revolut.",
-  dead_drop_required: "Please choose an active dead drop location.",
-  dead_drop_inactive: "Selected dead drop is no longer active. Please refresh.",
+  dead_drop_unavailable: "No dead drop available right now. Please try again later.",
   pickup_team_only: "Pickup is available for team members only.",
   pickup_location_required: "Please choose a pickup point.",
   invalid_pickup_point: "Selected pickup point is invalid or inactive.",
   delivery_team_only: "Delivery is available for team members only.",
   delivery_address_required: "Please enter a delivery address.",
   invalid_revolut_pay_timing: "Invalid Revolut timing selection. Please retry.",
+  preorder_pay_now_required: "Pre-order requires pay-now. Pay-on-delivery is not available.",
+  points_min_order_total: "Points can be used only on orders of at least 50,000 HUF.",
   points_insufficient: "You don't have enough points for this order.",
   bees_insufficient: "You don't have enough Bees for this order.",
   wallet_required: "Your wallet is not ready yet. Refresh and try again.",
@@ -65,6 +67,7 @@ export async function handleCreateOrder(request: Request) {
       bees_used,
       points_used,
       revolut_pay_timing,
+      customer_username,
     }: {
       customer_token?: string;
       product_id?: string;
@@ -72,11 +75,15 @@ export async function handleCreateOrder(request: Request) {
       user_type?: UserType;
       payment_method?: PaymentMethod | string;
       referred_by?: string | null;
+      customer_username?: string | null;
     } & FulfillmentBody = body;
 
     const token = typeof customer_token === "string" ? customer_token.trim() : "";
     if (!token || !product_id || !quantity || !user_type || !payment_method) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+    }
+    if (await isCustomerBanned(token)) {
+      return NextResponse.json({ error: "Your account is currently blocked. Please contact support." }, { status: 403 });
     }
     if (quantity < 1) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
@@ -95,16 +102,12 @@ export async function handleCreateOrder(request: Request) {
       console.warn("[order] guest attempted revolut", { customer_token: token.slice(0, 8) });
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
-    if (user_type === "guest" && pm !== "crypto") {
+    if (user_type === "guest" && !["crypto", "points", "bees"].includes(pm)) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
 
     const bUsed = typeof bees_used === "number" && bees_used > 0 ? bees_used : 0;
     const pUsed = typeof points_used === "number" && points_used > 0 ? Math.floor(points_used) : 0;
-
-    if (user_type === "guest" && (bUsed > 0 || pUsed > 0)) {
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
-    }
 
     const ft = fulfillment_type as string | undefined;
     if (ft && !["dead_drop", "pickup", "delivery"].includes(ft)) {
@@ -115,6 +118,13 @@ export async function handleCreateOrder(request: Request) {
     }
 
     const refCode = referred_by ? sanitizePlainText(referred_by, 32) : "";
+    const customerUsernameRaw =
+      typeof customer_username === "string"
+        ? customer_username.trim().replace(/^@/, "").toLowerCase()
+        : "";
+    const customerUsername = customerUsernameRaw
+      ? sanitizePlainText(customerUsernameRaw, 64)
+      : null;
 
     let revolutTimingParam: string | null = null;
     if (
@@ -201,13 +211,11 @@ export async function handleCreateOrder(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, code: "empty_order_id" }, { status: 500 });
     }
 
-    const { data: ord } = await supabase.from("orders").select("status").eq("id", orderId).single();
-    if (ord?.status === "confirmed" || ord?.status === "waiting") {
-      try {
-        await processOrderConfirmed(orderId);
-      } catch (postErr) {
-        console.error("[processOrderConfirmed] non-fatal", postErr);
-      }
+    if (customerUsername) {
+      await supabase
+        .from("orders")
+        .update({ customer_username: customerUsername })
+        .eq("id", orderId);
     }
 
     if (refCode) {
@@ -240,6 +248,22 @@ export async function handleCreateOrder(request: Request) {
         console.error("[order referral]", refErr);
       }
     }
+
+    const { data: createdOrder } = await supabase
+      .from("orders")
+      .select("order_number, fulfillment_type, payment_method")
+      .eq("id", orderId)
+      .maybeSingle();
+    const orderLabel =
+      (createdOrder?.order_number as string | null | undefined) ?? orderId.slice(0, 8);
+    const fulfill = (createdOrder?.fulfillment_type as string | null | undefined) ?? "—";
+    const pay = (createdOrder?.payment_method as string | null | undefined) ?? "—";
+    void notifyAdminPush({
+      title: "New order placed",
+      body: `${orderLabel} · ${fulfill} · ${pay}`,
+      url: "/admin-080209?tab=orders",
+      tag: `new-order-${orderId}`,
+    });
 
     const res = NextResponse.json({ order_id: orderId });
     const host = request.headers.get("host")?.split(":")[0] ?? "";

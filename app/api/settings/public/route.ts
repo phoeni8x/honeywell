@@ -21,7 +21,11 @@ const KEYS = [
   "fulfillment_dead_drop_enabled",
   "fulfillment_pickup_enabled",
   "fulfillment_delivery_enabled",
+  "maintenance_mode",
+  "maintenance_message",
+  "maintenance_eta",
   "crypto_network",
+  "support_enabled",
 ] as const;
 
 function emptyPayload() {
@@ -47,7 +51,11 @@ function emptyPayload() {
     fulfillment_dead_drop_enabled: "1",
     fulfillment_pickup_enabled: "1",
     fulfillment_delivery_enabled: "1",
+    maintenance_mode: "0",
+    maintenance_message: "Honey Well is currently under maintenance and testing. Please check back later.",
+    maintenance_eta: "",
     crypto_network: "",
+    support_enabled: "1",
   };
 }
 
@@ -91,7 +99,13 @@ export async function GET() {
       fulfillment_dead_drop_enabled: map.fulfillment_dead_drop_enabled ?? "1",
       fulfillment_pickup_enabled: map.fulfillment_pickup_enabled ?? "1",
       fulfillment_delivery_enabled: map.fulfillment_delivery_enabled ?? "1",
+      maintenance_mode: map.maintenance_mode ?? "0",
+      maintenance_message:
+        map.maintenance_message ??
+        "Honey Well is currently under maintenance and testing. Please check back later.",
+      maintenance_eta: map.maintenance_eta ?? "",
       crypto_network: map.crypto_network ?? "",
+      support_enabled: map.support_enabled ?? "1",
     });
   } catch (e) {
     console.error(e);

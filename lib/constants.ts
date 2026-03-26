@@ -8,3 +8,5 @@ export const LS_THEME = "honeywell_theme";
 export const LS_REFERRED_BY = "honeywell_referred_by";
 /** This browser's own referral code (mirrors server bees_wallets.referral_code) */
 export const LS_MY_REFERRAL_CODE = "honeywell_my_referral_code";
+/** Team member Telegram handle captured at verify time (without @). */
+export const LS_TELEGRAM_USERNAME = "honeywell_telegram_username";

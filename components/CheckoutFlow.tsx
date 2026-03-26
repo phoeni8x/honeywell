@@ -2,27 +2,13 @@
 
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
-import { LS_REFERRED_BY } from "@/lib/constants";
+import { LS_REFERRED_BY, LS_TELEGRAM_USERNAME } from "@/lib/constants";
 import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { getPriceForUser } from "@/lib/helpers";
 import type { FulfillmentType, Product, UserType } from "@/types";
 import clsx from "clsx";
-import { AlertCircle, ChevronLeft, MapPin, Navigation, Package, Truck } from "lucide-react";
-import Image from "next/image";
+import { AlertCircle, ChevronLeft, MapPin, Package, Truck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-type DeadDrop = {
-  id: string;
-  name: string;
-  latitude: number;
-  longitude: number;
-  google_maps_url: string | null;
-  apple_maps_url: string | null;
-  instructions: string | null;
-  location_photo_url: string | null;
-  active_from: string | null;
-  active_until: string | null;
-};
 
 type PickupLoc = {
   id: string;
@@ -66,9 +52,7 @@ export function CheckoutFlow({
   const [step, setStep] = useState<Step>(1);
   const [fulfillment, setFulfillment] = useState<FulfillmentType | null>(null);
 
-  const [deadDrop, setDeadDrop] = useState<DeadDrop | null>(null);
   const [pickupPoints, setPickupPoints] = useState<PickupLoc[]>([]);
-  const [selectedDeadDropId, setSelectedDeadDropId] = useState<string | null>(null);
   const [selectedPickupId, setSelectedPickupId] = useState<string | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryApt, setDeliveryApt] = useState("");
@@ -90,24 +74,22 @@ export function CheckoutFlow({
 
   const { unit } = getPriceForUser(product, userType);
   const baseTotal = unit * quantity;
+  const isPreorder = Boolean(product.allow_preorder) && Number(product.stock_quantity) < quantity;
 
   const remainderHuf = useMemo(() => {
     let r = baseTotal - pointsToUse - beesToUse * 10000;
     if (r < 0) r = 0;
     return r;
   }, [baseTotal, pointsToUse, beesToUse]);
+  const pointsAllowedForOrder = baseTotal >= 50_000;
 
   const loadContext = useCallback(async () => {
-    const [ddRes, pkRes, wRes] = await Promise.all([
-      fetch("/api/dead-drops/active"),
+    const [pkRes, wRes] = await Promise.all([
       fetch("/api/shop-locations/pickup-points"),
       fetch("/api/wallet/summary", { headers: { "x-customer-token": getOrCreateCustomerToken() } }),
     ]);
-    const dd = await ddRes.json();
     const pk = await pkRes.json();
     const w = await wRes.json();
-    setDeadDrop(dd.dead_drop ?? null);
-    if (dd.dead_drop?.id) setSelectedDeadDropId(dd.dead_drop.id);
     setPickupPoints(pk.locations ?? []);
     setWalletPoints(typeof w.points === "number" ? w.points : 0);
     setWalletBees(typeof w.bees === "number" ? w.bees : 0);
@@ -130,6 +112,13 @@ export function CheckoutFlow({
       setRemainderPay("crypto");
     }
   }, [open, userType]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (isPreorder && remainderPay === "revolut" && revolutPayTiming !== "pay_now") {
+      setRevolutPayTiming("pay_now");
+    }
+  }, [open, isPreorder, remainderPay, revolutPayTiming]);
 
   useEffect(() => {
     if (!open || fulfillment !== "delivery") return;
@@ -176,10 +165,6 @@ export function CheckoutFlow({
         setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
         return;
       }
-      if (!deadDrop) {
-        setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
-        return;
-      }
     }
     if (ft === "pickup" && !fulfillmentOptions.pickup) {
       setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
@@ -193,17 +178,14 @@ export function CheckoutFlow({
     setStep(2);
   }
 
-  const showDeadDropCard =
-    userType === "team_member"
-      ? fulfillmentOptions.deadDrop
-      : fulfillmentOptions.deadDrop && Boolean(deadDrop);
+  const showDeadDropCard = fulfillmentOptions.deadDrop;
   const showPickupCard = userType === "team_member" && fulfillmentOptions.pickup;
   const showDeliveryCard = userType === "team_member" && fulfillmentOptions.delivery;
 
   function canProceedStep2(): boolean {
     if (!fulfillment) return false;
     if (fulfillment === "dead_drop") {
-      return Boolean(selectedDeadDropId && deadDrop);
+      return true;
     }
     if (fulfillment === "pickup") {
       return Boolean(selectedPickupId);
@@ -212,7 +194,6 @@ export function CheckoutFlow({
   }
 
   function paymentMethodForSubmit(): string {
-    if (userType === "guest") return "crypto";
     if (remainderHuf <= 0.01) {
       if (beesToUse > 0 && pointsToUse === 0) return "bees";
       if (pointsToUse > 0) return "points";
@@ -241,16 +222,12 @@ export function CheckoutFlow({
       setError("Enter a delivery address.");
       return;
     }
-    if (fulfillment === "dead_drop" && !selectedDeadDropId) {
-      setError("Dead drop is unavailable. Try again or pick another option.");
-      return;
-    }
     if (fulfillment === "pickup" && !selectedPickupId) {
       setError("Select a pickup point.");
       return;
     }
     const pm = paymentMethodForSubmit();
-    if (userType === "guest" && pm !== "crypto") {
+    if (userType === "guest" && pm === "revolut") {
       setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
@@ -258,6 +235,8 @@ export function CheckoutFlow({
     try {
       const referred_by =
         typeof window !== "undefined" ? localStorage.getItem(LS_REFERRED_BY) : null;
+      const customer_username =
+        typeof window !== "undefined" ? localStorage.getItem(LS_TELEGRAM_USERNAME) : null;
       const body: Record<string, unknown> = {
         customer_token: token,
         product_id: product.id,
@@ -268,8 +247,8 @@ export function CheckoutFlow({
         bees_used: beesToUse,
         points_used: pointsToUse,
         ...(referred_by ? { referred_by } : {}),
+        ...(customer_username ? { customer_username } : {}),
       };
-      if (fulfillment === "dead_drop") body.dead_drop_id = selectedDeadDropId;
       if (fulfillment === "pickup") body.location_id = selectedPickupId;
       if (fulfillment === "delivery") {
         body.delivery_address = deliveryAddress;
@@ -331,9 +310,24 @@ export function CheckoutFlow({
   const busy = loading || externalLoading;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <button type="button" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-label="Close" />
-      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-honey-border bg-surface p-6 shadow-2xl dark:bg-surface-dark">
+      <div
+        className="relative w-full max-w-lg overflow-y-auto rounded-t-3xl border border-honey-border bg-surface p-6 shadow-2xl dark:bg-surface-dark sm:max-h-[90vh] sm:rounded-2xl"
+        style={{
+          maxHeight: "92dvh",
+          paddingBottom: "max(24px, env(safe-area-inset-bottom))",
+        }}
+      >
+        <div className="mx-auto -mt-2 mb-4 h-1 w-10 rounded-full bg-honey-border/60 sm:hidden" />
+        <div
+          className="fixed inset-0 z-[-1]"
+          onClick={() => {
+            if (typeof document !== "undefined") {
+              (document.activeElement as HTMLElement)?.blur();
+            }
+          }}
+        />
         <div className="mb-4 flex items-center justify-between gap-2">
           {step > 1 && (
             <button
@@ -368,11 +362,9 @@ export function CheckoutFlow({
                 only. Team members can also use pickup or delivery when enabled.
               </p>
             )}
-            {userType === "guest" && (!fulfillmentOptions.deadDrop || !deadDrop) && (
+            {userType === "guest" && !fulfillmentOptions.deadDrop && (
               <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
-                {fulfillmentOptions.deadDrop
-                  ? "There is no active dead drop location right now. Please try again later or contact support."
-                  : "Dead drop is temporarily unavailable. Please contact support."}
+                Dead drop is temporarily unavailable. Please contact support.
               </div>
             )}
             <div className="grid gap-3">
@@ -380,20 +372,16 @@ export function CheckoutFlow({
                 <button
                   type="button"
                   onClick={() => pickFulfillment("dead_drop")}
-                  disabled={!deadDrop}
+                  disabled={false}
                   className={clsx(
                     "flex items-start gap-3 rounded-xl border p-4 text-left transition",
-                    deadDrop
-                      ? "border-honey-border hover:border-primary/40"
-                      : "cursor-not-allowed border-honey-border/50 opacity-60"
+                    "border-honey-border hover:border-primary/40"
                   )}
                 >
                   <MapPin className="mt-0.5 h-5 w-5 text-primary" />
                   <div>
                     <p className="font-semibold text-honey-text">Dead drop</p>
-                    <p className="text-sm text-honey-muted">
-                      {deadDrop ? deadDrop.name : "No active dead drop right now."}
-                    </p>
+                    <p className="text-sm text-honey-muted">A private drop point is assigned after payment.</p>
                   </div>
                 </button>
               )}
@@ -435,38 +423,14 @@ export function CheckoutFlow({
           </div>
         )}
 
-        {step === 2 && fulfillment === "dead_drop" && deadDrop && (
+        {step === 2 && fulfillment === "dead_drop" && (
           <div className="space-y-4">
-            <h3 className="font-display text-lg text-honey-text">Dead drop location</h3>
-            <p className="font-medium text-honey-text">{deadDrop.name}</p>
-            {deadDrop.instructions && <p className="text-sm text-honey-muted">{deadDrop.instructions}</p>}
-            {deadDrop.location_photo_url && (
-              <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-honey-border">
-                <Image src={deadDrop.location_photo_url} alt="" fill className="object-cover" />
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {deadDrop.google_maps_url && (
-                <a
-                  href={deadDrop.google_maps_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border border-honey-border px-3 py-1.5 text-xs font-semibold"
-                >
-                  <Navigation className="h-3.5 w-3.5" />
-                  Google Maps
-                </a>
-              )}
-              {deadDrop.apple_maps_url && (
-                <a
-                  href={deadDrop.apple_maps_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border border-honey-border px-3 py-1.5 text-xs font-semibold"
-                >
-                  Apple Maps
-                </a>
-              )}
+            <h3 className="font-display text-lg text-honey-text">Dead drop allocation</h3>
+            <p className="text-sm text-honey-muted">
+              For security, exact dead-drop location details are assigned privately after your order is accepted.
+            </p>
+            <div className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-3 text-xs text-honey-text">
+              If all active dead-drop slots are allocated, checkout will show No dead drop available.
             </div>
             <button
               type="button"
@@ -515,30 +479,48 @@ export function CheckoutFlow({
 
         {step === 2 && fulfillment === "delivery" && (
           <div className="space-y-4">
+            <button
+              type="button"
+              className="mb-3 ml-auto flex items-center gap-1 rounded-full bg-honey-border/40 px-4 py-1.5 text-xs font-semibold text-honey-text md:hidden"
+              onClick={() => (document.activeElement as HTMLElement)?.blur()}
+            >
+              Done ✓
+            </button>
             <h3 className="font-display text-lg text-honey-text">Delivery address</h3>
             <input
               className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
               placeholder="Full address *"
               value={deliveryAddress}
+              enterKeyHint="next"
+              autoComplete="street-address"
               onChange={(e) => setDeliveryAddress(e.target.value)}
+              onFocus={(e) => e.target.scrollIntoView({ behavior: "smooth", block: "center" })}
             />
             <input
               className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
               placeholder="Apartment / floor / door (optional)"
               value={deliveryApt}
+              enterKeyHint="next"
+              autoComplete="address-line2"
               onChange={(e) => setDeliveryApt(e.target.value)}
+              onFocus={(e) => e.target.scrollIntoView({ behavior: "smooth", block: "center" })}
             />
             <textarea
               className="min-h-[72px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
               placeholder="Delivery notes (optional)"
               value={deliveryNotes}
               onChange={(e) => setDeliveryNotes(e.target.value)}
+              onFocus={(e) => e.target.scrollIntoView({ behavior: "smooth", block: "center" })}
             />
             <input
               className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
               placeholder="Phone (optional)"
               value={deliveryPhone}
+              enterKeyHint="done"
+              autoComplete="tel"
+              inputMode="tel"
               onChange={(e) => setDeliveryPhone(e.target.value)}
+              onFocus={(e) => e.target.scrollIntoView({ behavior: "smooth", block: "center" })}
             />
             <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-honey-text">
               Delivery is handled personally by Honey Well. We will contact you to confirm your delivery window.
@@ -557,10 +539,16 @@ export function CheckoutFlow({
         {step === 3 && (
           <div className="space-y-4">
             <h3 className="font-display text-lg text-honey-text">Payment</h3>
+            {isPreorder && (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+                Pre-order requires payment now. Pay-on-delivery is not available for pre-orders.
+              </div>
+            )}
             {userType === "guest" ? (
               <p className="text-sm text-honey-muted">
-                Order total {formatPrice(baseTotal)}. Guests pay with <span className="font-medium text-honey-text">cryptocurrency</span>{" "}
-                only (no Points or Bees at checkout).
+                Order total {formatPrice(baseTotal)}. Guests can use <span className="font-medium text-honey-text">Points and Bees</span>{" "}
+                (Points require minimum order {formatPrice(50_000)}), and pay any remainder with{" "}
+                <span className="font-medium text-honey-text">cryptocurrency</span>.
               </p>
             ) : (
               <p className="text-sm text-honey-muted">
@@ -569,30 +557,42 @@ export function CheckoutFlow({
                 or <span className="font-medium text-honey-text">cryptocurrency</span> — choose below.
               </p>
             )}
-            {userType === "team_member" && (
+            {userType && (
               <>
                 <div>
                   <label className="text-xs font-semibold text-honey-muted">Points to apply (1 pt = 1 HUF)</label>
+                  {!pointsAllowedForOrder && (
+                    <p className="mt-1 text-xs text-honey-muted">
+                      Points can be used only for orders of at least {formatPrice(50_000)}.
+                    </p>
+                  )}
                   <input
                     type="number"
                     min={0}
-                    max={Math.min(walletPoints, Math.floor(baseTotal))}
+                    max={pointsAllowedForOrder ? Math.min(walletPoints, Math.floor(baseTotal)) : 0}
                     className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
                     value={pointsToUse || ""}
-                    onChange={(e) => setPointsToUse(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    disabled={!pointsAllowedForOrder}
+                    onChange={(e) =>
+                      setPointsToUse(
+                        pointsAllowedForOrder ? Math.max(0, parseInt(e.target.value, 10) || 0) : 0
+                      )
+                    }
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-honey-muted">Bees to apply (1 Bee = 10,000 HUF)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.0001}
-                    max={walletBees}
-                    className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-                    value={beesToUse || ""}
-                    onChange={(e) => setBeesToUse(Math.max(0, parseFloat(e.target.value) || 0))}
-                  />
+                  <div>
+                    <label className="text-xs font-semibold text-honey-muted">Bees to apply (1 Bee = 10,000 HUF)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.0001}
+                      max={walletBees}
+                      className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                      value={beesToUse || ""}
+                      onChange={(e) => setBeesToUse(Math.max(0, parseFloat(e.target.value) || 0))}
+                    />
+                  </div>
                 </div>
               </>
             )}
@@ -638,19 +638,21 @@ export function CheckoutFlow({
                     after you place the order (set by admin).
                   </p>
                   <div className="mt-3 flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRevolutPayTiming("pay_on_delivery")}
-                      className={clsx(
-                        "rounded-xl border px-3 py-2 text-left text-sm",
-                        revolutPayTiming === "pay_on_delivery"
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-honey-border text-honey-text"
-                      )}
-                    >
-                      <span className="font-semibold">Pay after receiving</span>
-                      <span className="mt-0.5 block text-xs text-honey-muted">Order is accepted; you&apos;ll pay when you receive it.</span>
-                    </button>
+                    {!isPreorder && (
+                      <button
+                        type="button"
+                        onClick={() => setRevolutPayTiming("pay_on_delivery")}
+                        className={clsx(
+                          "rounded-xl border px-3 py-2 text-left text-sm",
+                          revolutPayTiming === "pay_on_delivery"
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-honey-border text-honey-text"
+                        )}
+                      >
+                        <span className="font-semibold">Pay after receiving</span>
+                        <span className="mt-0.5 block text-xs text-honey-muted">Order is accepted; you&apos;ll pay when you receive it.</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setRevolutPayTiming("pay_now")}

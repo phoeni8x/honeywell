@@ -2,6 +2,7 @@
 
 import { OrderCard } from "@/components/OrderCard";
 import { RevolutModal } from "@/components/RevolutModal";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { getOrCreateCustomerToken, setCustomerToken } from "@/lib/customer-token";
 import { syncCustomerTokenFromUrl } from "@/lib/sync-customer-token-from-url";
 import type { OrderWithProduct } from "@/types";
@@ -28,15 +29,23 @@ export function OrderHistoryContent() {
   const [loading, setLoading] = useState(true);
   const [revolutOpen, setRevolutOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { state: pushState, subscribe: subscribePush } = usePushNotifications();
 
   const loadOrders = useCallback(async (t: string, opts?: { quiet?: boolean }) => {
     if (!opts?.quiet) setLoading(true);
     try {
+      if (!t || t.trim().length < 8) {
+        // No valid token — show empty state, don't call API
+        setOrders([]);
+        return;
+      }
       const res = await fetch("/api/orders/mine", {
         headers: { "x-customer-token": t },
       });
       const data = await res.json();
       if (res.ok) setOrders(data.orders ?? []);
+    } catch {
+      // silently fail — user will see "No orders yet"
     } finally {
       if (!opts?.quiet) setLoading(false);
     }
@@ -156,12 +165,26 @@ export function OrderHistoryContent() {
       <div>
         <h1 className="font-display text-4xl text-honey-text">My orders</h1>
       </div>
+      {pushState !== "unsupported" && pushState !== "subscribed" && (
+        <div className="flex items-center justify-between rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+          <span className="text-honey-text">Enable push notifications for order updates and support replies.</span>
+          <button
+            type="button"
+            onClick={() => void subscribePush()}
+            className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white"
+          >
+            Enable notifications
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-honey-muted">Loading orders…</p>
       ) : orders.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-honey-border py-16 text-center text-honey-muted">
-          No orders yet. Browse the shop to place your first order.
+          No orders yet.{" "}
+          <a href="/shop" className="text-primary underline">Browse the shop</a>{" "}
+          to place your first order.
         </p>
       ) : (
         <div className="space-y-6">
@@ -185,6 +208,12 @@ export function OrderHistoryContent() {
         onClose={() => setRevolutOpen(false)}
         revolutUrl={settings.revolut_payment_link}
       />
+      <p className="text-center text-sm text-honey-muted">
+        Want a paginated view?{" "}
+        <a href="/account/orders" className="text-primary underline">
+          View full order history
+        </a>
+      </p>
     </div>
   );
 }

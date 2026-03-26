@@ -1,4 +1,5 @@
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
+import { notifyAdminPush } from "@/lib/push-notify";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
@@ -60,6 +61,13 @@ export async function POST(request: Request) {
       console.error("[pickup-photo update]", updErr);
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
     }
+
+    void notifyAdminPush({
+      title: "Pickup proof submitted",
+      body: `Order ${orderId.slice(0, 8)} submitted pickup photo proof.`,
+      url: "/admin-080209?tab=orders",
+      tag: `pickup-proof-${orderId}`,
+    });
 
     return NextResponse.json({ ok: true, url: publicUrl });
   } catch (e) {

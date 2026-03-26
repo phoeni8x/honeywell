@@ -1,11 +1,12 @@
 export type UserType = "team_member" | "guest";
 
-export type ProductCategory = "flower" | "vitamin";
+export type ProductCategory = string;
 
 export type FulfillmentType = "dead_drop" | "pickup" | "delivery";
 
 export type OrderStatus =
   | "payment_pending"
+  | "pre_ordered"
   | "payment_expired"
   | "waiting"
   | "confirmed"
@@ -31,12 +32,14 @@ export interface Product {
   stock_quantity: number;
   image_url: string | null;
   is_active: boolean;
+  allow_preorder?: boolean;
   created_at: string;
 }
 
 export interface Order {
   id: string;
   customer_token: string;
+  customer_username?: string | null;
   product_id: string;
   quantity: number;
   total_price: number;

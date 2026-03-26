@@ -18,6 +18,10 @@ export function HomePageInner() {
   const searchParams = useSearchParams();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [tagline, setTagline] = useState<string | null>(null);
+  const [settings, setSettings] = useState({
+    shop_address: "",
+    google_maps_url: "",
+  });
   const [userType, setUserType] = useState<UserType | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
@@ -52,6 +56,10 @@ export function HomePageInner() {
       .then((r) => r.json())
       .then((d) => {
         if (d.hero_tagline) setTagline(d.hero_tagline);
+        setSettings({
+          shop_address: typeof d.shop_address === "string" ? d.shop_address : "",
+          google_maps_url: typeof d.google_maps_url === "string" ? d.google_maps_url : "",
+        });
       })
       .catch(() => {});
   }, []);
@@ -156,10 +164,63 @@ export function HomePageInner() {
           <p className="mt-2 text-sm text-honey-muted">
             Address and map are configured in admin. Embed a Google Map here once your address is set in Settings.
           </p>
-          <div className="mt-4 flex h-48 items-center justify-center rounded-xl border border-dashed border-honey-border bg-surface text-sm text-honey-muted dark:bg-surface-dark">
-            Map embed placeholder
+          {settings.google_maps_url ? (
+            <a
+              href={settings.google_maps_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 flex h-48 items-center justify-center rounded-xl border border-honey-border bg-surface text-sm font-medium text-primary underline hover:bg-primary/5 dark:bg-surface-dark"
+            >
+              📍 {settings.shop_address || "Open location in Google Maps"}
+            </a>
+          ) : (
+            <div className="mt-4 flex h-48 items-center justify-center rounded-xl border border-dashed border-honey-border bg-surface text-sm text-honey-muted dark:bg-surface-dark">
+              Map location not configured yet — add your address in admin Settings.
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border-2 border-honey-border bg-surface px-6 py-8 dark:bg-surface-dark md:px-8">
+        <h2 className="font-display text-3xl text-honey-text">How points work (Guests &amp; Team)</h2>
+        <p className="mt-2 text-sm text-honey-muted">
+          Both guests and team members can use points at checkout. Points are wallet credit: <span className="font-semibold text-honey-text">1 point = 1 HUF</span>.
+        </p>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-honey-border bg-bg/50 p-4 dark:bg-black/20">
+            <p className="text-xs font-semibold uppercase tracking-wide text-honey-muted">Earning rules</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-honey-muted">
+              <li>You earn points only when an order is completed.</li>
+              <li>You earn <span className="font-semibold text-honey-text">800 points per full 10,000 HUF</span>.</li>
+              <li>Example: 50,000 HUF completed order = 4,000 points.</li>
+              <li>No points are earned on orders where points were already used.</li>
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-honey-border bg-bg/50 p-4 dark:bg-black/20">
+            <p className="text-xs font-semibold uppercase tracking-wide text-honey-muted">Usage rules</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-honey-muted">
+              <li>Points can be applied only when the order total is at least 50,000 HUF.</li>
+              <li>Guests and team members can both spend points.</li>
+              <li>Any remaining amount after points is paid with your selected payment method at checkout.</li>
+              <li>Balances and history are visible in your account pages.</li>
+            </ul>
           </div>
         </div>
+      </section>
+
+      <section className="rounded-3xl border-2 border-amber-300 bg-amber-50/70 px-6 py-8 dark:border-amber-500/40 dark:bg-amber-900/10 md:px-8">
+        <h2 className="font-display text-3xl text-honey-text">Terms &amp; conditions</h2>
+        <p className="mt-2 text-sm text-honey-muted">
+          By using Honey Well, you agree to follow these rules.
+        </p>
+        <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-honey-text">
+          <li>No abusive, fraudulent, or mischievous behavior. Serious violations can lead to a permanent ban.</li>
+          <li>All payments are treated as instant and final once sent.</li>
+          <li>No credits, no pay-later, and no unpaid reservations.</li>
+        </ul>
+        <p className="mt-4 text-sm font-medium text-honey-text">
+          In case of any issue, feel free to contact support anytime.
+        </p>
       </section>
 
       <section className="relative overflow-hidden rounded-3xl border-2 border-honey-border bg-gradient-to-br from-blush/40 via-bg to-primary/10 px-6 py-12 dark:from-[#1a1400] dark:via-bg dark:to-surface-dark md:px-10">

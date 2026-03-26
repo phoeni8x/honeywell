@@ -256,3 +256,36 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* Mobile safe area support for Telegram Mini App and notch phones */
+:root {
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-top: env(safe-area-inset-top, 0px);
+}
+
+/* Smooth scrolling everywhere */
+* {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Prevent double-tap zoom on buttons and links on iOS */
+button,
+a {
+  touch-action: manipulation;
+}
+
+/* Better tap targets on mobile */
+button,
+[role="button"],
+a {
+  min-height: 44px;
+  cursor: pointer;
+}
+
+/* Telegram Mini App viewport fix */
+html,
+body {
+  height: 100%;
+  overscroll-behavior: none;
+}

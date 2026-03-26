@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/admin";
-import { basePointsFromOrderHuf, calculateLevel, pointsWithLevelBonus } from "@/lib/levels";
+import { basePointsFromOrderHuf, calculateLevel } from "@/lib/levels";
 
 const MIN_REFERRAL_BEES = 0.05;
 
@@ -12,39 +12,66 @@ export type ProcessOrderConfirmedResult = {
   leveledUp?: boolean;
 };
 
-/** Run after order is set to `confirmed`. Idempotent per order for points. */
+/** Run after order completion (`delivered`/`picked_up`). Idempotent per order for points. */
 export async function processOrderConfirmed(orderId: string): Promise<ProcessOrderConfirmedResult> {
   const supabase = createServiceClient();
+  const { data: order, error: oErr } = await supabase.from("orders").select("*").eq("id", orderId).single();
+  if (oErr || !order) {
+    return { ok: false };
+  }
+  // Rewards are awarded only for completed orders.
+  if (order.status !== "delivered" && order.status !== "picked_up") {
+    return { ok: true, pointsEarned: 0, previousLevel: 1, newLevel: 1, leveledUp: false };
+  }
 
-  const { data: existingPt } = await supabase
+  // Idempotency guard: claim this order once at DB level.
+  const { data: claimedOrder, error: claimErr } = await supabase
+    .from("orders")
+    .update({ rewards_processed_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .is("rewards_processed_at", null)
+    .in("status", ["delivered", "picked_up"])
+    .select("*")
+    .maybeSingle();
+
+  if (claimErr) {
+    return { ok: false };
+  }
+
+  if (!claimedOrder) {
+    const { data: w } = await supabase
+      .from("points_wallets")
+      .select("buyer_level")
+      .eq("customer_token", order.customer_token as string)
+      .maybeSingle();
+    const lv = w?.buyer_level ?? 1;
+    return { ok: true, pointsEarned: Number(order.points_earned ?? 0), previousLevel: lv, newLevel: lv, leveledUp: false };
+  }
+
+  const customerToken = claimedOrder.customer_token as string;
+  const totalHuf = Number(claimedOrder.total_price);
+  const pointsUsed = Number(claimedOrder.points_used ?? 0);
+
+  // Backfill guard for legacy rows that may already have an earn tx from earlier flows.
+  const { data: existingEarnTx } = await supabase
     .from("points_transactions")
-    .select("id")
+    .select("points")
+    .eq("customer_token", customerToken)
     .eq("order_id", orderId)
     .eq("type", "earn")
     .maybeSingle();
 
-  if (existingPt) {
-    const { data: ord } = await supabase.from("orders").select("customer_token").eq("id", orderId).maybeSingle();
-    const token = ord?.customer_token as string | undefined;
-    if (token) {
-      const { data: w } = await supabase
-        .from("points_wallets")
-        .select("buyer_level")
-        .eq("customer_token", token)
-        .maybeSingle();
-      const lv = w?.buyer_level ?? 1;
-      return { ok: true, pointsEarned: 0, previousLevel: lv, newLevel: lv, leveledUp: false };
-    }
-    return { ok: true, pointsEarned: 0, previousLevel: 1, newLevel: 1, leveledUp: false };
+  if (existingEarnTx) {
+    const earned = Number(existingEarnTx.points ?? 0);
+    await supabase.from("orders").update({ points_earned: earned }).eq("id", orderId);
+    const { data: w } = await supabase
+      .from("points_wallets")
+      .select("buyer_level")
+      .eq("customer_token", customerToken)
+      .maybeSingle();
+    const lv = w?.buyer_level ?? 1;
+    return { ok: true, pointsEarned: earned, previousLevel: lv, newLevel: lv, leveledUp: false };
   }
-
-  const { data: order, error: oErr } = await supabase.from("orders").select("*").eq("id", orderId).single();
-  if (oErr || !order || (order.status !== "confirmed" && order.status !== "waiting")) {
-    return { ok: false };
-  }
-
-  const customerToken = order.customer_token as string;
-  const totalHuf = Number(order.total_price);
 
   const { data: wallet } = await supabase
     .from("points_wallets")
@@ -58,8 +85,11 @@ export async function processOrderConfirmed(orderId: string): Promise<ProcessOrd
   const totalSpent = Number(wallet?.total_spent_huf ?? 0) + totalHuf;
   const newLevel = calculateLevel(totalOrders, totalSpent);
 
-  const base = basePointsFromOrderHuf(totalHuf);
-  const pts = pointsWithLevelBonus(base, newLevel);
+  // Earning rules:
+  // - minimum completed order value: 50,000 HUF
+  // - no points earned when points were used on this order
+  const eligibleForEarn = totalHuf >= 50_000 && pointsUsed <= 0;
+  const pts = eligibleForEarn ? basePointsFromOrderHuf(totalHuf) : 0;
 
   if (wallet) {
     await supabase
@@ -84,12 +114,14 @@ export async function processOrderConfirmed(orderId: string): Promise<ProcessOrd
     });
   }
 
-  await supabase.from("points_transactions").insert({
-    customer_token: customerToken,
-    type: "earn",
-    points: pts,
-    order_id: orderId,
-  });
+  if (pts > 0) {
+    await supabase.from("points_transactions").insert({
+      customer_token: customerToken,
+      type: "earn",
+      points: pts,
+      order_id: orderId,
+    });
+  }
 
   await supabase.from("orders").update({ points_earned: pts }).eq("id", orderId);
 

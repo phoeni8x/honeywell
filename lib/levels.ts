@@ -16,10 +16,12 @@ export const LEVEL_META: Record<
 };
 
 export function basePointsFromOrderHuf(totalHuf: number): number {
-  return Math.floor(totalHuf / 1000) * 10;
+  // New earning rule: 800 points per full 10,000 HUF.
+  return Math.floor(totalHuf / 10_000) * 800;
 }
 
 export function pointsWithLevelBonus(basePoints: number, level: number): number {
-  const pct = LEVEL_META[level]?.bonusPointsPct ?? 0;
-  return Math.floor(basePoints * (1 + pct / 100));
+  // Points earning is flat by spend bucket; level does not boost points.
+  void level;
+  return basePoints;
 }

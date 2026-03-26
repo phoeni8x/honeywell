@@ -1,4 +1,3 @@
-import { processOrderConfirmed } from "@/lib/order-confirmation-server";
 import { LEVEL_META } from "@/lib/levels";
 import { notifyCustomerPush } from "@/lib/push-notify";
 import { createServiceClient } from "@/lib/supabase/admin";
@@ -100,23 +99,13 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
     }
   }
 
-  const proc = await processOrderConfirmed(orderId);
-  if (!proc.ok) {
-    return { success: false, error: "Order rewards processing failed", status: 500 };
-  }
-
   const customerToken = order.customer_token as string | undefined;
   if (customerToken) {
     const bodyText = isRevolutDeliveryPayNow
       ? "Payment received — we're preparing your order."
       : "Your order is confirmed.";
     let extra = "";
-    if (proc.pointsEarned && proc.pointsEarned > 0) {
-      extra = ` You earned ${proc.pointsEarned} points.`;
-    }
-    if (proc.leveledUp && proc.newLevel) {
-      extra += ` ${LEVEL_META[proc.newLevel]?.name ?? "New"} level!`;
-    }
+    // Points are awarded when order is completed (delivered/picked_up), not at approval.
     void notifyCustomerPush(customerToken, {
       title: "Order update",
       body: `${bodyText}${extra}`.slice(0, 180),
@@ -125,18 +114,13 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
     });
   }
 
-  const newLevel = proc.newLevel ?? 1;
-  const previousLevel = proc.previousLevel ?? 1;
-  const leveledUp = Boolean(proc.leveledUp);
-  const levelName = LEVEL_META[newLevel]?.name ?? "Newbie";
-
   return {
     success: true,
     order_id: orderId,
-    points_earned: proc.pointsEarned ?? 0,
-    new_level: newLevel,
-    previous_level: previousLevel,
-    leveled_up: leveledUp,
-    level_name: levelName,
+    points_earned: 0,
+    new_level: 1,
+    previous_level: 1,
+    leveled_up: false,
+    level_name: LEVEL_META[1]?.name ?? "Newbie",
   };
 }

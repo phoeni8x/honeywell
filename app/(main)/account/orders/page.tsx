@@ -54,8 +54,11 @@ export default function AccountOrdersPage() {
       <div>
         <h1 className="font-display text-4xl text-honey-text">Order history</h1>
         <p className="mt-2 text-honey-muted">
-          Paginated view. Lifetime spend:{" "}
+          Completed orders spend:{" "}
           <span className="font-mono text-honey-text">{formatPrice(Math.round(totalSpent))}</span>
+        </p>
+        <p className="mt-1 text-xs text-honey-muted">
+          Only delivered and picked up orders are counted.
         </p>
         <p className="mt-1 text-sm text-honey-muted">
           You can also use the classic{" "}

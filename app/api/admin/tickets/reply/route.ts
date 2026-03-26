@@ -14,13 +14,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = (await request.json().catch(() => null)) as
+      | {
+          ticket_id?: string;
+          message?: string;
+          internal?: boolean;
+          status?: string;
+          set_status?: string;
+          media_urls?: string[];
+        }
+      | null;
+    if (!body) {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
     const ticketId = body.ticket_id as string | undefined;
     const message = sanitizePlainText(String(body.message ?? ""), 8000);
-    const status = body.status as string | undefined;
+    const status = (body.set_status ?? body.status) as string | undefined;
     const internal = Boolean(body.internal);
+    const mediaUrls =
+      Array.isArray(body.media_urls) && body.media_urls.length > 0
+        ? body.media_urls
+            .slice(0, 8)
+            .map((u) => sanitizePlainText(String(u ?? ""), 2000))
+            .filter((u) => u.length > 0)
+        : null;
 
-    if (!ticketId || !message.trim()) {
+    if (!ticketId) {
+      return NextResponse.json({ error: "ticket_id required" }, { status: 400 });
+    }
+
+    if (!message.trim() && (!mediaUrls || mediaUrls.length === 0)) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
@@ -38,12 +61,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
-    const sender = internal ? "admin_internal" : "admin";
-
     const { error: mErr } = await svc.from("ticket_messages").insert({
       ticket_id: ticketId,
-      sender,
-      message: message.trim(),
+      sender: internal ? "admin_internal" : "admin",
+      message: message.trim() || "(attachment)",
+      media_urls: mediaUrls ?? null,
+      is_read: false,
     });
 
     if (mErr) {

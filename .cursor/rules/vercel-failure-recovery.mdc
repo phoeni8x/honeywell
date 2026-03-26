@@ -1,0 +1,33 @@
+---
+description: When Vercel deploy fails, debug and redeploy until READY
+alwaysApply: true
+---
+
+# Vercel Failure Recovery Loop
+
+If any production deploy fails, do not stop at the first error. Run a fix-and-retry loop until deployment succeeds or a hard external blocker is confirmed.
+
+## Required flow
+
+1. Run production deploy from repo root: `npx vercel --prod --yes`.
+2. If it fails, capture the exact failing stage and first actionable error.
+3. Apply the minimal code/config fix for that root cause.
+4. Re-run lint/type/build checks locally when relevant.
+5. Re-run deploy.
+6. Repeat until Vercel reports **READY** and production alias is updated.
+
+## Common failure classes to check first
+
+- TypeScript/build errors: fix compile issues in the reported file/symbol.
+- Runtime/env errors: verify required env vars and missing server-only keys.
+- Auth/cookie/session regressions: verify middleware and API auth guards.
+- Schema/API mismatch: verify table names and route contracts match current DB.
+
+## Reporting requirement
+
+After recovery, always report:
+
+- failing root cause,
+- what was changed to fix it,
+- successful deploy proof (READY + inspector URL + production URL).
+
