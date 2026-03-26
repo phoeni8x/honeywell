@@ -25,10 +25,22 @@ export async function POST(request: Request) {
       : String(body.value);
 
   const supabase = createServiceClient();
-  const { error } = await supabase.from("settings").upsert({ key, value }, { onConflict: "key" });
-  if (error) {
-    console.error("[admin settings POST]", error);
+
+  // Update all rows for this key first so legacy duplicate rows (if any) cannot
+  // keep returning stale values from other API reads.
+  const updateResult = await supabase.from("settings").update({ value }).eq("key", key).select("key");
+  if (updateResult.error) {
+    console.error("[admin settings POST:update]", updateResult.error);
     return NextResponse.json({ error: "Failed to save" }, { status: 500 });
+  }
+
+  // Insert only when the key does not exist yet.
+  if (!updateResult.data || updateResult.data.length === 0) {
+    const insertResult = await supabase.from("settings").insert({ key, value });
+    if (insertResult.error) {
+      console.error("[admin settings POST:insert]", insertResult.error);
+      return NextResponse.json({ error: "Failed to save" }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ success: true });
