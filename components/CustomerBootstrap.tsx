@@ -11,12 +11,13 @@ export function CustomerBootstrap() {
     if (ran.current) return;
     ran.current = true;
 
-    // FIRST: detect and lock in the Telegram token if available.
-    // This must happen before API calls so all requests use the same token.
-    const tg = (window as { Telegram?: { WebApp?: { ready?: () => void; expand?: () => void } } }).Telegram?.WebApp;
-    if (tg) {
-      tg.ready?.();
-      tg.expand?.();
+    // Initialize Telegram Mini App
+    if (typeof window !== "undefined") {
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg) {
+        tg.ready();
+        tg.expand();
+      }
     }
 
     const token = getOrCreateCustomerToken();
