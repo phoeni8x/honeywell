@@ -1,4 +1,14 @@
 /** @type {import('next').NextConfig} */
+const csp = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://*.telegram.org",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:",
+  "frame-ancestors *",
+  // Apex + www: some mobile browsers treat fetch to the API as cross-origin if the page host differs from 'self' in edge cases.
+  "connect-src 'self' https://teamruby.net https://www.teamruby.net https://*.supabase.co wss://*.supabase.co https://api.telegram.org https://api.coingecko.com https://api.etherscan.io https://blockstream.info https://*.tile.openstreetmap.org https://tile.openstreetmap.org",
+].join("; ");
 
 const nextConfig = {
   async redirects() {
@@ -22,35 +32,19 @@ const nextConfig = {
     ],
   },
   async headers() {
-    return [
+    const securityHeaders = [
+      { key: "X-DNS-Prefetch-Control", value: "on" },
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       {
-        source: "/(.*)",
-        headers: [
-          {
-            key: "Content-Security-Policy",
-            value: [
-              "frame-ancestors *",
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://*.telegram.org",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https:",
-              "font-src 'self' data:",
-              "connect-src 'self' https:",
-              "media-src 'self' blob:",
-              "worker-src 'self' blob:",
-            ].join("; "),
-          },
-          {
-            key: "X-Content-Type-Options",
-            value: "nosniff",
-          },
-          {
-            key: "Referrer-Policy",
-            value: "origin-when-cross-origin",
-          },
-        ],
+        key: "Permissions-Policy",
+        value: "camera=(self), microphone=(), geolocation=(self)",
       },
     ];
+    if (process.env.NODE_ENV === "production") {
+      securityHeaders.push({ key: "Content-Security-Policy", value: csp });
+    }
+    return [{ source: "/:path*", headers: securityHeaders }];
   },
 };
 
