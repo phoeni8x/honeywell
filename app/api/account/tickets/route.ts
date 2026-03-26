@@ -1,8 +1,10 @@
 import { ADMIN_BASE_PATH } from "@/lib/constants";
 import { getCustomerTokenFromRequest } from "@/lib/customer-request";
+import { isCustomerBanned } from "@/lib/customer-moderation";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { notifyAdminPush } from "@/lib/push-notify";
 import { sanitizePlainText } from "@/lib/sanitize";
+import { parseSupportEnabled } from "@/lib/support-settings";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
@@ -24,9 +26,9 @@ export async function GET(request: Request) {
   }
 
   const supabase = createServiceClient();
-  const { data: rows, error } = await supabase
+  const { data: tickets, error } = await supabase
     .from("tickets")
-    .select("*")
+    .select("id, ticket_number, subject, category, status, created_at, updated_at")
     .eq("customer_token", token)
     .order("updated_at", { ascending: false });
 
@@ -35,7 +37,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
   }
 
-  return NextResponse.json({ tickets: rows ?? [] });
+  return NextResponse.json({ tickets: tickets ?? [] });
 }
 
 export async function POST(request: Request) {
@@ -43,8 +45,24 @@ export async function POST(request: Request) {
   if (!token) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
+  if (await isCustomerBanned(token)) {
+    return NextResponse.json({ error: "Your account is currently blocked. Please contact support." }, { status: 403 });
+  }
 
   try {
+    const supabase = createServiceClient();
+    const { data: supportSetting } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", "support_enabled")
+      .maybeSingle();
+    if (!parseSupportEnabled(supportSetting?.value)) {
+      return NextResponse.json(
+        { error: "Support is currently offline. Please come back later." },
+        { status: 503 }
+      );
+    }
+
     const body = await request.json();
     const subject = sanitizePlainText(String(body.subject ?? ""), 200);
     const message = sanitizePlainText(String(body.message ?? ""), 8000);
@@ -58,8 +76,6 @@ export async function POST(request: Request) {
     const allowed = ["order", "payment", "pickup", "product", "other"];
     const cat = allowed.includes(category) ? category : "other";
 
-    const supabase = createServiceClient();
-
     if (orderId) {
       const { data: ord } = await supabase
         .from("orders")
@@ -72,7 +88,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const { data: ticket, error: tErr } = await supabase
+    const { data: ticketRow, error: tErr } = await supabase
       .from("tickets")
       .insert({
         customer_token: token,
@@ -84,18 +100,22 @@ export async function POST(request: Request) {
       .select("*")
       .single();
 
-    if (tErr || !ticket) {
+    if (tErr || !ticketRow) {
       console.error("[tickets POST]", tErr);
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
     }
 
-    const { error: mErr } = await supabase.from("ticket_messages").insert({
-      ticket_id: ticket.id,
-      sender: "customer",
-      message: message.trim(),
-    });
+    const { data: firstMessage, error: mErr } = await supabase
+      .from("ticket_messages")
+      .insert({
+        ticket_id: ticketRow.id,
+        sender: "customer",
+        message: message.trim(),
+      })
+      .select("id, ticket_id, sender, message, media_urls, created_at, is_read")
+      .single();
 
-    if (mErr) {
+    if (mErr || !firstMessage) {
       console.error("[tickets POST message]", mErr);
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
     }
@@ -103,16 +123,41 @@ export async function POST(request: Request) {
     await supabase
       .from("tickets")
       .update({ updated_at: new Date().toISOString() })
-      .eq("id", ticket.id);
+      .eq("id", ticketRow.id);
+
+    const { data: freshTicket, error: freshTicketErr } = await supabase
+      .from("tickets")
+      .select("id, ticket_number, subject, category, status, created_at, updated_at")
+      .eq("id", ticketRow.id)
+      .single();
+
+    if (freshTicketErr || !freshTicket) {
+      console.error("[tickets POST fresh ticket]", freshTicketErr);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
+    }
+
+    const { data: threadMessages, error: threadErr } = await supabase
+      .from("ticket_messages")
+      .select("id, ticket_id, sender, message, media_urls, created_at, is_read")
+      .eq("ticket_id", ticketRow.id)
+      .order("created_at", { ascending: true });
+
+    if (threadErr) {
+      console.error("[tickets POST thread]", threadErr);
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
+    }
 
     void notifyAdminPush({
       title: "New support ticket",
-      body: `${ticket.ticket_number}: ${subject.trim()}`.slice(0, 140),
+      body: `${freshTicket.ticket_number}: ${subject.trim()}`.slice(0, 140),
       url: `${ADMIN_BASE_PATH}/tickets`,
-      tag: `ticket-${ticket.ticket_number}`,
+      tag: `ticket-${freshTicket.ticket_number}`,
     });
 
-    return NextResponse.json({ ticket });
+    return NextResponse.json({
+      ticket: freshTicket,
+      messages: threadMessages ?? [firstMessage],
+    });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
