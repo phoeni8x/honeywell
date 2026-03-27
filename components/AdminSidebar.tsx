@@ -40,7 +40,7 @@ const part4 = [
   { label: "Pickup points", href: `${ADMIN_BASE_PATH}/pickup-points`, icon: MapPin },
 ] as const;
 
-export function AdminSidebar() {
+export function AdminSidebar({ className, onNavigate }: { className?: string; onNavigate?: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") ?? "overview";
@@ -66,7 +66,12 @@ export function AdminSidebar() {
   }, [supabase]);
 
   return (
-    <aside className="flex w-full flex-col gap-1 border-b border-honey-border bg-surface p-4 dark:border-honey-border dark:bg-surface-dark md:w-56 md:border-b-0 md:border-r">
+    <aside
+      className={clsx(
+        "flex w-full flex-col gap-1 border-b border-honey-border bg-surface p-4 dark:border-honey-border dark:bg-surface-dark md:w-56 md:border-b-0 md:border-r",
+        className
+      )}
+    >
       <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-honey-muted">Honey Well</p>
       {tabs.map(({ id, label, icon: Icon, href }) => {
         const active = href.includes("?")
@@ -77,6 +82,7 @@ export function AdminSidebar() {
           <Link
             key={id}
             href={href}
+            onClick={onNavigate}
             className={clsx(
               "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition",
               active ? "bg-primary/15 text-primary" : "text-honey-muted hover:bg-honey-border/40 hover:text-honey-text"
@@ -101,6 +107,7 @@ export function AdminSidebar() {
           <Link
             key={href}
             href={href}
+            onClick={onNavigate}
             className={clsx(
               "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition",
               active ? "bg-primary/15 text-primary" : "text-honey-muted hover:bg-honey-border/40 hover:text-honey-text"
