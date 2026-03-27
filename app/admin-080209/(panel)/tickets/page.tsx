@@ -437,6 +437,38 @@ export default function AdminTicketsInboxPage() {
               </div>
 
               <div className="space-y-3 border-t border-honey-border pt-4">
+                <label className="flex items-center gap-2 text-sm text-honey-muted">
+                  <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />
+                  Internal note (not visible to customer, no push)
+                </label>
+                <div>
+                  <p className="text-xs text-honey-muted">Set status on send</p>
+                  <select
+                    className="mt-1 w-full max-w-xs rounded-lg border border-honey-border bg-bg px-2 py-1 text-sm"
+                    value={statusPick}
+                    onChange={(e) => setStatusPick(e.target.value)}
+                  >
+                    <option value="open">open</option>
+                    <option value="in_progress">in_progress</option>
+                    <option value="resolved">resolved</option>
+                    <option value="closed">closed</option>
+                  </select>
+                </div>
+                <textarea
+                  className="min-h-[100px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                  placeholder={internal ? "Internal note…" : "Reply to customer…"}
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => void sendReply()}
+                  disabled={sending || !reply.trim()}
+                  className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {sending ? "Sending…" : "Send"}
+                </button>
+
                 <div className="rounded-xl border border-honey-border/60 bg-bg/30 p-3">
                   <p className="text-xs font-semibold text-honey-text">Moderation</p>
                   <textarea
@@ -507,38 +539,6 @@ export default function AdminTicketsInboxPage() {
                     </button>
                   </div>
                 </div>
-
-                <label className="flex items-center gap-2 text-sm text-honey-muted">
-                  <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />
-                  Internal note (not visible to customer, no push)
-                </label>
-                <div>
-                  <p className="text-xs text-honey-muted">Set status on send</p>
-                  <select
-                    className="mt-1 w-full max-w-xs rounded-lg border border-honey-border bg-bg px-2 py-1 text-sm"
-                    value={statusPick}
-                    onChange={(e) => setStatusPick(e.target.value)}
-                  >
-                    <option value="open">open</option>
-                    <option value="in_progress">in_progress</option>
-                    <option value="resolved">resolved</option>
-                    <option value="closed">closed</option>
-                  </select>
-                </div>
-                <textarea
-                  className="min-h-[100px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-                  placeholder={internal ? "Internal note…" : "Reply to customer…"}
-                  value={reply}
-                  onChange={(e) => setReply(e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={() => void sendReply()}
-                  disabled={sending || !reply.trim()}
-                  className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                >
-                  {sending ? "Sending…" : "Send"}
-                </button>
               </div>
             </div>
           )}
