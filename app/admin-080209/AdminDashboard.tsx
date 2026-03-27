@@ -1125,7 +1125,6 @@ function OrdersSection({
               <th className="p-2">Total</th>
               <th className="p-2">Actions</th>
               <th className="p-2 whitespace-nowrap">Order</th>
-              <th className="p-2">Customer</th>
               <th className="p-2">Product</th>
               <th className="p-2">Qty</th>
               <th className="p-2">Time</th>
@@ -1156,7 +1155,6 @@ function OrdersSection({
                     {o.order_number ?? "—"}
                   </span>
                 </td>
-                <td className="p-2 font-mono text-xs">{truncateToken(o.customer_token)}</td>
                 <td className="p-2">{o.product?.name ?? "—"}</td>
                 <td className="p-2">{o.quantity}</td>
                 <td className="p-2 text-xs text-honey-muted">
