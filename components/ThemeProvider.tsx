@@ -1,15 +1,14 @@
 "use client";
 
-import { LS_THEME } from "@/lib/constants";
 import { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = "light" | "dark";
+type Theme = "dark";
 
 const ThemeContext = createContext<{
   theme: Theme;
   setTheme: (t: Theme) => void;
   mounted: boolean;
-}>({ theme: "light", setTheme: () => {}, mounted: false });
+}>({ theme: "dark", setTheme: () => {}, mounted: false });
 
 export function useTheme() {
   return useContext(ThemeContext);
@@ -18,27 +17,20 @@ export function useTheme() {
 function applyThemeToDom(theme: Theme) {
   const root = document.documentElement;
   root.setAttribute("data-theme", theme);
-  root.classList.remove("dark");
+  root.classList.add("dark");
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light");
+  const [theme] = useState<Theme>("dark");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem(LS_THEME) as Theme | null;
-    const prefersDark =
-      typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initial = stored === "dark" || stored === "light" ? stored : prefersDark ? "dark" : "light";
-    setThemeState(initial);
-    applyThemeToDom(initial);
+    applyThemeToDom("dark");
     setMounted(true);
   }, []);
 
-  const setTheme = (t: Theme) => {
-    setThemeState(t);
-    localStorage.setItem(LS_THEME, t);
-    applyThemeToDom(t);
+  const setTheme = () => {
+    applyThemeToDom("dark");
   };
 
   return (

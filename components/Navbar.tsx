@@ -7,7 +7,6 @@ import { ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ThemeToggle } from "./ThemeToggle";
 import { WalletNav } from "./WalletNav";
 
 const links = [
@@ -63,7 +62,6 @@ export function Navbar() {
           >
             <ShoppingBag className="h-5 w-5" />
           </Link>
-          <ThemeToggle />
           {userType && (
             <span
               className={clsx(

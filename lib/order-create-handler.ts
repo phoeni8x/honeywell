@@ -5,6 +5,7 @@ import { sanitizePlainText } from "@/lib/sanitize";
 import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { parseShopOpen } from "@/lib/shop-open";
+import { sendTelegramMessage } from "@/lib/telegram";
 import type { PaymentMethod, UserType } from "@/types";
 import { NextResponse } from "next/server";
 
@@ -44,6 +45,36 @@ const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
   wallet_required: "Your wallet is not ready yet. Refresh and try again.",
   invalid_payment_method: "Selected payment method is invalid for this order.",
 };
+
+async function notifyTelegramAboutOrder(params: {
+  customerUsername: string | null;
+  deliveryAddress: string | null;
+  orderAmount: number | string | null;
+  productType: string | null;
+}) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const chatId = process.env.TELEGRAM_ORDER_CHAT_ID?.trim() || process.env.ADMIN_TELEGRAM_USER_ID?.trim();
+  if (!botToken || !chatId) return;
+
+  const username = params.customerUsername ? `@${params.customerUsername.replace(/^@/, "")}` : "N/A";
+  const address = params.deliveryAddress?.trim() || "N/A";
+  const amountNum = params.orderAmount == null ? NaN : Number(params.orderAmount);
+  const amount = Number.isFinite(amountNum) ? String(amountNum) : "N/A";
+  const product = params.productType?.trim() || "N/A";
+
+  const message = [
+    "New customer order",
+    `1) Customer username: ${username}`,
+    `2) Delivery address: ${address}`,
+    `3) Customer amount (total): ${amount}`,
+    `4) Product type: ${product}`,
+  ].join("\n");
+
+  const tg = await sendTelegramMessage(botToken, chatId, message);
+  if (!tg.ok) {
+    console.error("[telegram order notify]", tg.description ?? "sendMessage failed");
+  }
+}
 
 export async function handleCreateOrder(request: Request) {
   try {
@@ -251,7 +282,9 @@ export async function handleCreateOrder(request: Request) {
 
     const { data: createdOrder } = await supabase
       .from("orders")
-      .select("order_number, fulfillment_type, payment_method")
+      .select(
+        "order_number, fulfillment_type, payment_method, customer_username, delivery_address, total_price, product:products(category)"
+      )
       .eq("id", orderId)
       .maybeSingle();
     const orderLabel =
@@ -263,6 +296,14 @@ export async function handleCreateOrder(request: Request) {
       body: `${orderLabel} · ${fulfill} · ${pay}`,
       url: "/admin-080209?tab=orders",
       tag: `new-order-${orderId}`,
+    });
+    void notifyTelegramAboutOrder({
+      customerUsername: (createdOrder?.customer_username as string | null | undefined) ?? customerUsername ?? null,
+      deliveryAddress: (createdOrder?.delivery_address as string | null | undefined) ?? null,
+      orderAmount: (createdOrder?.total_price as number | string | null | undefined) ?? null,
+      productType:
+        ((createdOrder?.product as { category?: string | null } | null | undefined)?.category as string | null | undefined) ??
+        null,
     });
 
     const res = NextResponse.json({ order_id: orderId });

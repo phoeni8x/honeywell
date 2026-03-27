@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/admin";
+import { sendTelegramMessage } from "@/lib/telegram";
 
 const DEMO_ORDER_MARKER = "__HW_DEMO__";
 const DEMO_TICKET_SUBJECT_PREFIX = "[HW Demo]";
@@ -19,6 +20,28 @@ export type SeedCustomerDemoResult =
  */
 export async function seedCustomerDemoData(customerToken: string): Promise<SeedCustomerDemoResult> {
   const supabase = createServiceClient();
+
+  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const chatId = process.env.TELEGRAM_ORDER_CHAT_ID?.trim() || process.env.ADMIN_TELEGRAM_USER_ID?.trim();
+  const demoCustomerUsername = `mock_customer_${customerToken.slice(0, 6)}`; // placeholder for testing telegram formatting
+  const demoDeliveryAddress = "Mock delivery address (seed demo)";
+
+  async function notifyTelegramAboutMockOrder(params: {
+    orderAmount: number;
+    productType: string | null;
+  }) {
+    if (!botToken || !chatId) return;
+    const product = params.productType?.trim() || "N/A";
+    const message = [
+      "New customer order",
+      `1) Customer username: @${demoCustomerUsername}`,
+      `2) Delivery address: ${demoDeliveryAddress}`,
+      `3) Customer amount (total): ${String(params.orderAmount)}`,
+      `4) Product type: ${product}`,
+    ].join("\n");
+    const tg = await sendTelegramMessage(botToken, chatId, message);
+    if (!tg.ok) console.error("[telegram mock order notify]", tg.description ?? "sendMessage failed");
+  }
 
   await supabase
     .from("orders")
@@ -41,7 +64,7 @@ export async function seedCustomerDemoData(customerToken: string): Promise<SeedC
 
   const { data: product, error: pErr } = await supabase
     .from("products")
-    .select("id, price_regular")
+    .select("id, price_regular, category")
     .eq("is_active", true)
     .limit(1)
     .maybeSingle();
@@ -51,6 +74,7 @@ export async function seedCustomerDemoData(customerToken: string): Promise<SeedC
   }
 
   const unit = Number(product.price_regular);
+  const productType = typeof product.category === "string" ? product.category : null;
   const now = new Date().toISOString();
 
   const { data: o1, error: e1 } = await supabase
@@ -73,6 +97,7 @@ export async function seedCustomerDemoData(customerToken: string): Promise<SeedC
     console.error("[seed demo order 1]", e1);
     return { ok: false, error: "order_insert_failed" };
   }
+  await notifyTelegramAboutMockOrder({ orderAmount: unit, productType });
 
   const { data: o2, error: e2 } = await supabase
     .from("orders")
@@ -94,6 +119,7 @@ export async function seedCustomerDemoData(customerToken: string): Promise<SeedC
     console.error("[seed demo order 2]", e2);
     return { ok: false, error: "order_insert_failed" };
   }
+  await notifyTelegramAboutMockOrder({ orderAmount: unit * 2, productType });
 
   const ordersOut = [
     { id: o1.id, order_number: o1.order_number, status: o1.status },

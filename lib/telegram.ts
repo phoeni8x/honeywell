@@ -36,6 +36,22 @@ export async function getChannelMembership(
 
 type TgOk = { ok: boolean; description?: string };
 
+export async function sendTelegramMessage(
+  botToken: string,
+  chatId: string | number,
+  text: string
+): Promise<TgOk> {
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+    }),
+  });
+  return (await res.json()) as TgOk;
+}
+
 export async function banChatMemberApi(
   botToken: string,
   chatId: string,
