@@ -1,13 +1,24 @@
 name: Deploy Vercel Preview
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
   workflow_dispatch:
 
 jobs:
+  push-noop:
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip preview deploy on push
+        run: echo "Preview deploy runs on pull_request or manual dispatch only."
+
   deploy-preview:
+    if: ${{ github.event_name != 'push' }}
     runs-on: ubuntu-latest
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
