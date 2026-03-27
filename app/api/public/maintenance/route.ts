@@ -16,8 +16,9 @@ export async function GET() {
       .select("value")
       .eq("key", "maintenance_mode")
       .maybeSingle();
+    const modeRaw = data?.value ?? "0";
     return NextResponse.json(
-      { maintenance_mode: parseEnabled(data?.value ?? "0") },
+      { maintenance_mode: parseEnabled(modeRaw) },
       { headers: { "Cache-Control": "no-store, max-age=0" } }
     );
   } catch {

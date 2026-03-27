@@ -48,7 +48,7 @@ export async function middleware(request: NextRequest) {
   const isUnderDevelopmentPage = path === "/under-development";
   const isTelegramWebhook = path.startsWith("/api/telegram/webhook");
 
-  const maintenanceGateEnabled = false;
+  const maintenanceGateEnabled = true;
   if (maintenanceGateEnabled && !isMaintenanceApi) {
     const maintenanceOn = await isMaintenanceMode(request);
     if (maintenanceOn && !isAdminUi && !isAdminApi && !isUnderDevelopmentPage && !isTelegramWebhook && !isDemoUi) {

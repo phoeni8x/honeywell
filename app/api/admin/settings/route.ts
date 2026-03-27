@@ -5,6 +5,15 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+function normalizeSettingValue(key: string, raw: unknown): string {
+  const v = typeof raw === "string" ? raw.trim() : raw == null ? "" : String(raw).trim();
+  if (key === "maintenance_mode") {
+    const low = v.toLowerCase();
+    return low === "1" || low === "true" || low === "on" || low === "yes" ? "1" : "0";
+  }
+  return v;
+}
+
 export async function POST(request: Request) {
   const admin = await requireAdminUser();
   if (!admin) {
@@ -12,36 +21,24 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json().catch(() => null)) as { key?: unknown; value?: unknown } | null;
-  const key = typeof body?.key === "string" ? body.key.trim() : "";
+  const key = typeof body?.key === "string" ? body.key.trim().toLowerCase() : "";
   if (!key) {
     return NextResponse.json({ error: "key required" }, { status: 400 });
   }
 
-  const value =
-    typeof body?.value === "string"
-      ? body.value
-      : body?.value == null
-      ? ""
-      : String(body.value);
+  const value = normalizeSettingValue(key, body?.value);
 
   const supabase = createServiceClient();
 
-  // Update all rows for this key first so legacy duplicate rows (if any) cannot
-  // keep returning stale values from other API reads.
-  const updateResult = await supabase.from("settings").update({ value }).eq("key", key).select("key");
-  if (updateResult.error) {
-    console.error("[admin settings POST:update]", updateResult.error);
+  const upsertResult = await supabase
+    .from("settings")
+    .upsert({ key, value }, { onConflict: "key" })
+    .select("key, value")
+    .maybeSingle();
+  if (upsertResult.error) {
+    console.error("[admin settings POST:upsert]", upsertResult.error);
     return NextResponse.json({ error: "Failed to save" }, { status: 500 });
   }
 
-  // Insert only when the key does not exist yet.
-  if (!updateResult.data || updateResult.data.length === 0) {
-    const insertResult = await supabase.from("settings").insert({ key, value });
-    if (insertResult.error) {
-      console.error("[admin settings POST:insert]", insertResult.error);
-      return NextResponse.json({ error: "Failed to save" }, { status: 500 });
-    }
-  }
-
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, key, value: upsertResult.data?.value ?? value });
 }
