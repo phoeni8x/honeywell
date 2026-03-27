@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const ADMIN_LOGIN_PATH = `${ADMIN_BASE_PATH}/login`;
+const DEMO_BASE_PATH = "/demo-080209";
 
 async function isMaintenanceMode(request: NextRequest): Promise<boolean> {
   try {
@@ -39,6 +40,8 @@ export async function middleware(request: NextRequest) {
   });
 
   const path = request.nextUrl.pathname;
+  const isDemoUi = path === DEMO_BASE_PATH || path.startsWith(`${DEMO_BASE_PATH}/`);
+  const demoInternalPath = isDemoUi ? path.slice(DEMO_BASE_PATH.length) || "/" : path;
   const isAdminUi = path.startsWith(ADMIN_BASE_PATH);
   const isAdminApi = path.startsWith("/api/admin");
   const isMaintenanceApi = path.startsWith("/api/public/maintenance");
@@ -47,7 +50,7 @@ export async function middleware(request: NextRequest) {
 
   if (!isMaintenanceApi) {
     const maintenanceOn = await isMaintenanceMode(request);
-    if (maintenanceOn && !isAdminUi && !isAdminApi && !isUnderDevelopmentPage && !isTelegramWebhook) {
+    if (maintenanceOn && !isAdminUi && !isAdminApi && !isUnderDevelopmentPage && !isTelegramWebhook && !isDemoUi) {
       if (path.startsWith("/api/")) {
         return NextResponse.json(
           { error: "Website under development. Please check back later." },
@@ -61,7 +64,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  const needsCustomerTokenParam = path === "/order-history" || path === "/pay/crypto";
+  const needsCustomerTokenParam = demoInternalPath === "/order-history" || demoInternalPath === "/pay/crypto";
   const hasOrderId = Boolean(request.nextUrl.searchParams.get("orderId")?.trim());
   if (needsCustomerTokenParam && !request.nextUrl.searchParams.get("ct")) {
     const cookieToken = request.cookies.get("honeywell_customer_token")?.value?.trim() ?? "";
@@ -78,6 +81,12 @@ export async function middleware(request: NextRequest) {
     redirectUrl.pathname = ADMIN_BASE_PATH;
     redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
+  }
+
+  if (isDemoUi) {
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = demoInternalPath === "/" ? "/home" : demoInternalPath;
+    return NextResponse.rewrite(rewriteUrl);
   }
 
   if (!isAdminUi && !isAdminApi) {

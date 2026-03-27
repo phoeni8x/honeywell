@@ -1120,36 +1120,45 @@ function OrdersSection({
         <table className="w-full min-w-[800px] text-left text-sm">
           <thead className="border-b border-honey-border bg-bg/80 text-xs uppercase text-honey-muted">
             <tr>
+              <th className="p-2">Username</th>
+              <th className="p-2">Fulfillment</th>
+              <th className="p-2">Total</th>
+              <th className="p-2">Actions</th>
               <th className="p-2 whitespace-nowrap">Order</th>
               <th className="p-2">Customer</th>
-              <th className="p-2">Username</th>
               <th className="p-2">Product</th>
               <th className="p-2">Qty</th>
-              <th className="p-2">Total</th>
               <th className="p-2">Time</th>
               <th className="p-2">Points Used</th>
-              <th className="p-2">Fulfillment</th>
               <th className="p-2">Type</th>
               <th className="p-2">Pay</th>
               <th className="p-2">Status</th>
-              <th className="p-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((o) => (
               <tr key={o.id} className="border-b border-honey-border/60 align-top">
+                <td className="p-2 text-xs">
+                  {o.customer_username ? `@${o.customer_username}` : "—"}
+                </td>
+                <td className="p-2 text-xs">
+                  {o.fulfillment_type ?? "—"}
+                  {o.fulfillment_type === "delivery" && o.delivery_address && (
+                    <span className="mt-1 block max-w-[140px] text-honey-muted">{o.delivery_address}</span>
+                  )}
+                </td>
+                <td className="p-2">{formatPrice(Number(o.total_price), shopCurrency)}</td>
+                <td className="p-2">
+                  <div className="flex flex-col gap-1">{fulfillmentActions(o)}</div>
+                </td>
                 <td className="p-2">
                   <span className="font-mono text-xs font-bold text-primary whitespace-nowrap">
                     {o.order_number ?? "—"}
                   </span>
                 </td>
                 <td className="p-2 font-mono text-xs">{truncateToken(o.customer_token)}</td>
-                <td className="p-2 text-xs">
-                  {o.customer_username ? `@${o.customer_username}` : "—"}
-                </td>
                 <td className="p-2">{o.product?.name ?? "—"}</td>
                 <td className="p-2">{o.quantity}</td>
-                <td className="p-2">{formatPrice(Number(o.total_price), shopCurrency)}</td>
                 <td className="p-2 text-xs text-honey-muted">
                   <span className="block font-medium text-honey-text">
                     {new Date(o.created_at).toLocaleDateString("en-GB", {
@@ -1167,18 +1176,9 @@ function OrdersSection({
                 <td className="p-2 text-xs">
                   {Number(o.points_used ?? 0) > 0 ? `${Number(o.points_used)} pts` : "No"}
                 </td>
-                <td className="p-2 text-xs">
-                  {o.fulfillment_type ?? "—"}
-                  {o.fulfillment_type === "delivery" && o.delivery_address && (
-                    <span className="mt-1 block max-w-[140px] text-honey-muted">{o.delivery_address}</span>
-                  )}
-                </td>
                 <td className="p-2">{o.user_type}</td>
                 <td className="p-2">{o.payment_method ?? "—"}</td>
                 <td className="p-2 text-xs">{ORDER_STATUS_LABELS[o.status] ?? o.status}</td>
-                <td className="p-2">
-                  <div className="flex flex-col gap-1">{fulfillmentActions(o)}</div>
-                </td>
               </tr>
             ))}
           </tbody>

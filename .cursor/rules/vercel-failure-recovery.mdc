@@ -5,16 +5,17 @@ alwaysApply: true
 
 # Vercel Failure Recovery Loop
 
-If any production deploy fails, do not stop at the first error. Run a fix-and-retry loop until deployment succeeds or a hard external blocker is confirmed.
+After every production deploy attempt, always check deployment status and do not stop until the deployment is successful (`READY`) or a hard external blocker is confirmed.
 
 ## Required flow
 
 1. Run production deploy from repo root: `npx vercel --prod --yes`.
-2. If it fails, capture the exact failing stage and first actionable error.
-3. Apply the minimal code/config fix for that root cause.
-4. Re-run lint/type/build checks locally when relevant.
-5. Re-run deploy.
-6. Repeat until Vercel reports **READY** and production alias is updated.
+2. Immediately check deployment status (`READY`/error) from deploy output and/or `npx vercel inspect <deployment-url>`.
+3. If not `READY`, capture the exact failing stage and first actionable error.
+4. Apply the minimal code/config fix for that root cause.
+5. Re-run lint/type/build checks locally when relevant.
+6. Re-run deploy, then re-check status.
+7. Repeat until Vercel reports **READY** and production alias is updated.
 
 ## Common failure classes to check first
 
