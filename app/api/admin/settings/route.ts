@@ -1,7 +1,6 @@
-import { requireAdminUser } from "@/lib/admin-auth";
-import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
+import { requireAdmin } from "@/lib/admin-auth";
 import { createServiceClient } from "@/lib/supabase/admin";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +13,9 @@ function normalizeSettingValue(key: string, raw: unknown): string {
   return v;
 }
 
-export async function POST(request: Request) {
-  const admin = await requireAdminUser();
-  if (!admin) {
-    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
-  }
+export async function POST(request: NextRequest) {
+  const authError = await requireAdmin(request);
+  if (authError) return authError;
 
   const body = (await request.json().catch(() => null)) as { key?: unknown; value?: unknown } | null;
   const key = typeof body?.key === "string" ? body.key.trim().toLowerCase() : "";
