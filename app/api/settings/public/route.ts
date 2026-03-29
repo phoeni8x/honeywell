@@ -34,6 +34,27 @@ const KEYS = [
   "support_enabled",
 ] as const;
 
+function parseTruthySetting(v: string | null | undefined): boolean {
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "1" || s === "true" || s === "on" || s === "yes";
+}
+
+/** Merge rows so duplicate keys cannot hide an enabled maintenance or support flag. */
+function settingsMapFromRows(rows: { key: string; value: string | null }[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const r of rows) {
+    const k = r.key;
+    const v = r.value ?? "";
+    if (k === "maintenance_mode" || k === "support_enabled") {
+      const on = parseTruthySetting(v) || parseTruthySetting(map[k]);
+      map[k] = on ? "1" : "0";
+    } else {
+      map[k] = v;
+    }
+  }
+  return map;
+}
+
 function emptyPayload() {
   const shopAddress = "";
   const mapsQuery = shopAddress;
@@ -80,7 +101,7 @@ export async function GET() {
       return NextResponse.json(emptyPayload(), { headers: NO_STORE_HEADERS });
     }
 
-    const map = Object.fromEntries((data ?? []).map((r) => [r.key, r.value])) as Record<string, string>;
+    const map = settingsMapFromRows(data ?? []);
 
     const shopAddress = map.shop_address ?? "";
     const mapsQuery = map.maps_query ?? shopAddress;
