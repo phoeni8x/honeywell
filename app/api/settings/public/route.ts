@@ -1,3 +1,4 @@
+import { getMaintenanceModeViaRest } from "@/lib/maintenance-mode";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -102,6 +103,11 @@ export async function GET() {
     }
 
     const map = settingsMapFromRows(data ?? []);
+
+    const maintenanceFromRest = await getMaintenanceModeViaRest();
+    if (maintenanceFromRest !== null) {
+      map.maintenance_mode = maintenanceFromRest ? "1" : "0";
+    }
 
     const shopAddress = map.shop_address ?? "";
     const mapsQuery = map.maps_query ?? shopAddress;
