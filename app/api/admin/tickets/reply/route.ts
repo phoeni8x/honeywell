@@ -83,7 +83,7 @@ export async function POST(request: Request) {
       void notifyCustomerPush(ticket.customer_token, {
         title: "Reply from Honey Well",
         body: message.trim().slice(0, 140),
-        url: `/support/${encodeURIComponent(ticket.ticket_number)}`,
+        url: "/home",
         tag: `reply-${ticketId}`,
       });
     }

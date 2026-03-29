@@ -4,6 +4,7 @@ import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
 import { ORDER_STATUS_LABELS } from "@/lib/helpers";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
+import { getOrderIssueTelegramUrl } from "@/lib/support-telegram";
 import type { OrderWithProduct } from "@/types";
 import clsx from "clsx";
 import { ExternalLink, LifeBuoy, MapPin, Navigation, Truck } from "lucide-react";
@@ -308,20 +309,24 @@ export function OrderCard({
                 <p className="mt-2 text-xs text-honey-muted">
                   Need to cancel?{" "}
                   <a
-                    href={`/support/new?orderId=${encodeURIComponent(order.id)}`}
+                    href={getOrderIssueTelegramUrl(order.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="text-primary underline"
                   >
                     Contact support
                   </a>
                 </p>
               )}
-            <Link
-              href={`/support/new?orderId=${encodeURIComponent(order.id)}`}
+            <a
+              href={getOrderIssueTelegramUrl(order.id)}
+              target="_blank"
+              rel="noopener noreferrer"
               className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
             >
               <LifeBuoy className="h-3.5 w-3.5" />
-              Report an issue with this order
-            </Link>
+              Report an issue with this order (Telegram)
+            </a>
           </div>
         </div>
 

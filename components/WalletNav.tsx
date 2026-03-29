@@ -2,6 +2,7 @@
 
 import { useWallet } from "@/lib/WalletContext";
 import { LS_MY_REFERRAL_CODE } from "@/lib/constants";
+import { getSupportTelegramUrl } from "@/lib/support-telegram";
 import { LEVEL_META } from "@/lib/levels";
 import clsx from "clsx";
 import { ChevronDown, Coins, Sparkles } from "lucide-react";
@@ -105,13 +106,15 @@ export function WalletNav() {
               >
                 Referrals
               </Link>
-              <Link
-                href="/support"
+              <a
+                href={getSupportTelegramUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="rounded-lg px-2 py-1.5 text-honey-text hover:bg-honey-border/30"
                 onClick={() => setOpen(false)}
               >
-                Support
-              </Link>
+                Support (Telegram)
+              </a>
             </div>
             <div className="mt-3 flex flex-col gap-2">
               <Link

@@ -5,6 +5,13 @@ import { NextResponse, type NextRequest } from "next/server";
 const ADMIN_LOGIN_PATH = `${ADMIN_BASE_PATH}/login`;
 const DEMO_BASE_PATH = "/demo-080209";
 
+function supportTelegramUrl(): string {
+  const u = process.env.NEXT_PUBLIC_SUPPORT_TELEGRAM_URL?.trim();
+  if (u) return u.replace(/\/$/, "");
+  const bot = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, "") ?? "Honeyywell_bot";
+  return `https://t.me/${bot}`;
+}
+
 async function isMaintenanceMode(request: NextRequest): Promise<boolean> {
   try {
     const url = request.nextUrl.clone();
@@ -40,6 +47,11 @@ export async function middleware(request: NextRequest) {
   });
 
   const path = request.nextUrl.pathname;
+
+  if (path === "/support" || path.startsWith("/support/")) {
+    return NextResponse.redirect(supportTelegramUrl(), 302);
+  }
+
   const isDemoUi = path === DEMO_BASE_PATH || path.startsWith(`${DEMO_BASE_PATH}/`);
   const demoInternalPath = isDemoUi ? path.slice(DEMO_BASE_PATH.length) || "/" : path;
   const isAdminUi = path.startsWith(ADMIN_BASE_PATH);

@@ -1,6 +1,7 @@
 "use client";
 
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
+import { getSupportTelegramUrl } from "@/lib/support-telegram";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -42,7 +43,7 @@ export default function SeedDemoPage() {
         setMessage(data.error ?? "Request failed.");
         return;
       }
-      setMessage("Demo data created for this browser. Open My orders and Support and reload.");
+      setMessage("Demo data created for this browser. Open My orders and reload.");
       const lines: string[] = [];
       if (data.orders?.length) {
         lines.push(
@@ -110,9 +111,9 @@ export default function SeedDemoPage() {
           My orders
         </Link>
         {" · "}
-        <Link href="/support" className="text-primary underline">
-          Support
-        </Link>
+        <a href={getSupportTelegramUrl()} className="text-primary underline" target="_blank" rel="noopener noreferrer">
+          Telegram support
+        </a>
         {" · "}
         <Link href="/account/orders" className="text-primary underline">
           Order history (paginated)

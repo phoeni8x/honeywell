@@ -62,7 +62,7 @@ export async function POST(request: Request) {
         body: reason
           ? `Order ${orderNumber} was not approved: ${reason.slice(0, 120)}`
           : `Order ${orderNumber} was not approved. Contact support if you have questions.`,
-        url: "/support/new",
+        url: "/home",
         tag: `reject-${orderId}`,
       });
     }

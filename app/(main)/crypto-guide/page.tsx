@@ -1,7 +1,7 @@
 "use client";
 
 import { coinLabelFromActive } from "@/lib/crypto-coins";
-import Link from "next/link";
+import { getTelegramStartUrl } from "@/lib/support-telegram";
 import { useEffect, useState } from "react";
 
 export default function CryptoGuidePage() {
@@ -141,7 +141,7 @@ export default function CryptoGuidePage() {
           <details className="rounded-xl border border-honey-border bg-surface p-4 dark:bg-surface-dark">
             <summary className="cursor-pointer font-medium text-honey-text">What if I send the wrong amount?</summary>
             <p className="mt-2 text-sm text-honey-muted">
-              Open a support ticket immediately with your transaction hash — Support → New ticket.
+              Message us on Telegram immediately with your transaction hash (use the floating support button).
             </p>
           </details>
           <details className="rounded-xl border border-honey-border bg-surface p-4 dark:bg-surface-dark">
@@ -151,12 +151,14 @@ export default function CryptoGuidePage() {
         </div>
       </section>
 
-      <Link
-        href="/support/new?subject=Crypto%20Payment%20Help"
+      <a
+        href={getTelegramStartUrl("crypto_help")}
+        target="_blank"
+        rel="noopener noreferrer"
         className="inline-flex rounded-full bg-primary px-8 py-3 text-sm font-semibold text-white"
       >
-        Contact support
-      </Link>
+        Contact support on Telegram
+      </a>
     </div>
   );
 }

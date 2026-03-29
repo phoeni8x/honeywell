@@ -1,5 +1,6 @@
 import { CustomerBootstrap } from "@/components/CustomerBootstrap";
 import { RegisterServiceWorker } from "@/components/RegisterServiceWorker";
+import { SupportTelegramBubble } from "@/components/SupportTelegramBubble";
 import { ShopCurrencyProvider } from "@/components/ShopCurrencyProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { WalletProvider } from "@/lib/WalletContext";
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-bg font-body">
         <ThemeProvider>
           <RegisterServiceWorker />
+          <SupportTelegramBubble />
           <CustomerBootstrap />
           <WalletProvider>
             <ShopCurrencyProvider>{children}</ShopCurrencyProvider>
