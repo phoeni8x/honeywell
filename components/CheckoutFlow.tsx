@@ -61,14 +61,9 @@ export function CheckoutFlow({
   const [deliveryLat, setDeliveryLat] = useState<number | null>(null);
   const [deliveryLon, setDeliveryLon] = useState<number | null>(null);
 
-  const [pointsToUse, setPointsToUse] = useState(0);
-  const [beesToUse, setBeesToUse] = useState(0);
   const [remainderPay, setRemainderPay] = useState<"revolut" | "crypto">("crypto");
   /** Delivery + Revolut remainder: pay on delivery vs pay now (admin link). */
   const [revolutPayTiming, setRevolutPayTiming] = useState<"pay_now" | "pay_on_delivery">("pay_on_delivery");
-  const [walletPoints, setWalletPoints] = useState(0);
-  const [walletBees, setWalletBees] = useState(0);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,23 +71,12 @@ export function CheckoutFlow({
   const baseTotal = unit * quantity;
   const isPreorder = Boolean(product.allow_preorder) && Number(product.stock_quantity) < quantity;
 
-  const remainderHuf = useMemo(() => {
-    let r = baseTotal - pointsToUse - beesToUse * 10000;
-    if (r < 0) r = 0;
-    return r;
-  }, [baseTotal, pointsToUse, beesToUse]);
-  const pointsAllowedForOrder = baseTotal >= 50_000;
+  const remainderHuf = useMemo(() => baseTotal, [baseTotal]);
 
   const loadContext = useCallback(async () => {
-    const [pkRes, wRes] = await Promise.all([
-      fetch("/api/shop-locations/pickup-points"),
-      fetch("/api/wallet/summary", { headers: { "x-customer-token": getOrCreateCustomerToken() } }),
-    ]);
+    const [pkRes] = await Promise.all([fetch("/api/shop-locations/pickup-points")]);
     const pk = await pkRes.json();
-    const w = await wRes.json();
     setPickupPoints(pk.locations ?? []);
-    setWalletPoints(typeof w.points === "number" ? w.points : 0);
-    setWalletBees(typeof w.bees === "number" ? w.bees : 0);
   }, []);
 
   useEffect(() => {
@@ -106,11 +90,7 @@ export function CheckoutFlow({
 
   useEffect(() => {
     if (!open) return;
-    if (userType === "guest") {
-      setPointsToUse(0);
-      setBeesToUse(0);
-      setRemainderPay("crypto");
-    }
+    if (userType === "guest") setRemainderPay("crypto");
   }, [open, userType]);
 
   useEffect(() => {
@@ -194,11 +174,7 @@ export function CheckoutFlow({
   }
 
   function paymentMethodForSubmit(): string {
-    if (remainderHuf <= 0.01) {
-      if (beesToUse > 0 && pointsToUse === 0) return "bees";
-      if (pointsToUse > 0) return "points";
-      return "crypto";
-    }
+    if (remainderHuf <= 0.01) return "crypto";
     return remainderPay;
   }
 
@@ -244,8 +220,8 @@ export function CheckoutFlow({
         user_type: userType,
         payment_method: pm,
         fulfillment_type: fulfillment,
-        bees_used: beesToUse,
-        points_used: pointsToUse,
+        bees_used: 0,
+        points_used: 0,
         ...(referred_by ? { referred_by } : {}),
         ...(customer_username ? { customer_username } : {}),
       };
@@ -544,58 +520,10 @@ export function CheckoutFlow({
                 Pre-order requires payment now. Pay-on-delivery is not available for pre-orders.
               </div>
             )}
-            {userType === "guest" ? (
-              <p className="text-sm text-honey-muted">
-                Order total {formatPrice(baseTotal)}. Guests can use <span className="font-medium text-honey-text">Points and Bees</span>{" "}
-                (Points require minimum order {formatPrice(50_000)}), and pay any remainder with{" "}
-                <span className="font-medium text-honey-text">cryptocurrency</span>.
-              </p>
-            ) : (
-              <p className="text-sm text-honey-muted">
-                Order total {formatPrice(baseTotal)} · Wallet: {walletPoints} pts · {walletBees.toFixed(2)} Bees.
-                After Points/Bees, you can pay the remainder with <span className="font-medium text-honey-text">Revolut</span>{" "}
-                or <span className="font-medium text-honey-text">cryptocurrency</span> — choose below.
-              </p>
-            )}
-            {userType && (
-              <>
-                <div>
-                  <label className="text-xs font-semibold text-honey-muted">Points to apply (1 pt = 1 HUF)</label>
-                  {!pointsAllowedForOrder && (
-                    <p className="mt-1 text-xs text-honey-muted">
-                      Points can be used only for orders of at least {formatPrice(50_000)}.
-                    </p>
-                  )}
-                  <input
-                    type="number"
-                    min={0}
-                    max={pointsAllowedForOrder ? Math.min(walletPoints, Math.floor(baseTotal)) : 0}
-                    className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-                    value={pointsToUse || ""}
-                    disabled={!pointsAllowedForOrder}
-                    onChange={(e) =>
-                      setPointsToUse(
-                        pointsAllowedForOrder ? Math.max(0, parseInt(e.target.value, 10) || 0) : 0
-                      )
-                    }
-                  />
-                </div>
-                <div>
-                  <div>
-                    <label className="text-xs font-semibold text-honey-muted">Bees to apply (1 Bee = 10,000 HUF)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.0001}
-                      max={walletBees}
-                      className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-                      value={beesToUse || ""}
-                      onChange={(e) => setBeesToUse(Math.max(0, parseFloat(e.target.value) || 0))}
-                    />
-                  </div>
-                </div>
-              </>
-            )}
+            <p className="text-sm text-honey-muted">
+              Order total {formatPrice(baseTotal)}. Choose how you want to pay:
+              {userType === "team_member" ? " Revolut or cryptocurrency." : " cryptocurrency."}
+            </p>
             {remainderHuf > 0.01 && (
               <div>
                 <p className="mb-2 text-xs font-semibold text-honey-muted">Pay remaining {formatPrice(remainderHuf)} with</p>
@@ -707,7 +635,7 @@ export function CheckoutFlow({
                   </li>
                 )}
               <li className="flex justify-between border-t border-honey-border pt-2 font-semibold text-honey-text">
-                <span>Remaining after Bees/Points</span>
+                <span>Total</span>
                 <span>{formatPrice(remainderHuf)}</span>
               </li>
             </ul>

@@ -7,7 +7,6 @@ import { ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { WalletNav } from "./WalletNav";
 
 const links = [
   { href: "/home", label: "Home" },
@@ -15,7 +14,6 @@ const links = [
   { href: "/order-history", label: "My Orders" },
   { href: "/crypto-rates", label: "Rates" },
   { href: "/crypto-guide", label: "Crypto guide" },
-  { href: "/bees/buy", label: "Bees" },
 ];
 
 export function Navbar() {
@@ -53,7 +51,6 @@ export function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2 md:gap-3">
-          <WalletNav />
           <Link
             href="/shop"
             className="hidden rounded border border-primary/50 p-2 text-primary transition hover:bg-primary/15 sm:inline-flex"

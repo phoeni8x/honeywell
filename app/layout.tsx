@@ -3,7 +3,6 @@ import { RegisterServiceWorker } from "@/components/RegisterServiceWorker";
 import { SupportTelegramBubble } from "@/components/SupportTelegramBubble";
 import { ShopCurrencyProvider } from "@/components/ShopCurrencyProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { WalletProvider } from "@/lib/WalletContext";
 import type { Metadata, Viewport } from "next";
 import { Caveat, Cinzel, DM_Sans } from "next/font/google";
 import Script from "next/script";
@@ -53,9 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <RegisterServiceWorker />
           <SupportTelegramBubble />
           <CustomerBootstrap />
-          <WalletProvider>
-            <ShopCurrencyProvider>{children}</ShopCurrencyProvider>
-          </WalletProvider>
+          <ShopCurrencyProvider>{children}</ShopCurrencyProvider>
         </ThemeProvider>
         <script
           dangerouslySetInnerHTML={{

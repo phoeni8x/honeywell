@@ -181,33 +181,6 @@ export function HomePageInner() {
         </div>
       </section>
 
-      <section className="rounded-3xl border-2 border-honey-border bg-surface px-6 py-8 dark:bg-surface-dark md:px-8">
-        <h2 className="font-display text-3xl text-honey-text">How points work (Guests &amp; Team)</h2>
-        <p className="mt-2 text-sm text-honey-muted">
-          Both guests and team members can use points at checkout. Points are wallet credit: <span className="font-semibold text-honey-text">1 point = 1 HUF</span>.
-        </p>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-honey-border bg-bg/50 p-4 dark:bg-black/20">
-            <p className="text-xs font-semibold uppercase tracking-wide text-honey-muted">Earning rules</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-honey-muted">
-              <li>You earn points only when an order is completed.</li>
-              <li>You earn <span className="font-semibold text-honey-text">800 points per full 10,000 HUF</span>.</li>
-              <li>Example: 50,000 HUF completed order = 4,000 points.</li>
-              <li>No points are earned on orders where points were already used.</li>
-            </ul>
-          </div>
-          <div className="rounded-2xl border border-honey-border bg-bg/50 p-4 dark:bg-black/20">
-            <p className="text-xs font-semibold uppercase tracking-wide text-honey-muted">Usage rules</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-honey-muted">
-              <li>Points can be applied only when the order total is at least 50,000 HUF.</li>
-              <li>Guests and team members can both spend points.</li>
-              <li>Any remaining amount after points is paid with your selected payment method at checkout.</li>
-              <li>Balances and history are visible in your account pages.</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
       <section className="rounded-3xl border-2 border-amber-300 bg-amber-50/70 px-6 py-8 dark:border-amber-500/40 dark:bg-amber-900/10 md:px-8">
         <h2 className="font-display text-3xl text-honey-text">Terms &amp; conditions</h2>
         <p className="mt-2 text-sm text-honey-muted">
