@@ -60,7 +60,8 @@ export async function middleware(request: NextRequest) {
   const isUnderDevelopmentPage = path === "/under-development";
   const isTelegramWebhook = path.startsWith("/api/telegram/webhook");
 
-  const maintenanceGateEnabled = true;
+  /** Set `MAINTENANCE_GATE_ENABLED=false` on Vercel to serve the full site regardless of DB `settings.maintenance_mode`. */
+  const maintenanceGateEnabled = process.env.MAINTENANCE_GATE_ENABLED !== "false";
   if (maintenanceGateEnabled && !isMaintenanceApi) {
     const maintenanceOn = await isMaintenanceMode(request);
     if (maintenanceOn && !isAdminUi && !isAdminApi && !isUnderDevelopmentPage && !isTelegramWebhook && !isDemoUi) {
