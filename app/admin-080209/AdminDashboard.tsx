@@ -319,6 +319,11 @@ function ProductsSection({
     .map((id) => categories.find((c) => c.id === id))
     .filter((c): c is ProductCategoryRow => Boolean(c));
 
+  function reportProductsError(context: string, error: unknown): void {
+    console.error(`[admin products:${context}]`, error);
+    alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+  }
+
   useEffect(() => {
     setCategoryOrderIds(categories.map((c) => c.id));
   }, [categories]);
@@ -344,13 +349,25 @@ function ProductsSection({
       is_active: editing.is_active ?? true,
       allow_preorder: Boolean(editing.allow_preorder),
     };
-    if (editing.id) {
-      await supabase.from("products").update(payload).eq("id", editing.id);
-    } else {
-      await supabase.from("products").insert(payload);
+    try {
+      if (editing.id) {
+        const { error } = await supabase.from("products").update(payload).eq("id", editing.id);
+        if (error) {
+          reportProductsError("saveProduct:update", error);
+          return;
+        }
+      } else {
+        const { error } = await supabase.from("products").insert(payload);
+        if (error) {
+          reportProductsError("saveProduct:insert", error);
+          return;
+        }
+      }
+      setEditing(null);
+      onRefresh();
+    } catch (error) {
+      reportProductsError("saveProduct:unexpected", error);
     }
-    setEditing(null);
-    onRefresh();
   }
 
   async function addCategory() {
@@ -359,59 +376,99 @@ function ProductsSection({
     const slug = slugifyCategoryName(name);
     if (!slug) return;
     setCategorySaving("add");
-    await supabase
-      .from("product_categories")
-      .upsert(
-        {
-          slug,
-          name,
-          is_active: true,
-          sort_order: categories.length + 1,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "slug" }
-      );
-    setNewCategoryName("");
-    setCategorySaving(null);
-    onRefresh();
+    try {
+      const { error } = await supabase
+        .from("product_categories")
+        .upsert(
+          {
+            slug,
+            name,
+            is_active: true,
+            sort_order: categories.length + 1,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "slug" }
+        );
+      if (error) {
+        reportProductsError("addCategory", error);
+        return;
+      }
+      setNewCategoryName("");
+      onRefresh();
+    } catch (error) {
+      reportProductsError("addCategory:unexpected", error);
+    } finally {
+      setCategorySaving(null);
+    }
   }
 
   async function toggleCategory(cat: ProductCategoryRow, isActive: boolean) {
     setCategorySaving(cat.id + String(isActive));
-    await supabase
-      .from("product_categories")
-      .update({ is_active: isActive, updated_at: new Date().toISOString() })
-      .eq("id", cat.id);
-    setCategorySaving(null);
-    onRefresh();
+    try {
+      const { error } = await supabase
+        .from("product_categories")
+        .update({ is_active: isActive, updated_at: new Date().toISOString() })
+        .eq("id", cat.id);
+      if (error) {
+        reportProductsError("toggleCategory", error);
+        return;
+      }
+      onRefresh();
+    } catch (error) {
+      reportProductsError("toggleCategory:unexpected", error);
+    } finally {
+      setCategorySaving(null);
+    }
   }
 
   async function renameCategory(cat: ProductCategoryRow) {
     const next = prompt("Rename category", cat.name)?.trim();
     if (!next || next === cat.name) return;
     setCategorySaving("rename" + cat.id);
-    await supabase
-      .from("product_categories")
-      .update({ name: next, updated_at: new Date().toISOString() })
-      .eq("id", cat.id);
-    setCategorySaving(null);
-    onRefresh();
+    try {
+      const { error } = await supabase
+        .from("product_categories")
+        .update({ name: next, updated_at: new Date().toISOString() })
+        .eq("id", cat.id);
+      if (error) {
+        reportProductsError("renameCategory", error);
+        return;
+      }
+      onRefresh();
+    } catch (error) {
+      reportProductsError("renameCategory:unexpected", error);
+    } finally {
+      setCategorySaving(null);
+    }
   }
 
   async function deleteCategory(cat: ProductCategoryRow) {
     if (!confirm(`Delete category "${cat.name}"?`)) return;
-    const { count } = await supabase
+    const { count, error: countError } = await supabase
       .from("products")
       .select("id", { count: "exact", head: true })
       .eq("category", cat.slug);
+    if (countError) {
+      reportProductsError("deleteCategory:count", countError);
+      return;
+    }
     if ((count ?? 0) > 0) {
       alert("Cannot delete this category because products are still using it.");
       return;
     }
     setCategorySaving("del" + cat.id);
-    await supabase.from("product_categories").delete().eq("id", cat.id);
-    setCategorySaving(null);
-    onRefresh();
+    try {
+      const { error } = await supabase.from("product_categories").delete().eq("id", cat.id);
+      if (error) {
+        reportProductsError("deleteCategory:delete", error);
+        return;
+      }
+      onRefresh();
+    } catch (error) {
+      reportProductsError("deleteCategory:unexpected", error);
+    } finally {
+      setCategorySaving(null);
+    }
   }
 
   function moveCategory(dragId: string, targetId: string) {
@@ -443,21 +500,31 @@ function ProductsSection({
 
   async function saveCategoryOrder() {
     setCategorySaving("order");
-    const payload = categoryOrderIds.map((id, idx) => ({
-      id,
-      sort_order: idx + 1,
-      updated_at: new Date().toISOString(),
-    }));
-    await Promise.all(
-      payload.map((p) =>
-        supabase
-          .from("product_categories")
-          .update({ sort_order: p.sort_order, updated_at: p.updated_at })
-          .eq("id", p.id)
-      )
-    );
-    setCategorySaving(null);
-    onRefresh();
+    try {
+      const payload = categoryOrderIds.map((id, idx) => ({
+        id,
+        sort_order: idx + 1,
+        updated_at: new Date().toISOString(),
+      }));
+      const results = await Promise.all(
+        payload.map((p) =>
+          supabase
+            .from("product_categories")
+            .update({ sort_order: p.sort_order, updated_at: p.updated_at })
+            .eq("id", p.id)
+        )
+      );
+      const failed = results.find((r) => r.error);
+      if (failed?.error) {
+        reportProductsError("saveCategoryOrder", failed.error);
+        return;
+      }
+      onRefresh();
+    } catch (error) {
+      reportProductsError("saveCategoryOrder:unexpected", error);
+    } finally {
+      setCategorySaving(null);
+    }
   }
 
   async function uploadImage(file: File, productId: string) {
@@ -471,7 +538,11 @@ function ProductsSection({
     const {
       data: { publicUrl },
     } = supabase.storage.from("products").getPublicUrl(path);
-    await supabase.from("products").update({ image_url: publicUrl }).eq("id", productId);
+    const { error: updateError } = await supabase.from("products").update({ image_url: publicUrl }).eq("id", productId);
+    if (updateError) {
+      reportProductsError("uploadImage:update", updateError);
+      return;
+    }
     onRefresh();
   }
 
