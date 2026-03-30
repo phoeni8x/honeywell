@@ -274,7 +274,7 @@ export default function AdminDashboard() {
       {tab === "support" && !loading && <SupportTicketsSection />}
 
       {tab === "settings" && !loading && (
-        <SettingsSection settings={settings} onSave={upsertSetting} />
+        <SettingsSection settings={settings} />
       )}
     </div>
   );
@@ -1434,10 +1434,8 @@ function AnnouncementsSection({
 
 function SettingsSection({
   settings,
-  onSave,
 }: {
   settings: Record<string, string>;
-  onSave: (k: string, v: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<Record<string, string>>(settings);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -1447,15 +1445,24 @@ function SettingsSection({
     setDraft(settings);
   }, [settings]);
 
-  async function saveOne(key: string) {
+  async function saveSetting(key: string, value: string) {
     setSavingKey(key);
     try {
-      await onSave(key, draft[key] ?? "");
-      setSavedKey(key);
-      window.setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1800);
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value }),
+      });
+      if (res.ok) {
+        alert("Saved!");
+        setSavedKey(key);
+        window.setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1800);
+      } else {
+        alert("Failed to save: " + res.status);
+      }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : PUBLIC_ERROR_TRY_AGAIN_OR_GUEST;
-      alert(msg);
+      alert("Error: " + e);
     } finally {
       setSavingKey(null);
     }
@@ -1501,7 +1508,7 @@ function SettingsSection({
           <button
             type="button"
             disabled={savingKey === "shop_currency"}
-            onClick={() => saveOne("shop_currency")}
+            onClick={() => saveSetting("shop_currency", draft.shop_currency ?? "HUF")}
             className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {savingKey === "shop_currency" ? "Saving..." : "Save"}
@@ -1526,7 +1533,7 @@ function SettingsSection({
           <button
             type="button"
             disabled={savingKey === "shop_open"}
-            onClick={() => saveOne("shop_open")}
+            onClick={() => saveSetting("shop_open", draft.shop_open ?? "1")}
             className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {savingKey === "shop_open" ? "Saving..." : "Save"}
@@ -1551,7 +1558,7 @@ function SettingsSection({
           <button
             type="button"
             disabled={savingKey === "support_enabled"}
-            onClick={() => saveOne("support_enabled")}
+            onClick={() => saveSetting("support_enabled", draft.support_enabled ?? "1")}
             className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {savingKey === "support_enabled" ? "Saving..." : "Save"}
@@ -1576,7 +1583,7 @@ function SettingsSection({
           <button
             type="button"
             disabled={savingKey === "maintenance_mode"}
-            onClick={() => saveOne("maintenance_mode")}
+            onClick={() => saveSetting("maintenance_mode", draft.maintenance_mode ?? "0")}
             className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {savingKey === "maintenance_mode" ? "Saving..." : "Save"}
@@ -1603,7 +1610,7 @@ function SettingsSection({
           <button
             type="button"
             disabled={savingKey === "maintenance_message"}
-            onClick={() => saveOne("maintenance_message")}
+            onClick={() => saveSetting("maintenance_message", draft.maintenance_message ?? "")}
             className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {savingKey === "maintenance_message" ? "Saving..." : "Save"}
@@ -1625,7 +1632,7 @@ function SettingsSection({
           <button
             type="button"
             disabled={savingKey === "maintenance_eta"}
-            onClick={() => saveOne("maintenance_eta")}
+            onClick={() => saveSetting("maintenance_eta", draft.maintenance_eta ?? "")}
             className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {savingKey === "maintenance_eta" ? "Saving..." : "Save"}
@@ -1654,7 +1661,7 @@ function SettingsSection({
           <button
             type="button"
             disabled={savingKey === "active_crypto_coin"}
-            onClick={() => saveOne("active_crypto_coin")}
+            onClick={() => saveSetting("active_crypto_coin", draft.active_crypto_coin ?? "")}
             className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {savingKey === "active_crypto_coin" ? "Saving..." : "Save"}
@@ -1680,7 +1687,7 @@ function SettingsSection({
           <button
             type="button"
             disabled={savingKey === "crypto_network"}
-            onClick={() => saveOne("crypto_network")}
+            onClick={() => saveSetting("crypto_network", draft.crypto_network ?? "")}
             className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {savingKey === "crypto_network" ? "Saving..." : "Save"}
@@ -1703,7 +1710,7 @@ function SettingsSection({
           <button
             type="button"
             disabled={savingKey === "crypto_wallet_address"}
-            onClick={() => saveOne("crypto_wallet_address")}
+            onClick={() => saveSetting("crypto_wallet_address", draft.crypto_wallet_address ?? "")}
             className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {savingKey === "crypto_wallet_address" ? "Saving..." : "Save"}
@@ -1732,7 +1739,7 @@ function SettingsSection({
               <button
                 type="button"
                 disabled={savingKey === "fulfillment_dead_drop_enabled"}
-                onClick={() => saveOne("fulfillment_dead_drop_enabled")}
+                onClick={() => saveSetting("fulfillment_dead_drop_enabled", draft.fulfillment_dead_drop_enabled ?? "1")}
                 className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
               >
                 {savingKey === "fulfillment_dead_drop_enabled" ? "Saving..." : "Save"}
@@ -1754,7 +1761,7 @@ function SettingsSection({
               <button
                 type="button"
                 disabled={savingKey === "fulfillment_pickup_enabled"}
-                onClick={() => saveOne("fulfillment_pickup_enabled")}
+                onClick={() => saveSetting("fulfillment_pickup_enabled", draft.fulfillment_pickup_enabled ?? "1")}
                 className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
               >
                 {savingKey === "fulfillment_pickup_enabled" ? "Saving..." : "Save"}
@@ -1776,7 +1783,7 @@ function SettingsSection({
               <button
                 type="button"
                 disabled={savingKey === "fulfillment_delivery_enabled"}
-                onClick={() => saveOne("fulfillment_delivery_enabled")}
+                onClick={() => saveSetting("fulfillment_delivery_enabled", draft.fulfillment_delivery_enabled ?? "1")}
                 className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
               >
                 {savingKey === "fulfillment_delivery_enabled" ? "Saving..." : "Save"}
@@ -1799,7 +1806,7 @@ function SettingsSection({
           <button
             type="button"
             disabled={savingKey === key}
-            onClick={() => saveOne(key)}
+            onClick={() => saveSetting(key, draft[key] ?? "")}
             className="mt-2 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {savingKey === key ? "Saving..." : "Save"}
