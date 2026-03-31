@@ -951,7 +951,7 @@ function OrdersSection({
   async function cancelOrder(order: Order & { product?: Product | null }) {
     const defer = Boolean(order.defer_stock_until_approval);
     const skipRestore =
-      order.status === "awaiting_dead_drop" ? false : order.status === "payment_pending" && defer;
+      order.status === "awaiting_dead_drop" || (order.status === "payment_pending" && defer);
     const msg = skipRestore
       ? "Cancel this order? (No stock was deducted yet.)"
       : "Cancel this order and restore stock?";
@@ -976,7 +976,7 @@ function OrdersSection({
         showToast("Failed to cancel order. Try again.", false);
         return;
       }
-      showToast("Order cancelled and stock restored ✓");
+      showToast(skipRestore ? "Order cancelled ✓" : "Order cancelled and stock restored ✓");
       onRefresh();
     } finally {
       setActionLoading(null);

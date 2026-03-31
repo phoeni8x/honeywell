@@ -11,6 +11,7 @@ type DeadDropRow = {
   instructions: string | null;
   latitude: number;
   longitude: number;
+  product_id?: string | null;
   google_maps_url?: string | null;
   apple_maps_url?: string | null;
   location_photo_url?: string | null;
@@ -18,14 +19,18 @@ type DeadDropRow = {
   active_until?: string | null;
 };
 
+type ProductOption = { id: string; name: string };
+
 export default function AdminDeadDropsPage() {
   const [rows, setRows] = useState<DeadDropRow[]>([]);
+  const [products, setProducts] = useState<ProductOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [deadDropEnabled, setDeadDropEnabled] = useState<"1" | "0">("1");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     name: "",
+    product_id: "",
     latitude: "",
     longitude: "",
     google_maps_url: "",
@@ -37,6 +42,7 @@ export default function AdminDeadDropsPage() {
   });
   const [editDraft, setEditDraft] = useState({
     name: "",
+    product_id: "",
     latitude: "",
     longitude: "",
     google_maps_url: "",
@@ -54,12 +60,14 @@ export default function AdminDeadDropsPage() {
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const [{ data }, { data: st }] = await Promise.all([
+    const [{ data }, { data: st }, { data: prods }] = await Promise.all([
       supabase.from("dead_drops").select("*").order("created_at", { ascending: false }),
       supabase.from("settings").select("value").eq("key", "fulfillment_dead_drop_enabled").maybeSingle(),
+      supabase.from("products").select("id, name").eq("is_active", true).order("name"),
     ]);
     setRows((data as DeadDropRow[]) ?? []);
     setDeadDropEnabled(st?.value === "0" ? "0" : "1");
+    setProducts((prods as ProductOption[]) ?? []);
   }, []);
 
   useEffect(() => {
@@ -76,6 +84,7 @@ export default function AdminDeadDropsPage() {
       const supabase = createClient();
       const { error } = await supabase.from("dead_drops").insert({
         name: draft.name.trim(),
+        product_id: draft.product_id.trim() ? draft.product_id.trim() : null,
         latitude: Number(draft.latitude) || 0,
         longitude: Number(draft.longitude) || 0,
         google_maps_url: draft.google_maps_url || null,
@@ -92,6 +101,7 @@ export default function AdminDeadDropsPage() {
       }
       setDraft({
         name: "",
+        product_id: "",
         latitude: "",
         longitude: "",
         google_maps_url: "",
@@ -188,6 +198,7 @@ export default function AdminDeadDropsPage() {
     setEditingId(row.id);
     setEditDraft({
       name: row.name ?? "",
+      product_id: row.product_id ?? "",
       latitude: String(row.latitude ?? ""),
       longitude: String(row.longitude ?? ""),
       google_maps_url: row.google_maps_url ?? "",
@@ -205,6 +216,7 @@ export default function AdminDeadDropsPage() {
       const supabase = createClient();
       const payload = {
         name: editDraft.name.trim(),
+        product_id: editDraft.product_id.trim() ? editDraft.product_id.trim() : null,
         latitude: Number(editDraft.latitude) || 0,
         longitude: Number(editDraft.longitude) || 0,
         google_maps_url: editDraft.google_maps_url || null,
@@ -241,7 +253,8 @@ export default function AdminDeadDropsPage() {
       <div>
         <h1 className="font-display text-3xl text-honey-text">Dead drops</h1>
         <p className="mt-2 text-sm text-honey-muted">
-          Add and manage active dead-drop slots. Customers do not see these publicly before ordering.
+          Add and manage active dead-drop slots. Tie each active slot to one product so stock stays in sync (leave
+          product empty only for legacy “any product” slots).
         </p>
       </div>
 
@@ -277,6 +290,18 @@ export default function AdminDeadDropsPage() {
           onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
           onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
         />
+        <select
+          className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          value={draft.product_id}
+          onChange={(e) => setDraft((d) => ({ ...d, product_id: e.target.value }))}
+        >
+          <option value="">Product (optional — legacy: any)</option>
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
         <div className="grid gap-2 sm:grid-cols-2">
           <input
             className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
@@ -364,6 +389,9 @@ export default function AdminDeadDropsPage() {
                   <p className="font-medium text-honey-text">{r.name}</p>
                   <p className="text-xs text-honey-muted">
                     {r.is_active ? "active" : "inactive"} · {new Date(r.created_at).toLocaleString("en-GB")}
+                    {r.product_id
+                      ? ` · product: ${products.find((x) => x.id === r.product_id)?.name ?? r.product_id.slice(0, 8)}`
+                      : " · any product (legacy)"}
                   </p>
                   {r.instructions && <p className="mt-1 text-xs text-honey-muted">{r.instructions}</p>}
                 </div>
@@ -410,6 +438,18 @@ export default function AdminDeadDropsPage() {
                     value={editDraft.name}
                     onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
                   />
+                  <select
+                    className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
+                    value={editDraft.product_id}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, product_id: e.target.value }))}
+                  >
+                    <option value="">Product (optional — legacy: any)</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
                     placeholder="Latitude"

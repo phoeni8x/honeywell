@@ -20,7 +20,8 @@ export type AdminApproveFailure = {
 };
 
 /**
- * Admin approves a `payment_pending` order: deduct stock, advance status, award points/bees via `processOrderConfirmed`.
+ * Admin approves a `payment_pending` order: deduct stock (except dead_drop — stock lives on drops),
+ * advance status, award points/bees via `processOrderConfirmed`.
  */
 export async function executeAdminApproveOrder(orderId: string): Promise<AdminApproveSuccess | AdminApproveFailure> {
   const svc = createServiceClient();
@@ -33,6 +34,101 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
 
   if (order.status !== "payment_pending") {
     return { success: false, error: "Order is not pending approval", status: 400, code: "not_pending" };
+  }
+
+  const isRevolutDeliveryPayNow =
+    order.payment_method === "revolut" &&
+    order.fulfillment_type === "delivery" &&
+    order.revolut_pay_timing === "pay_now";
+
+  const now = new Date().toISOString();
+
+  // Dead drop: units are reserved on `dead_drops` (synced with product stock). Never deduct warehouse row here.
+  if (order.fulfillment_type === "dead_drop") {
+    if (!order.dead_drop_id) {
+      const { error: upErr } = await svc
+        .from("orders")
+        .update({ status: "awaiting_dead_drop", updated_at: now })
+        .eq("id", orderId)
+        .eq("status", "payment_pending");
+
+      if (upErr) {
+        console.error("[admin approve dead drop payment]", upErr);
+        return { success: false, error: "Order update failed", status: 400 };
+      }
+
+      const tokenEarly = order.customer_token as string | undefined;
+      if (tokenEarly) {
+        void notifyCustomerPush(tokenEarly, {
+          title: "Payment received",
+          body: "We're assigning your dead drop — you'll get the location shortly.",
+          url: `/account/orders/${orderId}/track`,
+          tag: `order-${orderId}`,
+        });
+      }
+
+      return {
+        success: true,
+        order_id: orderId,
+        points_earned: 0,
+        new_level: 1,
+        previous_level: 1,
+        leveled_up: false,
+        level_name: LEVEL_META[1]?.name ?? "Newbie",
+      };
+    }
+
+    // Preorder: drop already assigned at checkout
+    if (isRevolutDeliveryPayNow) {
+      const { error: upErr } = await svc
+        .from("orders")
+        .update({
+          status: "waiting",
+          pay_now_payment_confirmed: true,
+          updated_at: now,
+        })
+        .eq("id", orderId)
+        .eq("status", "payment_pending");
+
+      if (upErr) {
+        console.error("[admin approve]", upErr);
+        return { success: false, error: "Order update failed", status: 400 };
+      }
+    } else {
+      const { error: upErr } = await svc
+        .from("orders")
+        .update({ status: "confirmed", updated_at: now })
+        .eq("id", orderId)
+        .eq("status", "payment_pending");
+
+      if (upErr) {
+        console.error("[admin approve]", upErr);
+        return { success: false, error: "Order update failed", status: 400 };
+      }
+    }
+
+    const customerToken = order.customer_token as string | undefined;
+    if (customerToken) {
+      const bodyText = isRevolutDeliveryPayNow
+        ? "Payment received — we're preparing your order."
+        : "Your order is confirmed.";
+      void notifyCustomerPush(customerToken, {
+        title: "Order update",
+        body: `${bodyText}`.slice(0, 180),
+        url: `/account/orders/${orderId}/track`,
+        tag: `order-${orderId}`,
+      });
+    }
+
+    return {
+      success: true,
+      order_id: orderId,
+      points_earned: 0,
+      new_level: 1,
+      previous_level: 1,
+      leveled_up: false,
+      level_name: LEVEL_META[1]?.name ?? "Newbie",
+    };
   }
 
   const productId = order.product_id as string;
@@ -62,51 +158,6 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
   if (stockUpErr) {
     console.error("[admin approve] stock", stockUpErr);
     return { success: false, error: "Stock update failed", status: 500 };
-  }
-
-  const isRevolutDeliveryPayNow =
-    order.payment_method === "revolut" &&
-    order.fulfillment_type === "delivery" &&
-    order.revolut_pay_timing === "pay_now";
-
-  const isDeadDropAwaitingAssignment =
-    order.fulfillment_type === "dead_drop" &&
-    !order.dead_drop_id &&
-    order.status === "payment_pending";
-
-  const now = new Date().toISOString();
-
-  if (isDeadDropAwaitingAssignment) {
-    const { error: upErr } = await svc
-      .from("orders")
-      .update({ status: "awaiting_dead_drop", updated_at: now })
-      .eq("id", orderId)
-      .eq("status", "payment_pending");
-
-    if (upErr) {
-      console.error("[admin approve dead drop payment]", upErr);
-      return { success: false, error: "Order update failed", status: 400 };
-    }
-
-    const tokenEarly = order.customer_token as string | undefined;
-    if (tokenEarly) {
-      void notifyCustomerPush(tokenEarly, {
-        title: "Payment received",
-        body: "We're assigning your dead drop — you'll get the location shortly.",
-        url: `/account/orders/${orderId}/track`,
-        tag: `order-${orderId}`,
-      });
-    }
-
-    return {
-      success: true,
-      order_id: orderId,
-      points_earned: 0,
-      new_level: 1,
-      previous_level: 1,
-      leveled_up: false,
-      level_name: LEVEL_META[1]?.name ?? "Newbie",
-    };
   }
 
   if (isRevolutDeliveryPayNow) {
@@ -142,11 +193,9 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
     const bodyText = isRevolutDeliveryPayNow
       ? "Payment received — we're preparing your order."
       : "Your order is confirmed.";
-    let extra = "";
-    // Points are awarded when order is completed (delivered/picked_up), not at approval.
     void notifyCustomerPush(customerToken, {
       title: "Order update",
-      body: `${bodyText}${extra}`.slice(0, 180),
+      body: `${bodyText}`.slice(0, 180),
       url: `/account/orders/${orderId}/track`,
       tag: `order-${orderId}`,
     });

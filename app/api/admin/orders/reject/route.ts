@@ -40,16 +40,7 @@ export async function POST(request: Request) {
     }
 
     const awaitingDrop = st === "awaiting_dead_drop";
-    if (awaitingDrop) {
-      const { error: rpcErr } = await svc.rpc("restore_product_stock", {
-        p_product_id: order.product_id as string,
-        p_quantity: Number(order.quantity ?? 0),
-      });
-      if (rpcErr) {
-        console.error("[admin reject order] restore stock", rpcErr);
-        return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
-      }
-    }
+    // Dead-drop flow: stock was never deducted from `products` (inventory is on drops). Do not restore here.
 
     const now = new Date().toISOString();
     const { error: upErr } = await svc
