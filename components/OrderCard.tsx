@@ -7,7 +7,7 @@ import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { getOrderIssueTelegramUrl } from "@/lib/support-telegram";
 import type { OrderWithProduct } from "@/types";
 import clsx from "clsx";
-import { ExternalLink, LifeBuoy, MapPin, Navigation, Truck } from "lucide-react";
+import { Copy, ExternalLink, LifeBuoy, MapPin, Navigation, Truck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ConfettiBurst } from "./ConfettiBurst";
@@ -51,6 +51,7 @@ export function OrderCard({
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [revolutLinkError, setRevolutLinkError] = useState<string | null>(null);
+  const [refCopied, setRefCopied] = useState(false);
   const product = order.product;
   const statusLabel = ORDER_STATUS_LABELS[order.status] ?? order.status;
   const isFinalStatus = ["delivered", "picked_up", "cancelled", "payment_expired"].includes(order.status);
@@ -193,8 +194,9 @@ export function OrderCard({
                   order.status === "cancelled" && "bg-red-500/10 text-red-600",
                   order.status === "pre_ordered" && "bg-amber-500/20 text-amber-800 dark:text-amber-300",
                   order.status === "payment_pending" && "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+                  order.status === "awaiting_dead_drop" && "bg-sky-500/15 text-sky-800 dark:text-sky-200",
                   order.status === "waiting" && "bg-sky-500/15 text-sky-800 dark:text-sky-200",
-                  !["picked_up", "delivered", "cancelled", "pre_ordered", "payment_pending", "waiting"].includes(order.status) &&
+                  !["picked_up", "delivered", "cancelled", "pre_ordered", "payment_pending", "awaiting_dead_drop", "waiting"].includes(order.status) &&
                     "bg-honey-border/80 text-honey-muted"
                 )}
               >
@@ -206,6 +208,39 @@ export function OrderCard({
                 Pre-order awaiting admin decision. You will see updates here once accepted or rejected.
               </p>
             )}
+            {order.status === "awaiting_dead_drop" && (
+              <p className="mt-2 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs text-sky-900 dark:text-sky-100">
+                Payment received. Your dead-drop location (photos and coordinates) will appear here as soon as the team assigns it.
+              </p>
+            )}
+            {order.payment_reference_code &&
+              (order.status === "payment_pending" || order.status === "awaiting_dead_drop") && (
+                <div className="mt-3 rounded-2xl border-2 border-primary/35 bg-primary/5 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-honey-muted">Payment reference</p>
+                  <p className="mt-1 text-xs text-honey-muted">
+                    Put this in the <strong className="text-honey-text">memo / reference</strong> field when you pay (Revolut or
+                    crypto). Each order has its own code — do not reuse an old one.
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-lg font-bold tracking-wider text-primary">
+                      {order.payment_reference_code}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(order.payment_reference_code ?? "").then(() => {
+                          setRefCopied(true);
+                          window.setTimeout(() => setRefCopied(false), 2000);
+                        });
+                      }}
+                      className="inline-flex items-center gap-1 rounded-full border border-honey-border bg-bg px-3 py-1 text-xs font-semibold text-honey-text hover:bg-honey-border/30"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {refCopied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              )}
             {order.fulfillment_type && (
               <p className="mt-1 text-xs uppercase tracking-wide text-primary">
                 {order.fulfillment_type.replace(/_/g, " ")}

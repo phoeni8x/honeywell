@@ -52,7 +52,7 @@ export function AdminSidebar({ className, onNavigate }: { className?: string; on
       const { count } = await supabase
         .from("orders")
         .select("*", { count: "exact", head: true })
-        .eq("status", "payment_pending");
+        .in("status", ["payment_pending", "awaiting_dead_drop"]);
       setPendingOrders(count ?? 0);
     }
     void load();

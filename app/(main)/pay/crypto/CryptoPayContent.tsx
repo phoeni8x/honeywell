@@ -23,6 +23,7 @@ export function CryptoPayContent() {
   } | null>(null);
   const [cryptoNetworkHint, setCryptoNetworkHint] = useState("");
   const [copied, setCopied] = useState(false);
+  const [paymentRef, setPaymentRef] = useState<string | null>(null);
   const [deadline, setDeadline] = useState<number | null>(null);
   const router = useRouter();
 
@@ -56,6 +57,13 @@ export function CryptoPayContent() {
       if (cancelled) return;
       const token = getOrCreateCustomerToken();
       try {
+        const ordRes = await fetch(`/api/account/orders/${encodeURIComponent(orderId)}`, {
+          headers: { "x-customer-token": token },
+        });
+        const ordData = (await ordRes.json().catch(() => ({}))) as { order?: { payment_reference_code?: string | null } };
+        if (!cancelled && typeof ordData.order?.payment_reference_code === "string") {
+          setPaymentRef(ordData.order.payment_reference_code);
+        }
         const r = await fetch(`/api/calculate-crypto-amount?orderId=${encodeURIComponent(orderId)}`, {
           headers: { "x-customer-token": token },
         });
@@ -135,8 +143,17 @@ export function CryptoPayContent() {
       </p>
       {orderId && (
         <p className="mt-2 text-xs text-honey-muted">
-          Order reference: <span className="font-mono">{orderId}</span>
+          Internal order id: <span className="font-mono">{orderId.slice(0, 8)}…</span>
         </p>
+      )}
+      {paymentRef && (
+        <div className="mx-auto mt-4 max-w-md rounded-2xl border-2 border-primary/40 bg-primary/5 px-4 py-3 text-left">
+          <p className="text-xs font-semibold uppercase text-honey-muted">Payment reference (required)</p>
+          <p className="mt-1 text-xs text-honey-muted">
+            Put this in your wallet&apos;s memo / note field when sending crypto so we can match your payment. Do not reuse a code from an older order.
+          </p>
+          <p className="mt-2 font-mono text-2xl font-bold tracking-wider text-primary">{paymentRef}</p>
+        </div>
       )}
 
       {calc && (

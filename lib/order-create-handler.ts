@@ -51,6 +51,7 @@ async function notifyTelegramAboutOrder(params: {
   deliveryAddress: string | null;
   orderAmount: number | string | null;
   productType: string | null;
+  paymentReferenceCode: string | null;
 }) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
   const chatId = process.env.TELEGRAM_ORDER_CHAT_ID?.trim() || process.env.ADMIN_TELEGRAM_USER_ID?.trim();
@@ -61,6 +62,7 @@ async function notifyTelegramAboutOrder(params: {
   const amountNum = params.orderAmount == null ? NaN : Number(params.orderAmount);
   const amount = Number.isFinite(amountNum) ? String(amountNum) : "N/A";
   const product = params.productType?.trim() || "N/A";
+  const payRef = params.paymentReferenceCode?.trim() || "N/A";
 
   const message = [
     "New customer order",
@@ -68,6 +70,7 @@ async function notifyTelegramAboutOrder(params: {
     `2) Delivery address: ${address}`,
     `3) Customer amount (total): ${amount}`,
     `4) Product type: ${product}`,
+    `5) Payment reference (Revolut/crypto memo): ${payRef}`,
   ].join("\n");
 
   const tg = await sendTelegramMessage(botToken, chatId, message);
@@ -283,7 +286,7 @@ export async function handleCreateOrder(request: Request) {
     const { data: createdOrder } = await supabase
       .from("orders")
       .select(
-        "order_number, fulfillment_type, payment_method, customer_username, delivery_address, total_price, product:products(category)"
+        "order_number, fulfillment_type, payment_method, customer_username, delivery_address, total_price, payment_reference_code, product:products(category)"
       )
       .eq("id", orderId)
       .maybeSingle();
@@ -304,9 +307,13 @@ export async function handleCreateOrder(request: Request) {
       productType:
         ((createdOrder?.product as { category?: string | null } | null | undefined)?.category as string | null | undefined) ??
         null,
+      paymentReferenceCode: (createdOrder?.payment_reference_code as string | null | undefined) ?? null,
     });
 
-    const res = NextResponse.json({ order_id: orderId });
+    const res = NextResponse.json({
+      order_id: orderId,
+      payment_reference_code: (createdOrder?.payment_reference_code as string | null | undefined) ?? null,
+    });
     const host = request.headers.get("host")?.split(":")[0] ?? "";
     const secure = request.headers.get("x-forwarded-proto") === "https" || host !== "localhost";
     const cookieDomain = host.endsWith("teamruby.net") ? ".teamruby.net" : undefined;

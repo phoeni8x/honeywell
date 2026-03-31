@@ -28,6 +28,7 @@ export function OrderHistoryContent() {
   });
   const [loading, setLoading] = useState(true);
   const [revolutOpen, setRevolutOpen] = useState(false);
+  const [revolutPaymentRef, setRevolutPaymentRef] = useState<string | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { state: pushState, subscribe: subscribePush } = usePushNotifications();
 
@@ -155,9 +156,31 @@ export function OrderHistoryContent() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get("revolut") === "1") {
-      setRevolutOpen(true);
+    if (searchParams.get("revolut") !== "1") return;
+    setRevolutOpen(true);
+    const oid = searchParams.get("orderId")?.trim();
+    if (!oid) {
+      setRevolutPaymentRef(undefined);
+      return;
     }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const t = getOrCreateCustomerToken();
+        const res = await fetch(`/api/account/orders/${encodeURIComponent(oid)}`, {
+          headers: { "x-customer-token": t },
+        });
+        const data = (await res.json().catch(() => ({}))) as { order?: { payment_reference_code?: string | null } };
+        if (!cancelled && data.order?.payment_reference_code) {
+          setRevolutPaymentRef(data.order.payment_reference_code);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [searchParams]);
 
   return (
@@ -205,8 +228,12 @@ export function OrderHistoryContent() {
 
       <RevolutModal
         open={revolutOpen}
-        onClose={() => setRevolutOpen(false)}
+        onClose={() => {
+          setRevolutOpen(false);
+          setRevolutPaymentRef(undefined);
+        }}
         revolutUrl={settings.revolut_payment_link}
+        paymentReferenceCode={revolutPaymentRef}
       />
       <p className="text-center text-sm text-honey-muted">
         Want a paginated view?{" "}

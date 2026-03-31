@@ -63,6 +63,7 @@ type SupportTicketRow = {
 
 const ORDER_STATUSES = [
   "payment_pending",
+  "awaiting_dead_drop",
   "pre_ordered",
   "payment_expired",
   "waiting",
@@ -895,6 +896,26 @@ function OrdersSection({
     }
   }
 
+  async function assignDeadDrop(id: string) {
+    setActionLoading(id + "assign-dd");
+    try {
+      const res = await fetch("/api/admin/orders/assign-dead-drop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ order_id: id }),
+      });
+      if (!res.ok) {
+        showToast("Could not assign dead drop. Check pool or try again.", false);
+        return;
+      }
+      showToast("Dead drop assigned — customer notified ✓");
+      onRefresh();
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function confirmOrder(id: string) {
     setActionLoading(id + "confirm");
     try {
@@ -929,7 +950,8 @@ function OrdersSection({
 
   async function cancelOrder(order: Order & { product?: Product | null }) {
     const defer = Boolean(order.defer_stock_until_approval);
-    const skipRestore = order.status === "payment_pending" && defer;
+    const skipRestore =
+      order.status === "awaiting_dead_drop" ? false : order.status === "payment_pending" && defer;
     const msg = skipRestore
       ? "Cancel this order? (No stock was deducted yet.)"
       : "Cancel this order and restore stock?";
@@ -1002,7 +1024,22 @@ function OrdersSection({
             className="text-left text-xs text-primary hover:underline disabled:opacity-50"
             onClick={() => confirmOrder(o.id)}
           >
-            {o.payment_method === "revolut" ? "Approve payment successful" : "Confirm"}
+            {o.fulfillment_type === "dead_drop"
+              ? "Confirm payment received"
+              : o.payment_method === "revolut"
+                ? "Approve payment successful"
+                : "Confirm"}
+          </button>
+        )}
+
+        {o.status === "awaiting_dead_drop" && o.fulfillment_type === "dead_drop" && (
+          <button
+            type="button"
+            disabled={actionLoading !== null}
+            className="text-left text-xs font-semibold text-primary hover:underline disabled:opacity-50"
+            onClick={() => void assignDeadDrop(o.id)}
+          >
+            Assign dead drop
           </button>
         )}
 
@@ -1196,6 +1233,7 @@ function OrdersSection({
               <th className="p-2">Total</th>
               <th className="p-2">Actions</th>
               <th className="p-2 whitespace-nowrap">Order</th>
+              <th className="p-2 whitespace-nowrap">Pay ref</th>
               <th className="p-2">Product</th>
               <th className="p-2">Qty</th>
               <th className="p-2">Time</th>
@@ -1224,6 +1262,11 @@ function OrdersSection({
                 <td className="p-2">
                   <span className="font-mono text-xs font-bold text-primary whitespace-nowrap">
                     {o.order_number ?? "—"}
+                  </span>
+                </td>
+                <td className="p-2">
+                  <span className="font-mono text-[11px] font-semibold text-honey-text">
+                    {(o as Order & { payment_reference_code?: string | null }).payment_reference_code ?? "—"}
                   </span>
                 </td>
                 <td className="p-2">{o.product?.name ?? "—"}</td>

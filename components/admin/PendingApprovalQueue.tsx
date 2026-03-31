@@ -91,6 +91,11 @@ export function PendingApprovalQueue({
               </div>
               <div className="min-w-0">
                 <p className="font-mono text-xs font-semibold text-primary">{o.order_number ?? o.id.slice(0, 8)}</p>
+                {(o as Order & { payment_reference_code?: string | null }).payment_reference_code && (
+                  <p className="font-mono text-[11px] text-honey-text">
+                    Ref: {(o as Order & { payment_reference_code?: string }).payment_reference_code}
+                  </p>
+                )}
                 <p className="text-xs text-honey-muted">
                   {new Date(o.created_at).toLocaleString("en-GB", {
                     day: "2-digit",
@@ -145,8 +150,17 @@ export function PendingApprovalQueue({
           <div className="w-full max-w-md rounded-2xl border border-honey-border bg-surface p-6 shadow-xl dark:bg-surface-dark">
             <h3 className="font-display text-lg text-honey-text">Approve payment?</h3>
             <p className="mt-2 text-sm text-honey-muted">
-              Confirm approval for <span className="font-mono text-primary">{confirmOrder.order_number ?? confirmOrder.id}</span>.
-              This will deduct{" "}
+              Confirm approval for <span className="font-mono text-primary">{confirmOrder.order_number ?? confirmOrder.id}</span>
+              {(confirmOrder as Order & { payment_reference_code?: string | null }).payment_reference_code ? (
+                <>
+                  {" "}
+                  · pay ref{" "}
+                  <span className="font-mono font-semibold text-honey-text">
+                    {(confirmOrder as Order & { payment_reference_code?: string }).payment_reference_code}
+                  </span>
+                </>
+              ) : null}
+              . This will deduct{" "}
               <span className="font-semibold text-honey-text">
                 {confirmOrder.quantity}× {confirmOrder.product?.name ?? "item"}
               </span>{" "}

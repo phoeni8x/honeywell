@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const svc = createServiceClient();
     const { data: order, error: fetchErr } = await svc
       .from("orders")
-      .select("id, status, customer_token, order_number")
+      .select("id, status, customer_token, order_number, product_id, quantity, defer_stock_until_approval")
       .eq("id", orderId)
       .maybeSingle();
 
@@ -34,8 +34,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });
     }
 
-    if (order.status !== "payment_pending") {
+    const st = String(order.status);
+    if (st !== "payment_pending" && st !== "awaiting_dead_drop") {
       return NextResponse.json({ error: "Order is not pending approval.", code: "not_pending" }, { status: 400 });
+    }
+
+    const awaitingDrop = st === "awaiting_dead_drop";
+    if (awaitingDrop) {
+      const { error: rpcErr } = await svc.rpc("restore_product_stock", {
+        p_product_id: order.product_id as string,
+        p_quantity: Number(order.quantity ?? 0),
+      });
+      if (rpcErr) {
+        console.error("[admin reject order] restore stock", rpcErr);
+        return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+      }
     }
 
     const now = new Date().toISOString();
@@ -47,7 +60,7 @@ export async function POST(request: Request) {
         rejection_reason: reason || null,
       })
       .eq("id", orderId)
-      .eq("status", "payment_pending");
+      .in("status", awaitingDrop ? ["awaiting_dead_drop"] : ["payment_pending"]);
 
     if (upErr) {
       console.error("[admin reject order]", upErr);

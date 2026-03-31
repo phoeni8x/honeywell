@@ -69,7 +69,45 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
     order.fulfillment_type === "delivery" &&
     order.revolut_pay_timing === "pay_now";
 
+  const isDeadDropAwaitingAssignment =
+    order.fulfillment_type === "dead_drop" &&
+    !order.dead_drop_id &&
+    order.status === "payment_pending";
+
   const now = new Date().toISOString();
+
+  if (isDeadDropAwaitingAssignment) {
+    const { error: upErr } = await svc
+      .from("orders")
+      .update({ status: "awaiting_dead_drop", updated_at: now })
+      .eq("id", orderId)
+      .eq("status", "payment_pending");
+
+    if (upErr) {
+      console.error("[admin approve dead drop payment]", upErr);
+      return { success: false, error: "Order update failed", status: 400 };
+    }
+
+    const tokenEarly = order.customer_token as string | undefined;
+    if (tokenEarly) {
+      void notifyCustomerPush(tokenEarly, {
+        title: "Payment received",
+        body: "We're assigning your dead drop — you'll get the location shortly.",
+        url: `/account/orders/${orderId}/track`,
+        tag: `order-${orderId}`,
+      });
+    }
+
+    return {
+      success: true,
+      order_id: orderId,
+      points_earned: 0,
+      new_level: 1,
+      previous_level: 1,
+      leveled_up: false,
+      level_name: LEVEL_META[1]?.name ?? "Newbie",
+    };
+  }
 
   if (isRevolutDeliveryPayNow) {
     const { error: upErr } = await svc

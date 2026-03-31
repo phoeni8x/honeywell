@@ -30,6 +30,7 @@ export function truncateToken(token: string, head = 6, tail = 4): string {
 
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   payment_pending: "Awaiting Payment",
+  awaiting_dead_drop: "Payment OK — assign drop",
   pre_ordered: "Pre-Ordered",
   payment_expired: "Payment Expired",
   waiting: "Waiting",

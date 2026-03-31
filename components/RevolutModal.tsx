@@ -7,9 +7,11 @@ interface RevolutModalProps {
   open: boolean;
   onClose: () => void;
   revolutUrl: string;
+  /** Shown above the link so the customer can copy before opening Revolut. */
+  paymentReferenceCode?: string;
 }
 
-export function RevolutModal({ open, onClose, revolutUrl }: RevolutModalProps) {
+export function RevolutModal({ open, onClose, revolutUrl, paymentReferenceCode }: RevolutModalProps) {
   const buttonRef = useRef<HTMLAnchorElement>(null);
 
   // Scroll the button into view when modal opens on mobile
@@ -66,8 +68,14 @@ export function RevolutModal({ open, onClose, revolutUrl }: RevolutModalProps) {
         </button>
         <h2 className="font-display text-2xl text-honey-text">Pay with Revolut</h2>
         <p className="mt-2 text-sm text-honey-muted">
-          Your order is reserved. Complete payment using the team Revolut link below.
+          Copy your payment reference first, then open Revolut and paste it into the reference / memo field before sending.
         </p>
+        {paymentReferenceCode ? (
+          <div className="mt-4 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3">
+            <p className="text-xs font-semibold uppercase text-honey-muted">Your reference (required)</p>
+            <p className="mt-1 font-mono text-xl font-bold tracking-wider text-primary">{paymentReferenceCode}</p>
+          </div>
+        ) : null}
           {/* Big tappable button - easy to hit on mobile */}
           <a
           ref={buttonRef}

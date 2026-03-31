@@ -1,3 +1,4 @@
+import { generatePaymentReferenceCodeClient } from "@/lib/payment-reference";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { sendTelegramMessage } from "@/lib/telegram";
 
@@ -87,6 +88,7 @@ export async function seedCustomerDemoData(customerToken: string): Promise<SeedC
       user_type: "guest",
       payment_method: "crypto",
       status: "delivered",
+      payment_reference_code: generatePaymentReferenceCodeClient(),
       referral_code_used: DEMO_ORDER_MARKER,
       updated_at: now,
     })
@@ -109,6 +111,7 @@ export async function seedCustomerDemoData(customerToken: string): Promise<SeedC
       user_type: "guest",
       payment_method: "crypto",
       status: "confirmed",
+      payment_reference_code: generatePaymentReferenceCodeClient(),
       referral_code_used: DEMO_ORDER_MARKER,
       updated_at: now,
     })

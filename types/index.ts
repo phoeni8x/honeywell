@@ -6,6 +6,7 @@ export type FulfillmentType = "dead_drop" | "pickup" | "delivery";
 
 export type OrderStatus =
   | "payment_pending"
+  | "awaiting_dead_drop"
   | "pre_ordered"
   | "payment_expired"
   | "waiting"
@@ -50,6 +51,8 @@ export interface Order {
   created_at: string;
   updated_at: string;
   order_number?: string | null;
+  /** Unique 6-char code for Revolut/crypto payment reference; immutable after creation. */
+  payment_reference_code?: string | null;
   referral_code_used?: string | null;
   fulfillment_type?: FulfillmentType | string | null;
   dead_drop_id?: string | null;
