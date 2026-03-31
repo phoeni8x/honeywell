@@ -1039,7 +1039,7 @@ function OrdersSection({
             className="text-left text-xs font-semibold text-primary hover:underline disabled:opacity-50"
             onClick={() => void assignDeadDrop(o.id)}
           >
-            Assign dead drop
+            Assign dead drop (legacy queue)
           </button>
         )}
 

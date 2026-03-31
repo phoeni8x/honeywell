@@ -20,8 +20,8 @@ export type AdminApproveFailure = {
 };
 
 /**
- * Admin approves a `payment_pending` order: deduct stock (except dead_drop — stock lives on drops),
- * advance status, award points/bees via `processOrderConfirmed`.
+ * Admin approves `payment_pending`: non–dead-drop deducts product stock here; dead_drop (no slot yet)
+ * deducts stock and assigns a free dead drop in one DB transaction via `confirm_dead_drop_payment_and_assign`.
  */
 export async function executeAdminApproveOrder(orderId: string): Promise<AdminApproveSuccess | AdminApproveFailure> {
   const svc = createServiceClient();
@@ -43,27 +43,42 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
 
   const now = new Date().toISOString();
 
-  // Dead drop: units are reserved on `dead_drops` (synced with product stock). Never deduct warehouse row here.
+  // Dead drop (two-step checkout): confirm payment → deduct stock + claim one slot → confirmed with coordinates.
   if (order.fulfillment_type === "dead_drop") {
     if (!order.dead_drop_id) {
-      const { error: upErr } = await svc
-        .from("orders")
-        .update({ status: "awaiting_dead_drop", updated_at: now })
-        .eq("id", orderId)
-        .eq("status", "payment_pending");
+      const { error: rpcErr } = await svc.rpc("confirm_dead_drop_payment_and_assign", {
+        p_order_id: orderId,
+      });
 
-      if (upErr) {
-        console.error("[admin approve dead drop payment]", upErr);
-        return { success: false, error: "Order update failed", status: 400 };
+      if (rpcErr) {
+        const msg = String(rpcErr.message ?? "").toLowerCase();
+        console.error("[admin approve dead_drop confirm]", rpcErr);
+        if (msg.includes("insufficient_stock")) {
+          return {
+            success: false,
+            error: "Not enough product stock to confirm — adjust stock or cancel order.",
+            status: 400,
+            code: "insufficient_stock",
+          };
+        }
+        if (msg.includes("dead_drop_unavailable")) {
+          return {
+            success: false,
+            error: "No free dead drop for this product. Add or free a slot, then retry.",
+            status: 400,
+            code: "dead_drop_unavailable",
+          };
+        }
+        return { success: false, error: "Could not confirm dead drop order.", status: 400 };
       }
 
       const tokenEarly = order.customer_token as string | undefined;
       if (tokenEarly) {
         void notifyCustomerPush(tokenEarly, {
-          title: "Payment received",
-          body: "We're assigning your dead drop — you'll get the location shortly.",
+          title: "Dead drop ready",
+          body: "Payment received — open your order for map link and coordinates.",
           url: `/account/orders/${orderId}/track`,
-          tag: `order-${orderId}`,
+          tag: `order-${orderId}-drop`,
         });
       }
 
@@ -78,7 +93,7 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
       };
     }
 
-    // Preorder: drop already assigned at checkout
+    // Preorder path: slot already chosen at checkout
     if (isRevolutDeliveryPayNow) {
       const { error: upErr } = await svc
         .from("orders")

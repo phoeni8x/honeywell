@@ -253,8 +253,8 @@ export default function AdminDeadDropsPage() {
       <div>
         <h1 className="font-display text-3xl text-honey-text">Dead drops</h1>
         <p className="mt-2 text-sm text-honey-muted">
-          Add and manage active dead-drop slots. Tie each active slot to one product so stock stays in sync (leave
-          product empty only for legacy “any product” slots).
+          Add and manage active dead-drop slots. Optional product limits which line can use that slot; product stock
+          goes down only after admin confirms payment and the system assigns a free slot to the order.
         </p>
       </div>
 
