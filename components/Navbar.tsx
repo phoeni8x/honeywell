@@ -50,12 +50,16 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-hive-black/95 text-white backdrop-blur-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 md:px-6">
-        <Link href="/home" className="group flex min-w-0 items-center gap-2 sm:gap-3">
-          <RainbowHexLogo />
-          <BrandHoneyWellTitle size="sm" className="min-w-0 max-w-[55vw] sm:max-w-none" />
+        <Link
+          href="/home"
+          className="group flex min-w-0 flex-1 items-center gap-2 sm:gap-3 md:min-w-[200px] md:pr-4"
+        >
+          <RainbowHexLogo className="shrink-0" />
+          <BrandHoneyWellTitle size="sm" className="min-w-0 max-w-[58vw] md:hidden" />
+          <BrandHoneyWellTitle size="sm" spread className="hidden min-w-0 flex-1 md:flex" />
         </Link>
 
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden shrink-0 items-center gap-1 md:flex">
           {links.map(({ href, label }) => {
             const active = pathname === href;
             return (

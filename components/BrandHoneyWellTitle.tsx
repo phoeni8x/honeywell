@@ -33,12 +33,31 @@ export function RainbowHexLogo({ className }: { className?: string }) {
   );
 }
 
+function letterSpan(ch: string, globalIndex: number) {
+  const color = LETTER_COLORS[globalIndex % LETTER_COLORS.length];
+  return (
+    <span
+      key={`${ch}-${globalIndex}`}
+      className="inline-block font-display font-bold animate-honey-letter-bounce"
+      style={{
+        color,
+        animationDelay: `${globalIndex * 0.1}s`,
+      }}
+    >
+      {ch}
+    </span>
+  );
+}
+
 export function BrandHoneyWellTitle({
   size = "md",
   className,
+  spread = false,
 }: {
   size?: "sm" | "md" | "lg";
   className?: string;
+  /** Navbar: fill horizontal space with letters spread evenly (two words). */
+  spread?: boolean;
 }) {
   const sizeCls =
     size === "sm"
@@ -46,6 +65,35 @@ export function BrandHoneyWellTitle({
       : size === "lg"
         ? "text-2xl tracking-[0.18em] sm:text-3xl sm:tracking-[0.22em] md:text-5xl md:tracking-[0.28em]"
         : "text-xl tracking-[0.16em] sm:text-2xl sm:tracking-[0.2em] md:text-3xl md:tracking-[0.24em]";
+
+  const words = BRAND.split(" ");
+
+  if (spread) {
+    const smSpread =
+      size === "sm"
+        ? "text-base sm:text-lg md:text-xl lg:text-2xl"
+        : size === "lg"
+          ? sizeCls
+          : "text-xl sm:text-2xl md:text-3xl";
+
+    let globalIndex = 0;
+    return (
+      <span
+        className={clsx(
+          "flex min-w-0 flex-1 items-baseline gap-3 sm:gap-6 md:gap-10 lg:gap-14",
+          smSpread,
+          className
+        )}
+        aria-label="Honey Well"
+      >
+        {words.map((word) => (
+          <span key={word} className="flex min-w-0 flex-1 justify-evenly" style={{ flexBasis: 0 }}>
+            {word.split("").map((ch) => letterSpan(ch, globalIndex++))}
+          </span>
+        ))}
+      </span>
+    );
+  }
 
   return (
     <span
@@ -56,19 +104,7 @@ export function BrandHoneyWellTitle({
         if (ch === " ") {
           return <span key={`sp-${i}`} className="inline-block w-2 sm:w-3 md:w-4" aria-hidden />;
         }
-        const color = LETTER_COLORS[i % LETTER_COLORS.length];
-        return (
-          <span
-            key={i}
-            className="inline-block font-display font-bold animate-honey-letter-bounce"
-            style={{
-              color,
-              animationDelay: `${i * 0.1}s`,
-            }}
-          >
-            {ch}
-          </span>
-        );
+        return letterSpan(ch, i);
       })}
     </span>
   );
