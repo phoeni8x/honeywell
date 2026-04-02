@@ -1,5 +1,6 @@
 "use client";
 
+import { compressImageFileForUpload, type CloudinaryDirectUploadResponse } from "@/lib/dead-drop-upload-client";
 import { createClient } from "@/lib/supabase/client";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -44,6 +45,40 @@ export default function AdminDeadDropsPage() {
   type UploadHint = { tone: "success" | "error"; text: string };
   const [uploadHintByKind, setUploadHintByKind] = useState<Partial<Record<UploadKind, UploadHint>>>({});
   const uploadHintClearTimers = useRef<Partial<Record<UploadKind, number>>>({});
+  type UploadCredsCache =
+    | { status: "unset" }
+    | { status: "direct"; cloudName: string; uploadPreset: string }
+    | { status: "proxy" };
+  const uploadCredsRef = useRef<UploadCredsCache>({ status: "unset" });
+
+  const resolveUploadRoute = useCallback(async (): Promise<
+    { mode: "direct"; cloudName: string; uploadPreset: string } | { mode: "proxy" }
+  > => {
+    const c = uploadCredsRef.current;
+    if (c.status === "direct") {
+      return { mode: "direct", cloudName: c.cloudName, uploadPreset: c.uploadPreset };
+    }
+    if (c.status === "proxy") {
+      return { mode: "proxy" };
+    }
+    const res = await fetch("/api/admin/dead-drops/upload-credentials");
+    const data = (await res.json().catch(() => ({}))) as {
+      direct?: boolean;
+      cloudName?: string;
+      uploadPreset?: string;
+    };
+    if (res.ok && data.direct && data.cloudName && data.uploadPreset) {
+      uploadCredsRef.current = {
+        status: "direct",
+        cloudName: data.cloudName,
+        uploadPreset: data.uploadPreset,
+      };
+      return { mode: "direct", cloudName: data.cloudName, uploadPreset: data.uploadPreset };
+    }
+    uploadCredsRef.current = { status: "proxy" };
+    return { mode: "proxy" };
+  }, []);
+
   const DRAFT_LS_KEY = "honeywell_admin_dead_drops_draft_v1";
   const [draft, setDraft] = useState({
     name: "",
@@ -104,8 +139,9 @@ export default function AdminDeadDropsPage() {
     if (uploadingKind === kind) {
       node = (
         <p className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-900 dark:text-amber-100">
-          <span className="inline-block animate-pulse">●</span> Uploading {label}… This can take 1–3 minutes on a phone.{" "}
-          <strong className="font-semibold">Keep this screen open</strong> until you see “uploaded” below.
+          <span className="inline-block animate-pulse">●</span> Uploading {label}… Photos are resized on-device first; large
+          videos can take a few minutes on cellular. <strong className="font-semibold">Keep this screen open</strong>{" "}
+          until you see “uploaded” below.
         </p>
       );
     } else {
@@ -205,6 +241,10 @@ export default function AdminDeadDropsPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    void resolveUploadRoute();
+  }, [resolveUploadRoute]);
+
   async function uploadDeadDropMedia(kind: UploadKind, file: File, target: "draft" | "edit" = "draft") {
     const label = UPLOAD_LABELS[kind];
     setUploadHintByKind((h) => {
@@ -240,25 +280,59 @@ export default function AdminDeadDropsPage() {
 
     setUploadingKind(kind);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("kind", kind);
+      let uploadFile = file;
+      if (kind !== "location_video_url") {
+        uploadFile = await compressImageFileForUpload(file);
+      }
 
-      const res = await fetch("/api/admin/dead-drops/upload", { method: "POST", body: fd });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      const route = await resolveUploadRoute();
+      let finalUrl: string | undefined;
+      let directError: string | undefined;
 
-      if (!res.ok || !data.url) {
-        const errText = data.error || "Upload failed. Try again on Wi‑Fi or paste a URL instead.";
-        setUploadHintByKind((h) => ({ ...h, [kind]: { tone: "error", text: errText } }));
-        scheduleUploadHintClear(kind, 12000);
-        showToast(errText, false, 6000);
-        return;
+      if (route.mode === "direct") {
+        const resource = kind === "location_video_url" ? "video" : "image";
+        const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(route.cloudName)}/${resource}/upload`;
+        const cForm = new FormData();
+        cForm.append("file", uploadFile);
+        cForm.append("upload_preset", route.uploadPreset);
+        const cRes = await fetch(endpoint, { method: "POST", body: cForm });
+        const cData = (await cRes.json().catch(() => ({}))) as CloudinaryDirectUploadResponse;
+        if (cRes.ok && cData.secure_url) {
+          finalUrl = cData.secure_url;
+        } else {
+          const msg =
+            typeof cData.error === "object" && cData.error?.message
+              ? cData.error.message
+              : typeof cData.error === "string"
+                ? cData.error
+                : "Cloudinary direct upload failed";
+          directError = msg;
+        }
+      }
+
+      if (!finalUrl) {
+        const fd = new FormData();
+        fd.append("file", uploadFile);
+        fd.append("kind", kind);
+        const res = await fetch("/api/admin/dead-drops/upload", { method: "POST", body: fd });
+        const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+        if (!res.ok || !data.url) {
+          const errText =
+            data.error ||
+            directError ||
+            "Upload failed. Try again on Wi‑Fi or paste a URL instead.";
+          setUploadHintByKind((h) => ({ ...h, [kind]: { tone: "error", text: errText } }));
+          scheduleUploadHintClear(kind, 12000);
+          showToast(errText, false, 6000);
+          return;
+        }
+        finalUrl = data.url;
       }
 
       if (target === "edit") {
-        setEditDraft((d) => ({ ...d, [kind]: data.url as string }));
+        setEditDraft((d) => ({ ...d, [kind]: finalUrl as string }));
       } else {
-        setDraft((d) => ({ ...d, [kind]: data.url as string }));
+        setDraft((d) => ({ ...d, [kind]: finalUrl as string }));
       }
       setUploadHintByKind((h) => ({
         ...h,
