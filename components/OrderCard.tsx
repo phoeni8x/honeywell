@@ -69,7 +69,7 @@ export function OrderCard({
 
   const isLegacyPickup = order.fulfillment_type === "pickup";
 
-  const { displayAddress, googleUrl, appleUrl, deadDropWarning, deadDropPhotos, deadDropVideoUrl, deadDropFindInstructions } =
+  const { displayAddress, googleUrl, appleUrl, deadDropPhotos, deadDropVideoUrl, deadDropFindInstructions } =
     useMemo(() => {
     if (order.fulfillment_type === "dead_drop" && order.dead_drop) {
       const dd = order.dead_drop;
@@ -80,7 +80,6 @@ export function OrderCard({
         displayAddress: dd.name,
         googleUrl: dd.google_maps_url ?? mapsUrl,
         appleUrl: dd.apple_maps_url ?? appleMapsUrl,
-        deadDropWarning: dd.dig_up_when_alone_warning ?? null,
         deadDropPhotos: photos,
         deadDropVideoUrl: dd.location_video_url ?? null,
         deadDropFindInstructions: dd.instructions ?? null,
@@ -91,7 +90,6 @@ export function OrderCard({
         displayAddress: order.pickup_location.name + (order.pickup_location.admin_message ? ` — ${order.pickup_location.admin_message}` : ""),
         googleUrl: order.pickup_location.google_maps_url ?? mapsUrl,
         appleUrl: order.pickup_location.apple_maps_url ?? appleMapsUrl,
-        deadDropWarning: null,
         deadDropPhotos: [] as string[],
         deadDropVideoUrl: null,
         deadDropFindInstructions: null,
@@ -101,7 +99,6 @@ export function OrderCard({
       displayAddress: shopAddress,
       googleUrl: mapsUrl,
       appleUrl: appleMapsUrl,
-      deadDropWarning: null,
       deadDropPhotos: [] as string[],
       deadDropVideoUrl: null,
       deadDropFindInstructions: null,
@@ -394,11 +391,6 @@ export function OrderCard({
               <p className="mb-3 rounded-xl border border-green-500/40 bg-green-500/10 px-3 py-2 text-xs text-green-900 dark:text-green-100">
                 <span className="mr-1 font-semibold">Find:</span>
                 {deadDropFindInstructions}
-              </p>
-            )}
-            {order.fulfillment_type === "dead_drop" && deadDropWarning && (
-              <p className="mt-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
-                ⚠️ {deadDropWarning}
               </p>
             )}
             {order.fulfillment_type === "dead_drop" && deadDropVideoUrl && (

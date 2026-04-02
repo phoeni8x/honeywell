@@ -17,7 +17,6 @@ type DeadDropRow = {
   location_video_url?: string | null;
   location_photo_url_2?: string | null;
   location_photo_url_3?: string | null;
-  dig_up_when_alone_warning?: string | null;
   active_from?: string | null;
   active_until?: string | null;
 };
@@ -88,7 +87,6 @@ export default function AdminDeadDropsPage() {
     location_video_url: "",
     location_photo_url_2: "",
     location_photo_url_3: "",
-    dig_up_when_alone_warning: "",
     active_from: "",
     active_until: "",
   });
@@ -102,7 +100,6 @@ export default function AdminDeadDropsPage() {
     location_video_url: "",
     location_photo_url_2: "",
     location_photo_url_3: "",
-    dig_up_when_alone_warning: "",
     active_from: "",
     active_until: "",
   });
@@ -198,8 +195,12 @@ export default function AdminDeadDropsPage() {
     try {
       const raw = window.localStorage.getItem(DRAFT_LS_KEY);
       if (!raw) return;
-      const parsed = JSON.parse(raw) as Partial<typeof draft> & { latitude?: unknown; longitude?: unknown };
-      const { latitude: _lat, longitude: _lon, ...rest } = parsed;
+      const parsed = JSON.parse(raw) as Partial<typeof draft> & {
+        latitude?: unknown;
+        longitude?: unknown;
+        dig_up_when_alone_warning?: unknown;
+      };
+      const { latitude: _lat, longitude: _lon, dig_up_when_alone_warning: _dig, ...rest } = parsed;
       setDraft((d) => ({
         ...d,
         ...rest,
@@ -345,7 +346,6 @@ export default function AdminDeadDropsPage() {
     "location_video_url",
     "location_photo_url_2",
     "location_photo_url_3",
-    "dig_up_when_alone_warning",
   ] as const;
 
   function deadDropErrorText(error: { message?: string; details?: string } | null): string {
@@ -400,7 +400,6 @@ export default function AdminDeadDropsPage() {
         location_video_url: draft.location_video_url || null,
         location_photo_url_2: draft.location_photo_url_2 || null,
         location_photo_url_3: draft.location_photo_url_3 || null,
-        dig_up_when_alone_warning: draft.dig_up_when_alone_warning || null,
         active_from: draft.active_from ? new Date(draft.active_from).toISOString() : null,
         active_until: draft.active_until ? new Date(draft.active_until).toISOString() : null,
         is_active: true,
@@ -451,7 +450,6 @@ export default function AdminDeadDropsPage() {
         location_video_url: "",
         location_photo_url_2: "",
         location_photo_url_3: "",
-        dig_up_when_alone_warning: "",
         active_from: "",
         active_until: "",
       });
@@ -462,7 +460,7 @@ export default function AdminDeadDropsPage() {
       }
       showToast(
         strippedOptional
-          ? "Dead drop saved ✓ Apply Supabase migration 036 to persist extra photos, video, and dig-up warning."
+          ? "Dead drop saved ✓ Apply Supabase migration 036 to persist extra photos and video."
           : "Dead drop saved and set as active ✓"
       );
       load();
@@ -596,7 +594,6 @@ export default function AdminDeadDropsPage() {
       location_video_url: row.location_video_url ?? "",
       location_photo_url_2: row.location_photo_url_2 ?? "",
       location_photo_url_3: row.location_photo_url_3 ?? "",
-      dig_up_when_alone_warning: row.dig_up_when_alone_warning ?? "",
       active_from: toInputValue(row.active_from),
       active_until: toInputValue(row.active_until),
     });
@@ -618,7 +615,6 @@ export default function AdminDeadDropsPage() {
         location_video_url: editDraft.location_video_url || null,
         location_photo_url_2: editDraft.location_photo_url_2 || null,
         location_photo_url_3: editDraft.location_photo_url_3 || null,
-        dig_up_when_alone_warning: editDraft.dig_up_when_alone_warning || null,
         active_from: editDraft.active_from ? new Date(editDraft.active_from).toISOString() : null,
         active_until: editDraft.active_until ? new Date(editDraft.active_until).toISOString() : null,
       };
@@ -656,7 +652,7 @@ export default function AdminDeadDropsPage() {
       setEditingId(null);
       showToast(
         strippedOptional
-          ? "Dead drop updated ✓ Apply Supabase migration 036 for extra photos, video, and dig-up warning."
+          ? "Dead drop updated ✓ Apply Supabase migration 036 for extra photos and video."
           : "Dead drop updated ✓"
       );
       await load();
@@ -843,13 +839,6 @@ export default function AdminDeadDropsPage() {
         </div>
         {renderUploadStatus("location_video_url")}
 
-        <textarea
-          className="min-h-[64px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-          placeholder="Dig up when alone warning (optional)"
-          value={draft.dig_up_when_alone_warning}
-          onChange={(e) => setDraft((d) => ({ ...d, dig_up_when_alone_warning: e.target.value }))}
-          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
-        />
         <div className="grid gap-2 sm:grid-cols-2">
           <input
             type="datetime-local"
@@ -1094,12 +1083,6 @@ export default function AdminDeadDropsPage() {
                   </div>
                   {renderUploadStatus("location_video_url", "gridRow")}
 
-                  <textarea
-                    className="min-h-[64px] rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
-                    placeholder="Dig up when alone warning"
-                    value={editDraft.dig_up_when_alone_warning}
-                    onChange={(e) => setEditDraft((d) => ({ ...d, dig_up_when_alone_warning: e.target.value }))}
-                  />
                   <input
                     type="datetime-local"
                     className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
