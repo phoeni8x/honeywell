@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 type DeadDropRow = {
   id: string;
@@ -25,6 +25,13 @@ type DeadDropRow = {
 
 type ProductOption = { id: string; name: string };
 
+const UPLOAD_LABELS: Record<"location_photo_url" | "location_photo_url_2" | "location_photo_url_3" | "location_video_url", string> = {
+  location_photo_url: "Photo 1",
+  location_photo_url_2: "Photo 2",
+  location_photo_url_3: "Photo 3",
+  location_video_url: "Video",
+};
+
 export default function AdminDeadDropsPage() {
   const [rows, setRows] = useState<DeadDropRow[]>([]);
   const [products, setProducts] = useState<ProductOption[]>([]);
@@ -34,6 +41,9 @@ export default function AdminDeadDropsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   type UploadKind = "location_photo_url" | "location_photo_url_2" | "location_photo_url_3" | "location_video_url";
   const [uploadingKind, setUploadingKind] = useState<UploadKind | null>(null);
+  type UploadHint = { tone: "success" | "error"; text: string };
+  const [uploadHintByKind, setUploadHintByKind] = useState<Partial<Record<UploadKind, UploadHint>>>({});
+  const uploadHintClearTimers = useRef<Partial<Record<UploadKind, number>>>({});
   const DRAFT_LS_KEY = "honeywell_admin_dead_drops_draft_v1";
   const [draft, setDraft] = useState({
     name: "",
@@ -70,9 +80,55 @@ export default function AdminDeadDropsPage() {
   const MAX_ACTIVE_DEAD_DROPS = 200;
   const [activeDeadDropCount, setActiveDeadDropCount] = useState(0);
 
-  function showToast(msg: string, ok = true) {
+  function showToast(msg: string, ok = true, durationMs = 3000) {
     setToast({ msg, ok });
-    window.setTimeout(() => setToast(null), 3000);
+    window.setTimeout(() => setToast(null), durationMs);
+  }
+
+  function scheduleUploadHintClear(kind: UploadKind, delayMs: number) {
+    const prev = uploadHintClearTimers.current[kind];
+    if (prev) window.clearTimeout(prev);
+    uploadHintClearTimers.current[kind] = window.setTimeout(() => {
+      setUploadHintByKind((h) => {
+        const next = { ...h };
+        delete next[kind];
+        return next;
+      });
+      delete uploadHintClearTimers.current[kind];
+    }, delayMs);
+  }
+
+  function renderUploadStatus(kind: UploadKind, layout: "stack" | "gridRow" = "stack") {
+    const label = UPLOAD_LABELS[kind];
+    let node: ReactNode = null;
+    if (uploadingKind === kind) {
+      node = (
+        <p className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-900 dark:text-amber-100">
+          <span className="inline-block animate-pulse">●</span> Uploading {label}… This can take 1–3 minutes on a phone.{" "}
+          <strong className="font-semibold">Keep this screen open</strong> until you see “uploaded” below.
+        </p>
+      );
+    } else {
+      const hint = uploadHintByKind[kind];
+      if (!hint) return null;
+      if (hint.tone === "success") {
+        node = (
+          <p className="mt-2 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-2 text-xs font-semibold text-green-900 dark:text-green-100">
+            ✓ {hint.text}
+          </p>
+        );
+      } else {
+        node = (
+          <p className="mt-2 rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-800 dark:text-red-200">
+            {hint.text}
+          </p>
+        );
+      }
+    }
+    if (layout === "gridRow") {
+      return <div className="sm:col-span-2">{node}</div>;
+    }
+    return node;
   }
 
   const MAX_VIDEO_DURATION_SECONDS = 130; // ~2 minutes
@@ -149,7 +205,14 @@ export default function AdminDeadDropsPage() {
     load();
   }, [load]);
 
-  async function uploadDeadDropMedia(kind: UploadKind, file: File) {
+  async function uploadDeadDropMedia(kind: UploadKind, file: File, target: "draft" | "edit" = "draft") {
+    const label = UPLOAD_LABELS[kind];
+    setUploadHintByKind((h) => {
+      const next = { ...h };
+      delete next[kind];
+      return next;
+    });
+
     if (kind === "location_video_url") {
       const ct = (file.type || "").toLowerCase();
       if (!ct.startsWith("video/")) {
@@ -162,11 +225,16 @@ export default function AdminDeadDropsPage() {
         return;
       }
 
-      // Use duration metadata as the main UX constraint (iPhone clips vary a lot in size).
-      const durationSeconds = await readVideoDurationSeconds(file);
-      if (durationSeconds !== null && durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
-        showToast("Video is too long. Please keep it around ~2 minutes.", false);
-        return;
+      setUploadingKind(kind);
+      try {
+        // Use duration metadata as the main UX constraint (iPhone clips vary a lot in size).
+        const durationSeconds = await readVideoDurationSeconds(file);
+        if (durationSeconds !== null && durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
+          showToast("Video is too long. Please keep it around ~2 minutes.", false);
+          return;
+        }
+      } finally {
+        setUploadingKind(null);
       }
     }
 
@@ -180,12 +248,24 @@ export default function AdminDeadDropsPage() {
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
 
       if (!res.ok || !data.url) {
-        showToast(data.error || "Upload failed. Try again.", false);
+        const errText = data.error || "Upload failed. Try again on Wi‑Fi or paste a URL instead.";
+        setUploadHintByKind((h) => ({ ...h, [kind]: { tone: "error", text: errText } }));
+        scheduleUploadHintClear(kind, 12000);
+        showToast(errText, false, 6000);
         return;
       }
 
-      setDraft((d) => ({ ...d, [kind]: data.url as string }));
-      showToast("Upload successful ✓");
+      if (target === "edit") {
+        setEditDraft((d) => ({ ...d, [kind]: data.url as string }));
+      } else {
+        setDraft((d) => ({ ...d, [kind]: data.url as string }));
+      }
+      setUploadHintByKind((h) => ({
+        ...h,
+        [kind]: { tone: "success", text: `${label} uploaded — link is in the URL field above.` },
+      }));
+      scheduleUploadHintClear(kind, 15000);
+      showToast(`${label} uploaded successfully ✓`, true, 8000);
     } finally {
       setUploadingKind(null);
     }
@@ -481,9 +561,10 @@ export default function AdminDeadDropsPage() {
     <div className="max-w-2xl space-y-8">
       {toast && (
         <div
-          className={`fixed right-4 top-4 z-50 rounded-xl px-5 py-3 text-sm font-semibold shadow-xl ${
+          role="status"
+          className={`fixed z-50 max-w-md rounded-xl px-5 py-3 text-center text-sm font-semibold shadow-xl sm:text-left ${
             toast.ok ? "bg-green-600 text-white" : "bg-red-600 text-white"
-          }`}
+          } bottom-6 left-4 right-4 mx-auto sm:bottom-auto sm:left-auto sm:right-4 sm:top-4 sm:mx-0`}
         >
           {toast.msg}
         </div>
@@ -597,11 +678,12 @@ export default function AdminDeadDropsPage() {
             disabled={uploadingKind === "location_photo_url"}
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) void uploadDeadDropMedia("location_photo_url", f);
+              if (f) void uploadDeadDropMedia("location_photo_url", f, "draft");
               e.currentTarget.value = "";
             }}
           />
         </div>
+        {renderUploadStatus("location_photo_url")}
         <input
           className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
           placeholder="Photo URL #2 (optional)"
@@ -618,11 +700,12 @@ export default function AdminDeadDropsPage() {
             disabled={uploadingKind === "location_photo_url_2"}
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) void uploadDeadDropMedia("location_photo_url_2", f);
+              if (f) void uploadDeadDropMedia("location_photo_url_2", f, "draft");
               e.currentTarget.value = "";
             }}
           />
         </div>
+        {renderUploadStatus("location_photo_url_2")}
 
         <input
           className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
@@ -640,11 +723,12 @@ export default function AdminDeadDropsPage() {
             disabled={uploadingKind === "location_photo_url_3"}
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) void uploadDeadDropMedia("location_photo_url_3", f);
+              if (f) void uploadDeadDropMedia("location_photo_url_3", f, "draft");
               e.currentTarget.value = "";
             }}
           />
         </div>
+        {renderUploadStatus("location_photo_url_3")}
 
         <input
           className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
@@ -662,11 +746,12 @@ export default function AdminDeadDropsPage() {
             disabled={uploadingKind === "location_video_url"}
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) void uploadDeadDropMedia("location_video_url", f);
+              if (f) void uploadDeadDropMedia("location_video_url", f, "draft");
               e.currentTarget.value = "";
             }}
           />
         </div>
+        {renderUploadStatus("location_video_url")}
 
         <textarea
           className="min-h-[64px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
@@ -862,77 +947,81 @@ export default function AdminDeadDropsPage() {
                       disabled={uploadingKind === "location_photo_url"}
                       onChange={(e) => {
                         const f = e.target.files?.[0];
-                        if (f) void uploadDeadDropMedia("location_photo_url", f);
+                        if (f) void uploadDeadDropMedia("location_photo_url", f, "edit");
                         e.currentTarget.value = "";
                       }}
                     />
                   </div>
-          <input
-            className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
-            placeholder="Photo URL #2"
-            value={editDraft.location_photo_url_2}
-            onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_2: e.target.value }))}
-          />
-          <div className="mt-2 sm:col-span-2">
-            <input
-              type="file"
-              accept="image/*"
-              className="w-full text-xs"
-              disabled={uploadingKind === "location_photo_url_2"}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void uploadDeadDropMedia("location_photo_url_2", f);
-                e.currentTarget.value = "";
-              }}
-            />
-          </div>
+                  {renderUploadStatus("location_photo_url", "gridRow")}
+                  <input
+                    className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
+                    placeholder="Photo URL #2"
+                    value={editDraft.location_photo_url_2}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_2: e.target.value }))}
+                  />
+                  <div className="mt-2 sm:col-span-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="w-full text-xs"
+                      disabled={uploadingKind === "location_photo_url_2"}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void uploadDeadDropMedia("location_photo_url_2", f, "edit");
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  </div>
+                  {renderUploadStatus("location_photo_url_2", "gridRow")}
 
-          <input
-            className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
-            placeholder="Photo URL #3"
-            value={editDraft.location_photo_url_3}
-            onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_3: e.target.value }))}
-          />
-          <div className="mt-2 sm:col-span-2">
-            <input
-              type="file"
-              accept="image/*"
-              className="w-full text-xs"
-              disabled={uploadingKind === "location_photo_url_3"}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void uploadDeadDropMedia("location_photo_url_3", f);
-                e.currentTarget.value = "";
-              }}
-            />
-          </div>
+                  <input
+                    className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
+                    placeholder="Photo URL #3"
+                    value={editDraft.location_photo_url_3}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_3: e.target.value }))}
+                  />
+                  <div className="mt-2 sm:col-span-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="w-full text-xs"
+                      disabled={uploadingKind === "location_photo_url_3"}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void uploadDeadDropMedia("location_photo_url_3", f, "edit");
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  </div>
+                  {renderUploadStatus("location_photo_url_3", "gridRow")}
 
-          <input
-            className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
-            placeholder="Video URL"
-            value={editDraft.location_video_url}
-            onChange={(e) => setEditDraft((d) => ({ ...d, location_video_url: e.target.value }))}
-          />
-          <div className="mt-2 sm:col-span-2">
-            <input
-              type="file"
-              accept="video/*"
-              className="w-full text-xs"
-              disabled={uploadingKind === "location_video_url"}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void uploadDeadDropMedia("location_video_url", f);
-                e.currentTarget.value = "";
-              }}
-            />
-          </div>
+                  <input
+                    className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
+                    placeholder="Video URL"
+                    value={editDraft.location_video_url}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, location_video_url: e.target.value }))}
+                  />
+                  <div className="mt-2 sm:col-span-2">
+                    <input
+                      type="file"
+                      accept="video/*"
+                      className="w-full text-xs"
+                      disabled={uploadingKind === "location_video_url"}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void uploadDeadDropMedia("location_video_url", f, "edit");
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  </div>
+                  {renderUploadStatus("location_video_url", "gridRow")}
 
-          <textarea
-            className="min-h-[64px] rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
-            placeholder="Dig up when alone warning"
-            value={editDraft.dig_up_when_alone_warning}
-            onChange={(e) => setEditDraft((d) => ({ ...d, dig_up_when_alone_warning: e.target.value }))}
-          />
+                  <textarea
+                    className="min-h-[64px] rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
+                    placeholder="Dig up when alone warning"
+                    value={editDraft.dig_up_when_alone_warning}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, dig_up_when_alone_warning: e.target.value }))}
+                  />
                   <input
                     type="datetime-local"
                     className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
