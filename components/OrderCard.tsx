@@ -57,6 +57,7 @@ export function OrderCard({
   const product = order.product;
   const statusLabel = ORDER_STATUS_LABELS[order.status] ?? order.status;
   const isFinalStatus = ["delivered", "picked_up", "cancelled", "payment_expired"].includes(order.status);
+  const isVipCustomer = order.user_type === "team_member";
   const showRevolutPayNowBanner =
     order.payment_method === "revolut" &&
     order.revolut_pay_timing === "pay_now" &&
@@ -288,7 +289,7 @@ export function OrderCard({
             {showRevolutPayNowBanner && (
               <div className="mt-3 rounded-2xl border-2 border-amber-400/60 bg-amber-50 px-4 py-3 dark:bg-amber-400/10">
                 <p className="mb-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
-                  Payment required to confirm your order
+                  {isVipCustomer ? "Pay with bank transfer" : "Payment required to confirm your order"}
                 </p>
                 <a
                   href={revolutPaymentLink || "#"}
@@ -305,7 +306,7 @@ export function OrderCard({
                     }
                   }}
                 >
-                  Open bank transfer payment
+                  {isVipCustomer ? "Pay with bank transfer" : "Open bank transfer payment"}
                   <ExternalLink className="h-4 w-4" />
                 </a>
                 <p className="mt-2 text-center text-xs text-amber-600 dark:text-amber-400">
