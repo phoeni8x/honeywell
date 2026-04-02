@@ -449,85 +449,92 @@ export default function AdminDeadDropsPage() {
             }}
           />
         </div>
-        <input
-          className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-          placeholder="Photo URL #2 (optional)"
-          value={draft.location_photo_url_2}
-          enterKeyHint="next"
-          onChange={(e) => setDraft((d) => ({ ...d, location_photo_url_2: e.target.value }))}
-          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
-        />
-        <div className="mt-2">
-          <input
-            type="file"
-            accept="image/*"
-            className="w-full text-xs"
-            disabled={uploadingKind === "location_photo_url_2"}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void uploadDeadDropMedia("location_photo_url_2", f);
-              e.currentTarget.value = "";
-            }}
+        {deadDropColumnSet.has("location_photo_url_2") ? (
+          <>
+            <input
+              className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              placeholder="Photo URL #2 (optional)"
+              value={draft.location_photo_url_2}
+              enterKeyHint="next"
+              onChange={(e) => setDraft((d) => ({ ...d, location_photo_url_2: e.target.value }))}
+              onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+            />
+            <div className="mt-2">
+              <input
+                type="file"
+                accept="image/*"
+                className="w-full text-xs"
+                disabled={uploadingKind === "location_photo_url_2"}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void uploadDeadDropMedia("location_photo_url_2", f);
+                  e.currentTarget.value = "";
+                }}
+              />
+            </div>
+          </>
+        ) : null}
+
+        {deadDropColumnSet.has("location_photo_url_3") ? (
+          <>
+            <input
+              className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              placeholder="Photo URL #3 (optional)"
+              value={draft.location_photo_url_3}
+              enterKeyHint="next"
+              onChange={(e) => setDraft((d) => ({ ...d, location_photo_url_3: e.target.value }))}
+              onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+            />
+            <div className="mt-2">
+              <input
+                type="file"
+                accept="image/*"
+                className="w-full text-xs"
+                disabled={uploadingKind === "location_photo_url_3"}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void uploadDeadDropMedia("location_photo_url_3", f);
+                  e.currentTarget.value = "";
+                }}
+              />
+            </div>
+          </>
+        ) : null}
+        {deadDropColumnSet.has("location_video_url") ? (
+          <>
+            <input
+              className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              placeholder="Video URL (optional)"
+              value={draft.location_video_url}
+              enterKeyHint="next"
+              onChange={(e) => setDraft((d) => ({ ...d, location_video_url: e.target.value }))}
+              onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+            />
+            <div className="mt-2">
+              <input
+                type="file"
+                accept="video/*"
+                className="w-full text-xs"
+                disabled={uploadingKind === "location_video_url"}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void uploadDeadDropMedia("location_video_url", f);
+                  e.currentTarget.value = "";
+                }}
+              />
+            </div>
+          </>
+        ) : null}
+
+        {deadDropColumnSet.has("dig_up_when_alone_warning") ? (
+          <textarea
+            className="min-h-[64px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+            placeholder="Dig up when alone warning (optional)"
+            value={draft.dig_up_when_alone_warning}
+            onChange={(e) => setDraft((d) => ({ ...d, dig_up_when_alone_warning: e.target.value }))}
+            onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
           />
-          {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_photo_url_2") ? (
-            <p className="mt-1 text-[11px] text-amber-700">DB column for Photo #2 not available yet.</p>
-          ) : null}
-        </div>
-        <input
-          className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-          placeholder="Photo URL #3 (optional)"
-          value={draft.location_photo_url_3}
-          enterKeyHint="next"
-          onChange={(e) => setDraft((d) => ({ ...d, location_photo_url_3: e.target.value }))}
-          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
-        />
-        <div className="mt-2">
-          <input
-            type="file"
-            accept="image/*"
-            className="w-full text-xs"
-            disabled={uploadingKind === "location_photo_url_3"}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void uploadDeadDropMedia("location_photo_url_3", f);
-              e.currentTarget.value = "";
-            }}
-          />
-          {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_photo_url_3") ? (
-            <p className="mt-1 text-[11px] text-amber-700">DB column for Photo #3 not available yet.</p>
-          ) : null}
-        </div>
-        <input
-          className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-          placeholder="Video URL (optional)"
-          value={draft.location_video_url}
-          enterKeyHint="next"
-          onChange={(e) => setDraft((d) => ({ ...d, location_video_url: e.target.value }))}
-          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
-        />
-        <div className="mt-2">
-          <input
-            type="file"
-            accept="video/*"
-            className="w-full text-xs"
-            disabled={uploadingKind === "location_video_url"}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void uploadDeadDropMedia("location_video_url", f);
-              e.currentTarget.value = "";
-            }}
-          />
-          {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_video_url") ? (
-            <p className="mt-1 text-[11px] text-amber-700">DB column for Video not available yet.</p>
-          ) : null}
-        </div>
-        <textarea
-          className="min-h-[64px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-          placeholder="Dig up when alone warning (optional)"
-          value={draft.dig_up_when_alone_warning}
-          onChange={(e) => setDraft((d) => ({ ...d, dig_up_when_alone_warning: e.target.value }))}
-          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
-        />
+        ) : null}
         <div className="grid gap-2 sm:grid-cols-2">
           <input
             type="datetime-local"
@@ -720,78 +727,84 @@ export default function AdminDeadDropsPage() {
                       }}
                     />
                   </div>
-          <input
-            className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
-            placeholder="Photo URL #2"
-            value={editDraft.location_photo_url_2}
-            onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_2: e.target.value }))}
-          />
-          <div className="mt-2 sm:col-span-2">
-            <input
-              type="file"
-              accept="image/*"
-              className="w-full text-xs"
-              disabled={uploadingKind === "location_photo_url_2"}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void uploadDeadDropMedia("location_photo_url_2", f);
-                e.currentTarget.value = "";
-              }}
+          {deadDropColumnSet.has("location_photo_url_2") ? (
+            <>
+              <input
+                className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
+                placeholder="Photo URL #2"
+                value={editDraft.location_photo_url_2}
+                onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_2: e.target.value }))}
+              />
+              <div className="mt-2 sm:col-span-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="w-full text-xs"
+                  disabled={uploadingKind === "location_photo_url_2"}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void uploadDeadDropMedia("location_photo_url_2", f);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              </div>
+            </>
+          ) : null}
+
+          {deadDropColumnSet.has("location_photo_url_3") ? (
+            <>
+              <input
+                className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
+                placeholder="Photo URL #3"
+                value={editDraft.location_photo_url_3}
+                onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_3: e.target.value }))}
+              />
+              <div className="mt-2 sm:col-span-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="w-full text-xs"
+                  disabled={uploadingKind === "location_photo_url_3"}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void uploadDeadDropMedia("location_photo_url_3", f);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              </div>
+            </>
+          ) : null}
+          {deadDropColumnSet.has("location_video_url") ? (
+            <>
+              <input
+                className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
+                placeholder="Video URL"
+                value={editDraft.location_video_url}
+                onChange={(e) => setEditDraft((d) => ({ ...d, location_video_url: e.target.value }))}
+              />
+              <div className="mt-2 sm:col-span-2">
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="w-full text-xs"
+                  disabled={uploadingKind === "location_video_url"}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void uploadDeadDropMedia("location_video_url", f);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              </div>
+            </>
+          ) : null}
+          {deadDropColumnSet.has("dig_up_when_alone_warning") ? (
+            <textarea
+              className="min-h-[64px] rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
+              placeholder="Dig up when alone warning"
+              value={editDraft.dig_up_when_alone_warning}
+              onChange={(e) => setEditDraft((d) => ({ ...d, dig_up_when_alone_warning: e.target.value }))}
             />
-            {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_photo_url_2") ? (
-              <p className="mt-1 text-[11px] text-amber-700">DB column for Photo #2 not available yet.</p>
-            ) : null}
-          </div>
-          <input
-            className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
-            placeholder="Photo URL #3"
-            value={editDraft.location_photo_url_3}
-            onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_3: e.target.value }))}
-          />
-          <div className="mt-2 sm:col-span-2">
-            <input
-              type="file"
-              accept="image/*"
-              className="w-full text-xs"
-              disabled={uploadingKind === "location_photo_url_3"}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void uploadDeadDropMedia("location_photo_url_3", f);
-                e.currentTarget.value = "";
-              }}
-            />
-            {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_photo_url_3") ? (
-              <p className="mt-1 text-[11px] text-amber-700">DB column for Photo #3 not available yet.</p>
-            ) : null}
-          </div>
-          <input
-            className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
-            placeholder="Video URL"
-            value={editDraft.location_video_url}
-            onChange={(e) => setEditDraft((d) => ({ ...d, location_video_url: e.target.value }))}
-          />
-          <div className="mt-2 sm:col-span-2">
-            <input
-              type="file"
-              accept="video/*"
-              className="w-full text-xs"
-              disabled={uploadingKind === "location_video_url"}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void uploadDeadDropMedia("location_video_url", f);
-                e.currentTarget.value = "";
-              }}
-            />
-            {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_video_url") ? (
-              <p className="mt-1 text-[11px] text-amber-700">DB column for Video not available yet.</p>
-            ) : null}
-          </div>
-          <textarea
-            className="min-h-[64px] rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
-            placeholder="Dig up when alone warning"
-            value={editDraft.dig_up_when_alone_warning}
-            onChange={(e) => setEditDraft((d) => ({ ...d, dig_up_when_alone_warning: e.target.value }))}
-          />
+          ) : null}
                   <input
                     type="datetime-local"
                     className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
