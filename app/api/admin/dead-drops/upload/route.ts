@@ -2,6 +2,7 @@ import { requireAdminUser } from "@/lib/admin-auth";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
+import { v2 as cloudinary } from "cloudinary";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,34 @@ export async function POST(request: Request) {
       if (!ct.startsWith("video/")) {
         return NextResponse.json({ error: "Please upload a valid video file." }, { status: 400 });
       }
+    }
+
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim() || "";
+    const apiKey = process.env.CLOUDINARY_API_KEY?.trim() || "";
+    const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim() || "";
+
+    // Prefer Cloudinary if configured (better for large iPhone media). Fallback to Supabase Storage otherwise.
+    if (cloudName && apiKey && apiSecret) {
+      cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret, secure: true });
+      const ext = pickExt(file.name, file.type || "");
+      const rand = Math.random().toString(16).slice(2);
+      const ts = Date.now();
+      const publicId = `dead-drops/${kind}/${ts}-${rand}.${ext}`;
+      const bytes = Buffer.from(await file.arrayBuffer());
+
+      const resourceType = kind === "location_video_url" ? "video" : "image";
+      const uploaded = await new Promise<{ secure_url: string }>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { public_id: publicId, resource_type: resourceType, overwrite: true },
+          (err, result) => {
+            if (err || !result?.secure_url) return reject(err || new Error("Upload failed"));
+            resolve({ secure_url: result.secure_url });
+          }
+        );
+        stream.end(bytes);
+      });
+
+      return NextResponse.json({ ok: true, url: uploaded.secure_url });
     }
 
     const svc = createServiceClient();

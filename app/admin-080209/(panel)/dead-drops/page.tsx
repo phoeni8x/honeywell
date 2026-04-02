@@ -191,6 +191,30 @@ export default function AdminDeadDropsPage() {
     }
   }
 
+  function isMissingDeadDropColumnError(msg: string) {
+    const m = msg.toLowerCase();
+    return (
+      m.includes("could not find the") ||
+      (m.includes("does not exist") && m.includes("dead_drops")) ||
+      (m.includes("column") && m.includes("dead_drops") && m.includes("schema"))
+    );
+  }
+
+  function stripOptionalDeadDropColumns(payload: Record<string, unknown>, msg: string) {
+    const m = msg.toLowerCase();
+    const next = { ...payload };
+    const candidates = [
+      "location_video_url",
+      "location_photo_url_2",
+      "location_photo_url_3",
+      "dig_up_when_alone_warning",
+    ] as const;
+    for (const k of candidates) {
+      if (m.includes(k)) delete (next as any)[k];
+    }
+    return next;
+  }
+
   async function saveActive() {
     if (!draft.name.trim()) {
       showToast("Please enter a location name.", false);
@@ -222,24 +246,28 @@ export default function AdminDeadDropsPage() {
         is_active: true,
       };
 
-      const { error } = await supabase.from("dead_drops").insert(payload);
+      let insertPayload = payload;
+      let { error } = await supabase.from("dead_drops").insert(insertPayload);
       if (error) {
         const details = String(error.message ?? (error as any).details ?? "").trim();
         const msg = details.toLowerCase();
-        if (msg.includes("max_active_dead_drops_reached")) {
-          showToast(`Max active dead drops reached (${MAX_ACTIVE_DEAD_DROPS}). Deactivate some first.`, false);
-        } else if (
-          msg.includes("does not exist") &&
-          (msg.includes("location_photo_url_2") ||
-            msg.includes("location_photo_url_3") ||
-            msg.includes("location_video_url") ||
-            msg.includes("dig_up_when_alone_warning"))
-        ) {
-          showToast("Adding failed: DB is missing dead-drops media columns (photo #2/#3, video, warning). Please apply the migration so these columns exist.", false);
-        } else {
-          showToast(`Adding failed: ${details ? details.slice(0, 160) : "Try again."}`, false);
+        // If DB is missing optional media columns, retry without those keys so admin can still save the slot.
+        if (isMissingDeadDropColumnError(details)) {
+          insertPayload = stripOptionalDeadDropColumns(insertPayload, details);
+          const retry = await supabase.from("dead_drops").insert(insertPayload);
+          error = retry.error;
+          if (!error) {
+            showToast("Dead drop saved ✓ (Some media fields not saved yet — DB columns need migration)");
+          }
         }
-        return;
+        if (error) {
+          if (msg.includes("max_active_dead_drops_reached")) {
+            showToast(`Max active dead drops reached (${MAX_ACTIVE_DEAD_DROPS}). Deactivate some first.`, false);
+          } else {
+            showToast(`Adding failed: ${details ? details.slice(0, 160) : "Try again."}`, false);
+          }
+          return;
+        }
       }
       setDraft({
         name: "",
@@ -423,22 +451,23 @@ export default function AdminDeadDropsPage() {
         active_until: editDraft.active_until ? new Date(editDraft.active_until).toISOString() : null,
       };
 
-      const { error } = await supabase.from("dead_drops").update(payload).eq("id", id);
+      let updatePayload = payload;
+      let { error } = await supabase.from("dead_drops").update(updatePayload).eq("id", id);
       if (error) {
         const details = String(error.message ?? (error as any).details ?? "").trim();
-        const msg = details.toLowerCase();
-        if (
-          msg.includes("does not exist") &&
-          (msg.includes("location_photo_url_2") ||
-            msg.includes("location_photo_url_3") ||
-            msg.includes("location_video_url") ||
-            msg.includes("dig_up_when_alone_warning"))
-        ) {
-          showToast("Updating failed: DB is missing dead-drops media columns (photo #2/#3, video, warning). Please apply the migration so these columns exist.", false);
-        } else {
-          showToast(`Updating failed: ${details ? details.slice(0, 160) : "Try again."}`, false);
+        // If DB is missing optional media columns, retry without those keys so edits can still be saved.
+        if (isMissingDeadDropColumnError(details)) {
+          updatePayload = stripOptionalDeadDropColumns(updatePayload, details);
+          const retry = await supabase.from("dead_drops").update(updatePayload).eq("id", id);
+          error = retry.error;
+          if (!error) {
+            showToast("Dead drop updated ✓ (Some media fields not saved yet — DB columns need migration)");
+          }
         }
-        return;
+        if (error) {
+          showToast(`Updating failed: ${details ? details.slice(0, 160) : "Try again."}`, false);
+          return;
+        }
       }
       setEditingId(null);
       showToast("Dead drop updated ✓");
