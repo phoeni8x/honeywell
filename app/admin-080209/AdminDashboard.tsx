@@ -12,6 +12,7 @@ import { PendingApprovalQueue } from "@/components/admin/PendingApprovalQueue";
 import { useAdminPushNotifications } from "@/hooks/useAdminPushNotifications";
 import { createClient } from "@/lib/supabase/client";
 import type { Announcement, Order, Product } from "@/types";
+import { RainbowHeading } from "@/components/BrandHoneyWellTitle";
 import clsx from "clsx";
 import { LogOut } from "lucide-react";
 import Image from "next/image";
@@ -195,7 +196,11 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="font-display text-3xl text-honey-text">Dashboard</h1>
+        <RainbowHeading
+          as="h1"
+          text="DASHBOARD"
+          className="text-3xl tracking-[0.12em] sm:tracking-[0.14em]"
+        />
         <div className="flex items-center gap-2">
           {adminPushState !== "unsupported" && adminPushState !== "subscribed" && (
             <button
@@ -232,13 +237,15 @@ export default function AdminDashboard() {
           <Stat label="Sales today" value={salesToday} />
           <Stat label="Cancelled (today)" value={cancelledToday} />
           <Stat label="Cancelled (all)" value={cancelledTotal} />
-          <div className="card-hive flex gap-4 rounded-xl p-6 sm:col-span-3 lg:col-span-2">
+          <div className="relative flex gap-4 rounded-xl border border-white/10 bg-gradient-to-r from-fuchsia-500/10 via-amber-400/10 to-cyan-500/10 p-6 shadow-[4px_4px_0_rgba(240,192,64,0.12)] sm:col-span-3 lg:col-span-2">
             <div className="hex-border relative flex h-14 w-12 shrink-0 items-center justify-center bg-bg-secondary hex-clip">
-              <span className="font-display text-lg font-bold text-primary">Ft</span>
+              <span className="font-display text-lg font-bold bg-gradient-to-r from-fuchsia-500 via-amber-400 to-cyan-400 bg-clip-text text-transparent">
+                Ft
+              </span>
             </div>
             <div>
               <p className="text-sm text-honey-muted">Completed revenue today</p>
-              <p className="mt-1 font-display text-3xl text-honey-text">
+              <p className="mt-1 font-display text-3xl bg-gradient-to-r from-fuchsia-500 via-amber-400 to-cyan-400 bg-clip-text text-transparent">
                 {formatPrice(Math.round(completedRevenueToday), shopCurrency)}
               </p>
             </div>
@@ -283,13 +290,17 @@ export default function AdminDashboard() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="card-hive flex gap-4 rounded-xl p-6">
+    <div className="relative flex gap-4 rounded-xl border border-white/10 bg-gradient-to-r from-fuchsia-500/10 via-amber-400/10 to-cyan-500/10 p-6 shadow-[4px_4px_0_rgba(240,192,64,0.12)] transition hover:-translate-y-0.5 hover:shadow-[6px_6px_0_rgba(240,192,64,0.18)]">
       <div className="hex-border relative flex h-14 w-12 shrink-0 items-center justify-center bg-bg-secondary hex-clip">
-        <span className="font-display text-lg font-bold text-primary">#</span>
+        <span className="font-display text-lg font-bold bg-gradient-to-r from-fuchsia-500 via-amber-400 to-cyan-400 bg-clip-text text-transparent">
+          #
+        </span>
       </div>
       <div>
         <p className="text-sm text-honey-muted">{label}</p>
-        <p className="mt-1 font-display text-3xl text-honey-text">{value}</p>
+        <p className="mt-1 font-display text-3xl bg-gradient-to-r from-fuchsia-500 via-amber-400 to-cyan-400 bg-clip-text text-transparent">
+          {value}
+        </p>
       </div>
     </div>
   );
