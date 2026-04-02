@@ -1,6 +1,6 @@
 "use client";
 
-import { BrandHoneyWellTitle, RainbowHexLogo } from "@/components/BrandHoneyWellTitle";
+import { BrandHoneyWellTitle, RainbowHeading, RainbowHexLogo } from "@/components/BrandHoneyWellTitle";
 import { BeeSvg } from "@/components/BeeSvg";
 import { HoneycombBg } from "@/components/HoneycombBg";
 import { LS_TELEGRAM_USERNAME, LS_USER_TYPE } from "@/lib/constants";
@@ -139,7 +139,11 @@ export default function SplashPage() {
             aria-label="Close"
           />
           <div className="card-hive relative w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl dark:bg-surface-dark">
-            <h2 className="font-display text-2xl text-honey-text">VIP verification</h2>
+            <RainbowHeading
+              text="VIP VERIFICATION"
+              as="h2"
+              className="text-center font-display text-xl tracking-[0.12em] sm:text-2xl sm:tracking-[0.16em]"
+            />
             <p className="mt-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-honey-muted">
               Before using the website, open our bot and type or tap{" "}
               <code className="rounded bg-honey-border/50 px-1 font-mono text-honey-text">/start</code> so you&apos;re
@@ -194,14 +198,17 @@ export default function SplashPage() {
                 type="button"
                 onClick={verifyTeam}
                 disabled={loading}
-                className="btn-primary flex-1 py-3 text-sm disabled:opacity-60"
+                className="btn-cta-green flex-1 py-3 text-sm disabled:opacity-60"
               >
                 {loading ? "Checking…" : "Verify"}
               </button>
             </div>
             <p className="mt-4 text-center text-sm text-honey-muted">
               Not verified?{" "}
-              <Link href="/not-a-member" className="font-semibold text-primary underline-offset-2 hover:underline">
+              <Link
+                href="/not-a-member"
+                className="font-semibold text-red-500 underline-offset-2 hover:text-red-400 hover:underline"
+              >
                 Continue as guest
               </Link>
             </p>

@@ -49,6 +49,33 @@ function letterSpan(ch: string, globalIndex: number) {
   );
 }
 
+/** Per-letter rainbow + bounce (matches brand title treatment). */
+export function RainbowHeading({
+  text,
+  className,
+  as: Comp = "h2",
+}: {
+  text: string;
+  className?: string;
+  as?: "h1" | "h2" | "h3" | "p" | "span";
+}) {
+  let letterIndex = 0;
+  return (
+    <Comp className={clsx("text-balance", className)} aria-label={text}>
+      {text.split("").map((ch, i) => {
+        if (ch === " ") {
+          return (
+            <span key={`sp-${i}`} className="inline-block w-2 sm:w-2.5" aria-hidden>
+              {" "}
+            </span>
+          );
+        }
+        return letterSpan(ch, letterIndex++);
+      })}
+    </Comp>
+  );
+}
+
 export function BrandHoneyWellTitle({
   size = "md",
   className,
