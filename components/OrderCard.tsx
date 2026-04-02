@@ -65,12 +65,21 @@ export function OrderCard({
 
   const isLegacyPickup = order.fulfillment_type === "pickup";
 
-  const { displayAddress, googleUrl, appleUrl } = useMemo(() => {
+  const { displayAddress, googleUrl, appleUrl, deadDropWarning, deadDropPhotos, deadDropVideoUrl, deadDropCoords } =
+    useMemo(() => {
     if (order.fulfillment_type === "dead_drop" && order.dead_drop) {
+      const dd = order.dead_drop;
+      const photos = [dd.location_photo_url, dd.location_photo_url_2, dd.location_photo_url_3].filter(
+        (p): p is string => Boolean(p)
+      );
       return {
-        displayAddress: order.dead_drop.name + (order.dead_drop.instructions ? ` — ${order.dead_drop.instructions}` : ""),
-        googleUrl: order.dead_drop.google_maps_url ?? mapsUrl,
-        appleUrl: order.dead_drop.apple_maps_url ?? appleMapsUrl,
+        displayAddress: dd.name + (dd.instructions ? ` — ${dd.instructions}` : ""),
+        googleUrl: dd.google_maps_url ?? mapsUrl,
+        appleUrl: dd.apple_maps_url ?? appleMapsUrl,
+        deadDropWarning: dd.dig_up_when_alone_warning ?? null,
+        deadDropPhotos: photos,
+        deadDropVideoUrl: dd.location_video_url ?? null,
+        deadDropCoords: { latitude: dd.latitude, longitude: dd.longitude },
       };
     }
     if (order.fulfillment_type === "pickup" && order.pickup_location) {
@@ -78,9 +87,21 @@ export function OrderCard({
         displayAddress: order.pickup_location.name + (order.pickup_location.admin_message ? ` — ${order.pickup_location.admin_message}` : ""),
         googleUrl: order.pickup_location.google_maps_url ?? mapsUrl,
         appleUrl: order.pickup_location.apple_maps_url ?? appleMapsUrl,
+        deadDropWarning: null,
+        deadDropPhotos: [] as string[],
+        deadDropVideoUrl: null,
+        deadDropCoords: null,
       };
     }
-    return { displayAddress: shopAddress, googleUrl: mapsUrl, appleUrl: appleMapsUrl };
+    return {
+      displayAddress: shopAddress,
+      googleUrl: mapsUrl,
+      appleUrl: appleMapsUrl,
+      deadDropWarning: null,
+      deadDropPhotos: [] as string[],
+      deadDropVideoUrl: null,
+      deadDropCoords: null,
+    };
   }, [order, shopAddress, mapsUrl, appleMapsUrl]);
 
   const showLocationSection =
@@ -367,6 +388,42 @@ export function OrderCard({
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
               <span>{displayAddress}</span>
             </p>
+            {order.fulfillment_type === "dead_drop" && deadDropCoords && (
+              <p className="mt-1 break-all font-mono text-xs text-honey-muted">
+                Coordinates: {deadDropCoords.latitude.toFixed(6)}, {deadDropCoords.longitude.toFixed(6)}
+              </p>
+            )}
+            {order.fulfillment_type === "dead_drop" && deadDropWarning && (
+              <p className="mt-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+                ⚠️ {deadDropWarning}
+              </p>
+            )}
+            {order.fulfillment_type === "dead_drop" && deadDropVideoUrl && (
+              <div className="mt-3 overflow-hidden rounded-xl border border-honey-border bg-black/20">
+                <video
+                  src={deadDropVideoUrl}
+                  controls
+                  preload="metadata"
+                  className="max-h-56 w-full object-contain"
+                />
+              </div>
+            )}
+            {order.fulfillment_type === "dead_drop" && deadDropPhotos.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {deadDropPhotos.map((url, idx) => (
+                  <a
+                    key={`${url}-${idx}`}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block overflow-hidden rounded-lg border border-honey-border/60 bg-black/20"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`Dead drop photo ${idx + 1}`} loading="lazy" className="h-20 w-full object-cover" />
+                  </a>
+                ))}
+              </div>
+            )}
             {isLegacyPickup && (
               <p className="mb-3 text-xs text-honey-muted">
                 Older pickup order — contact support if you need help completing this order.

@@ -91,6 +91,10 @@ export interface DeadDropRow {
   apple_maps_url: string | null;
   instructions: string | null;
   location_photo_url: string | null;
+  location_video_url?: string | null;
+  location_photo_url_2?: string | null;
+  location_photo_url_3?: string | null;
+  dig_up_when_alone_warning?: string | null;
 }
 
 export interface ShopLocationRow {

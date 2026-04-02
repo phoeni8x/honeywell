@@ -15,6 +15,10 @@ type DeadDropRow = {
   google_maps_url?: string | null;
   apple_maps_url?: string | null;
   location_photo_url?: string | null;
+  location_video_url?: string | null;
+  location_photo_url_2?: string | null;
+  location_photo_url_3?: string | null;
+  dig_up_when_alone_warning?: string | null;
   active_from?: string | null;
   active_until?: string | null;
 };
@@ -37,6 +41,10 @@ export default function AdminDeadDropsPage() {
     apple_maps_url: "",
     instructions: "",
     location_photo_url: "",
+    location_video_url: "",
+    location_photo_url_2: "",
+    location_photo_url_3: "",
+    dig_up_when_alone_warning: "",
     active_from: "",
     active_until: "",
   });
@@ -49,9 +57,15 @@ export default function AdminDeadDropsPage() {
     apple_maps_url: "",
     instructions: "",
     location_photo_url: "",
+    location_video_url: "",
+    location_photo_url_2: "",
+    location_photo_url_3: "",
+    dig_up_when_alone_warning: "",
     active_from: "",
     active_until: "",
   });
+  const MAX_ACTIVE_DEAD_DROPS = 200;
+  const [activeDeadDropCount, setActiveDeadDropCount] = useState(0);
 
   function showToast(msg: string, ok = true) {
     setToast({ msg, ok });
@@ -65,7 +79,9 @@ export default function AdminDeadDropsPage() {
       supabase.from("settings").select("value").eq("key", "fulfillment_dead_drop_enabled").maybeSingle(),
       supabase.from("products").select("id, name").eq("is_active", true).order("name"),
     ]);
-    setRows((data as DeadDropRow[]) ?? []);
+    const list = ((data as DeadDropRow[]) ?? []) as DeadDropRow[];
+    setRows(list);
+    setActiveDeadDropCount(list.filter((r) => r.is_active).length);
     setDeadDropEnabled(st?.value === "0" ? "0" : "1");
     setProducts((prods as ProductOption[]) ?? []);
   }, []);
@@ -77,6 +93,10 @@ export default function AdminDeadDropsPage() {
   async function saveActive() {
     if (!draft.name.trim()) {
       showToast("Please enter a location name.", false);
+      return;
+    }
+    if (activeDeadDropCount >= MAX_ACTIVE_DEAD_DROPS) {
+      showToast(`Max active dead drops reached (${MAX_ACTIVE_DEAD_DROPS}). Deactivate some first.`, false);
       return;
     }
     setLoading(true);
@@ -91,12 +111,21 @@ export default function AdminDeadDropsPage() {
         apple_maps_url: draft.apple_maps_url || null,
         instructions: draft.instructions || null,
         location_photo_url: draft.location_photo_url || null,
+        location_video_url: draft.location_video_url || null,
+        location_photo_url_2: draft.location_photo_url_2 || null,
+        location_photo_url_3: draft.location_photo_url_3 || null,
+        dig_up_when_alone_warning: draft.dig_up_when_alone_warning || null,
         active_from: draft.active_from ? new Date(draft.active_from).toISOString() : null,
         active_until: draft.active_until ? new Date(draft.active_until).toISOString() : null,
         is_active: true,
       });
       if (error) {
-        showToast("Failed to save. Try again.", false);
+        const msg = String(error.message ?? error.details ?? "").toLowerCase();
+        if (msg.includes("max_active_dead_drops_reached")) {
+          showToast(`Max active dead drops reached (${MAX_ACTIVE_DEAD_DROPS}). Deactivate some first.`, false);
+        } else {
+          showToast("Failed to save. Try again.", false);
+        }
         return;
       }
       setDraft({
@@ -108,6 +137,10 @@ export default function AdminDeadDropsPage() {
         apple_maps_url: "",
         instructions: "",
         location_photo_url: "",
+        location_video_url: "",
+        location_photo_url_2: "",
+        location_photo_url_3: "",
+        dig_up_when_alone_warning: "",
         active_from: "",
         active_until: "",
       });
@@ -122,9 +155,19 @@ export default function AdminDeadDropsPage() {
     setLoading(true);
     try {
       const supabase = createClient();
+      const row = rows.find((r) => r.id === id);
+      if (row && !row.is_active && activeDeadDropCount >= MAX_ACTIVE_DEAD_DROPS) {
+        showToast(`Max active dead drops reached (${MAX_ACTIVE_DEAD_DROPS}). Deactivate some first.`, false);
+        return;
+      }
       const { error } = await supabase.from("dead_drops").update({ is_active: true }).eq("id", id);
       if (error) {
-        showToast("Failed to activate. Try again.", false);
+        const msg = String(error.message ?? error.details ?? "").toLowerCase();
+        if (msg.includes("max_active_dead_drops_reached")) {
+          showToast(`Max active dead drops reached (${MAX_ACTIVE_DEAD_DROPS}). Deactivate some first.`, false);
+        } else {
+          showToast("Failed to activate. Try again.", false);
+        }
         return;
       }
       showToast("Dead drop activated ✓");
@@ -205,6 +248,10 @@ export default function AdminDeadDropsPage() {
       apple_maps_url: row.apple_maps_url ?? "",
       instructions: row.instructions ?? "",
       location_photo_url: row.location_photo_url ?? "",
+      location_video_url: row.location_video_url ?? "",
+      location_photo_url_2: row.location_photo_url_2 ?? "",
+      location_photo_url_3: row.location_photo_url_3 ?? "",
+      dig_up_when_alone_warning: row.dig_up_when_alone_warning ?? "",
       active_from: toInputValue(row.active_from),
       active_until: toInputValue(row.active_until),
     });
@@ -223,6 +270,10 @@ export default function AdminDeadDropsPage() {
         apple_maps_url: editDraft.apple_maps_url || null,
         instructions: editDraft.instructions || null,
         location_photo_url: editDraft.location_photo_url || null,
+        location_video_url: editDraft.location_video_url || null,
+        location_photo_url_2: editDraft.location_photo_url_2 || null,
+        location_photo_url_3: editDraft.location_photo_url_3 || null,
+        dig_up_when_alone_warning: editDraft.dig_up_when_alone_warning || null,
         active_from: editDraft.active_from ? new Date(editDraft.active_from).toISOString() : null,
         active_until: editDraft.active_until ? new Date(editDraft.active_until).toISOString() : null,
       };
@@ -349,6 +400,37 @@ export default function AdminDeadDropsPage() {
           value={draft.location_photo_url}
           enterKeyHint="next"
           onChange={(e) => setDraft((d) => ({ ...d, location_photo_url: e.target.value }))}
+          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+        />
+        <input
+          className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          placeholder="Photo URL #2 (optional)"
+          value={draft.location_photo_url_2}
+          enterKeyHint="next"
+          onChange={(e) => setDraft((d) => ({ ...d, location_photo_url_2: e.target.value }))}
+          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+        />
+        <input
+          className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          placeholder="Photo URL #3 (optional)"
+          value={draft.location_photo_url_3}
+          enterKeyHint="next"
+          onChange={(e) => setDraft((d) => ({ ...d, location_photo_url_3: e.target.value }))}
+          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+        />
+        <input
+          className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          placeholder="Video URL (optional)"
+          value={draft.location_video_url}
+          enterKeyHint="next"
+          onChange={(e) => setDraft((d) => ({ ...d, location_video_url: e.target.value }))}
+          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+        />
+        <textarea
+          className="min-h-[64px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          placeholder="Dig up when alone warning (optional)"
+          value={draft.dig_up_when_alone_warning}
+          onChange={(e) => setDraft((d) => ({ ...d, dig_up_when_alone_warning: e.target.value }))}
           onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
         />
         <div className="grid gap-2 sm:grid-cols-2">
@@ -486,6 +568,30 @@ export default function AdminDeadDropsPage() {
                     value={editDraft.location_photo_url}
                     onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url: e.target.value }))}
                   />
+          <input
+            className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
+            placeholder="Photo URL #2"
+            value={editDraft.location_photo_url_2}
+            onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_2: e.target.value }))}
+          />
+          <input
+            className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
+            placeholder="Photo URL #3"
+            value={editDraft.location_photo_url_3}
+            onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_3: e.target.value }))}
+          />
+          <input
+            className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
+            placeholder="Video URL"
+            value={editDraft.location_video_url}
+            onChange={(e) => setEditDraft((d) => ({ ...d, location_video_url: e.target.value }))}
+          />
+          <textarea
+            className="min-h-[64px] rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
+            placeholder="Dig up when alone warning"
+            value={editDraft.dig_up_when_alone_warning}
+            onChange={(e) => setEditDraft((d) => ({ ...d, dig_up_when_alone_warning: e.target.value }))}
+          />
                   <input
                     type="datetime-local"
                     className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
