@@ -35,7 +35,7 @@ export function CryptoGuideContent() {
     <div className="mx-auto max-w-3xl space-y-12 pb-4">
       <div>
         <h2 className="font-display text-3xl text-honey-text">How to pay with crypto</h2>
-        <p className="mt-2 text-honey-muted">Short guide for guests and team members paying with cryptocurrency.</p>
+        <p className="mt-2 text-honey-muted">Short guide for guests and VIPs paying with cryptocurrency.</p>
       </div>
 
       <section>

@@ -122,7 +122,7 @@ export function PendingApprovalQueue({
                     ? "Crypto"
                     : o.payment_method}
               </p>
-              <p className="text-xs text-honey-muted">{o.user_type === "team_member" ? "Team" : "Guest"}</p>
+              <p className="text-xs text-honey-muted">{o.user_type === "team_member" ? "VIP" : "Guest"}</p>
             </div>
             <div className="flex shrink-0 flex-col gap-2 sm:w-36">
               <button

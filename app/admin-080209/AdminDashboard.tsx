@@ -746,7 +746,7 @@ function ProductsSection({
                 onChange={(v) => setEditing({ ...editing, price_regular: Number(v) })}
               />
               <Field
-                label={`Team price (${shopCurrency})`}
+                label={`VIP price (${shopCurrency})`}
                 type="number"
                 value={String(editing.price_team_member ?? 0)}
                 onChange={(v) => setEditing({ ...editing, price_team_member: Number(v) })}

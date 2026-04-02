@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandHoneyWellTitle, RainbowHexLogo } from "@/components/BrandHoneyWellTitle";
 import { BeeSvg } from "@/components/BeeSvg";
 import { HoneycombBg } from "@/components/HoneycombBg";
 import { LS_TELEGRAM_USERNAME, LS_USER_TYPE } from "@/lib/constants";
@@ -86,7 +87,7 @@ export default function SplashPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-hive-black px-6 py-16">
+    <div className="rainbow-site-bg relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-hive-black px-6 py-16">
       <HoneycombBg className="opacity-[0.18]" variant="dark" />
       <div className="pointer-events-none absolute bottom-[12%] left-[8%] md:bottom-[18%]">
         <BeeSvg size={72} />
@@ -96,9 +97,14 @@ export default function SplashPage() {
       </div>
 
       <div className="relative z-10 flex max-w-lg flex-col items-center text-center">
-        <h1 className="font-display text-5xl font-semibold tracking-tight text-primary md:text-6xl">Honey Well</h1>
-        <p className="mt-4 max-w-md text-balance font-body text-lg italic text-white/90">
-          Fresh flowers. Pure wellness. Curated with care.
+        <div className="mb-4 flex items-center gap-3">
+          <RainbowHexLogo className="h-12 w-12 scale-110" />
+        </div>
+        <h1 className="flex justify-center">
+          <BrandHoneyWellTitle size="lg" />
+        </h1>
+        <p className="mt-5 max-w-md text-balance bg-gradient-to-r from-pink-300 via-amber-200 to-cyan-300 bg-clip-text font-body text-lg italic text-transparent md:text-xl">
+          Welcome to our magical well
         </p>
 
         <div className="mt-12 flex w-full max-w-sm flex-col gap-4">
@@ -110,9 +116,9 @@ export default function SplashPage() {
               setInfo(null);
               setBotUrl(null);
             }}
-            className="btn-primary w-full"
+            className="btn-primary w-full shadow-[0_0_24px_rgba(236,72,153,0.35)]"
           >
-            I&apos;m a Team Member
+            I&apos;m a VIP
           </button>
           <button
             type="button"
@@ -133,7 +139,7 @@ export default function SplashPage() {
             aria-label="Close"
           />
           <div className="card-hive relative w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl dark:bg-surface-dark">
-            <h2 className="font-display text-2xl text-honey-text">Team verification</h2>
+            <h2 className="font-display text-2xl text-honey-text">VIP verification</h2>
             <p className="mt-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-honey-muted">
               Before using the website, open our bot and type or tap{" "}
               <code className="rounded bg-honey-border/50 px-1 font-mono text-honey-text">/start</code> so you&apos;re

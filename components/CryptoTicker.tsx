@@ -59,7 +59,7 @@ export function CryptoTicker({ embedded = false }: { embedded?: boolean }) {
 
   if (!line) {
     return embedded ? null : (
-      <div className="border-b border-honey-border bg-surface/80 py-2 text-center text-xs text-honey-muted dark:bg-surface-dark/80">
+      <div className="border-b-2 border-fuchsia-500/35 bg-gradient-to-r from-pink-950/30 via-violet-950/20 to-cyan-950/30 py-2 text-center text-xs text-white/70">
         Loading crypto rates…
       </div>
     );
@@ -68,11 +68,11 @@ export function CryptoTicker({ embedded = false }: { embedded?: boolean }) {
   return (
     <div
       className={clsx(
-        "overflow-hidden border-b border-honey-border bg-primary/5",
+        "overflow-hidden border-b-2 border-fuchsia-500/40 bg-gradient-to-r from-pink-950/40 via-violet-900/25 to-cyan-950/40 bg-[length:200%_100%] animate-gradient-shift",
         embedded ? "rounded-xl" : ""
       )}
     >
-      <div className="animate-ticker flex whitespace-nowrap py-2 text-xs font-medium text-honey-text">
+      <div className="animate-ticker flex whitespace-nowrap py-2 text-xs font-medium text-white/90 [text-shadow:0_0_12px_rgba(255,100,200,0.35)]">
         <span className="px-6">{line}</span>
         <span className="px-6" aria-hidden>
           {line}

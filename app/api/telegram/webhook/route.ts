@@ -27,7 +27,7 @@ const USERNAME_REQUIRED_MESSAGE =
   "Please set a public Telegram username first (Settings → Telegram → Username). Honey Well needs it before we can verify you or link your account — then try again.";
 
 const FIRST_CONTACT_COMMUNITY_MESSAGE =
-  "Welcome to Honey Well. Sending /start, tapping Start, or sending /verify registers you with our community — we save your Telegram so we can verify team membership and send updates from Honey Well.";
+  "Welcome to Honey Well. Sending /start, tapping Start, or sending /verify registers you with our community — we save your Telegram so we can verify VIP access and send updates from Honey Well.";
 
 const ADMIN_RULES_TEXT = `Honey Well — Admin commands (your Telegram user id must match ADMIN_TELEGRAM_USER_ID)
 
@@ -338,7 +338,7 @@ async function sendStartMembershipReply(
     if (m.ok) {
       channelMember = m.member;
       body = m.member
-        ? "You're verified as a Honey Well team member."
+        ? "You're verified as a Honey Well VIP."
         : "Welcome, guest.";
     } else {
       body = `Could not verify channel membership. ${m.error}`;

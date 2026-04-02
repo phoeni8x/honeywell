@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandHoneyWellTitle } from "@/components/BrandHoneyWellTitle";
 import { CryptoGuideContent } from "@/components/CryptoGuideContent";
 import { HoneycombBg } from "@/components/HoneycombBg";
 import { LS_REFERRED_BY, LS_USER_TYPE } from "@/lib/constants";
@@ -14,7 +15,6 @@ type TaglineRow = { title: string; body: string };
 
 export function HomePageInner() {
   const searchParams = useSearchParams();
-  const [tagline, setTagline] = useState<string | null>(null);
   const [userType, setUserType] = useState<UserType | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
@@ -31,15 +31,6 @@ export function HomePageInner() {
     if (v === "team_member" || v === "guest") setUserType(v);
   }, []);
 
-  useEffect(() => {
-    fetch("/api/settings/public")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.hero_tagline) setTagline(d.hero_tagline);
-      })
-      .catch(() => {});
-  }, []);
-
   const faqs: TaglineRow[] = [
     {
       title: "1. Browse products",
@@ -51,7 +42,7 @@ export function HomePageInner() {
     },
     {
       title: "3. Pay",
-      body: "Team members can pay the remainder with bank transfer or cryptocurrency — your choice at checkout. Guests pay with cryptocurrency.",
+      body: "VIPs can pay the remainder with bank transfer or cryptocurrency — your choice at checkout. Guests pay with cryptocurrency.",
     },
     {
       title: "4. Collect",
@@ -64,18 +55,19 @@ export function HomePageInner() {
   return (
     <div className="space-y-16 pb-16">
       {refInUrl && (
-        <div className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-center text-sm text-honey-text dark:bg-primary/10">
+        <div className="rounded-2xl border border-fuchsia-500/40 bg-gradient-to-r from-pink-500/10 to-cyan-500/10 px-4 py-3 text-center text-sm text-honey-text">
           Referral code saved for checkout. Thanks for visiting through a friend.
         </div>
       )}
 
-      <section className="relative overflow-hidden rounded-3xl border-2 border-honey-border bg-surface px-6 py-14 text-center shadow-[4px_4px_0_rgba(240,192,64,0.35)] dark:bg-surface-dark md:px-12">
+      <section className="relative overflow-hidden rounded-3xl border-2 border-fuchsia-500/40 bg-surface px-6 py-14 text-center shadow-[0_0_48px_rgba(168,85,247,0.22)] dark:bg-surface-dark md:px-12">
         <HoneycombBg className="opacity-[0.14]" />
         <div className="relative z-10">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Welcome</p>
-          <h1 className="mt-3 font-display text-4xl font-semibold text-honey-text md:text-5xl">Honey Well</h1>
-          <p className="mx-auto mt-4 max-w-xl text-balance text-lg text-honey-muted">
-            {tagline ?? "Seasonal blooms, daily vitamins, and calm service — curated for our community."}
+          <h1 className="flex flex-col items-center gap-2">
+            <BrandHoneyWellTitle size="lg" />
+          </h1>
+          <p className="mx-auto mt-6 max-w-xl text-balance bg-gradient-to-r from-pink-300 via-amber-200 to-cyan-300 bg-clip-text text-xl italic text-transparent md:text-2xl">
+            Welcome to our magical well
           </p>
           <Link href="/shop" className="btn-primary mt-8 inline-flex">
             Browse products
@@ -84,22 +76,30 @@ export function HomePageInner() {
       </section>
 
       {userType === "team_member" && (
-        <div className="rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-accent/10 to-primary/5 px-6 py-5 text-center dark:from-primary/20 dark:via-accent/15">
-          <p className="font-display text-lg text-honey-text">
-            Welcome back, team member! You have access to exclusive discounts and can pay with bank transfer or crypto.
+        <div className="rounded-2xl border-2 border-fuchsia-500/50 bg-gradient-to-r from-fuchsia-950/40 via-violet-950/35 to-cyan-950/40 px-6 py-5 text-center shadow-[0_0_32px_rgba(236,72,153,0.2)]">
+          <p className="font-display text-lg text-white">
+            Welcome back, VIP! You have access to exclusive discounts and can pay with bank transfer or crypto.
           </p>
         </div>
       )}
 
-      <section id="crypto-guide" className="scroll-mt-24 rounded-3xl border-2 border-honey-border bg-surface/80 px-6 py-10 dark:bg-surface-dark/80 md:px-10">
+      <section
+        id="crypto-guide"
+        className="scroll-mt-24 rounded-3xl border-2 border-cyan-500/30 bg-surface/80 px-6 py-10 shadow-[0_0_24px_rgba(34,211,238,0.12)] dark:bg-surface-dark/80 md:px-10"
+      >
         <CryptoGuideContent />
       </section>
 
       <section>
-        <h2 className="font-display text-3xl text-honey-text">How to use this website</h2>
+        <h2 className="bg-gradient-to-r from-pink-400 via-amber-300 to-cyan-400 bg-clip-text font-display text-3xl text-transparent">
+          How to use this website
+        </h2>
         <div className="mt-6 space-y-2">
           {faqs.map((item, i) => (
-            <div key={item.title} className="overflow-hidden rounded-2xl border border-honey-border bg-surface dark:bg-surface-dark">
+            <div
+              key={item.title}
+              className="overflow-hidden rounded-2xl border border-violet-500/25 bg-surface dark:bg-surface-dark"
+            >
               <button
                 type="button"
                 onClick={() => setOpenFaq(openFaq === i ? null : i)}
@@ -111,14 +111,14 @@ export function HomePageInner() {
                 />
               </button>
               {openFaq === i && (
-                <div className="border-t border-honey-border px-5 py-4 text-sm text-honey-muted">{item.body}</div>
+                <div className="border-t border-white/10 px-5 py-4 text-sm text-honey-muted">{item.body}</div>
               )}
             </div>
           ))}
         </div>
       </section>
 
-      <section className="rounded-3xl border-2 border-amber-300 bg-amber-50/70 px-6 py-8 dark:border-amber-500/40 dark:bg-amber-900/10 md:px-8">
+      <section className="rounded-3xl border-2 border-amber-400/50 bg-gradient-to-br from-amber-950/30 via-violet-950/20 to-pink-950/25 px-6 py-8 md:px-8">
         <h2 className="font-display text-3xl text-honey-text">Terms &amp; conditions</h2>
         <p className="mt-2 text-sm text-honey-muted">By using Honey Well, you agree to follow these rules.</p>
         <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-honey-text">
