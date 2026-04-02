@@ -19,6 +19,7 @@ import { ADMIN_BASE_PATH } from "@/lib/constants";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { RainbowHeading } from "@/components/BrandHoneyWellTitle";
 
 const tabs = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, href: `${ADMIN_BASE_PATH}?tab=overview` },
@@ -67,7 +68,11 @@ export function AdminSidebar({ className, onNavigate }: { className?: string; on
         className
       )}
     >
-      <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-honey-muted">Honey Well</p>
+      <RainbowHeading
+        as="p"
+        text="HONEY WELL"
+        className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide"
+      />
       {tabs.map(({ id, label, icon: Icon, href }) => {
         const active = href.includes("?")
           ? pathname === ADMIN_BASE_PATH && tab === id
@@ -80,12 +85,20 @@ export function AdminSidebar({ className, onNavigate }: { className?: string; on
             onClick={onNavigate}
             className={clsx(
               "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition",
-              active ? "bg-primary/15 text-primary" : "text-honey-muted hover:bg-honey-border/40 hover:text-honey-text"
+              active
+                ? "bg-gradient-to-r from-fuchsia-500/15 via-amber-400/15 to-cyan-500/15 text-honey-text"
+                : "text-honey-muted hover:bg-honey-border/40 hover:text-honey-text"
             )}
           >
             <Icon className="h-4 w-4" />
             <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-              {label}
+              <span
+                className={clsx(
+                  active && "bg-gradient-to-r from-fuchsia-400 via-amber-300 to-cyan-400 bg-clip-text text-transparent"
+                )}
+              >
+                {label}
+              </span>
               {showBadge ? (
                 <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold leading-none text-white">
                   {pendingOrders > 99 ? "99+" : pendingOrders}
@@ -95,7 +108,11 @@ export function AdminSidebar({ className, onNavigate }: { className?: string; on
           </Link>
         );
       })}
-      <p className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-honey-muted">Fulfillment</p>
+      <RainbowHeading
+        as="p"
+        text="FULFILLMENT"
+        className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide"
+      />
       {part4.map(({ label, href, icon: Icon }) => {
         const active = pathname === href;
         return (
@@ -105,11 +122,19 @@ export function AdminSidebar({ className, onNavigate }: { className?: string; on
             onClick={onNavigate}
             className={clsx(
               "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition",
-              active ? "bg-primary/15 text-primary" : "text-honey-muted hover:bg-honey-border/40 hover:text-honey-text"
+              active
+                ? "bg-gradient-to-r from-fuchsia-500/15 via-amber-400/15 to-cyan-500/15 text-honey-text"
+                : "text-honey-muted hover:bg-honey-border/40 hover:text-honey-text"
             )}
           >
             <Icon className="h-4 w-4" />
-            {label}
+            <span
+              className={clsx(
+                active && "bg-gradient-to-r from-fuchsia-400 via-amber-300 to-cyan-400 bg-clip-text text-transparent"
+              )}
+            >
+              {label}
+            </span>
           </Link>
         );
       })}
