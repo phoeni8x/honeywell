@@ -279,8 +279,6 @@ export default function AdminDashboard() {
         <TicketsSection rows={ticketRows} />
       )}
 
-      {tab === "support" && !loading && <SupportTicketsSection />}
-
       {tab === "settings" && !loading && (
         <SettingsSection settings={settings} />
       )}

@@ -283,9 +283,6 @@ export default function AdminTicketsInboxPage() {
     <div className="flex min-h-[70vh] flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link href={`${ADMIN_BASE_PATH}?tab=support`} className="text-sm text-primary hover:underline">
-            ← Legacy support table
-          </Link>
           <h1 className="mt-2 font-display text-3xl text-honey-text">Support inbox</h1>
           <p className="mt-1 text-sm text-honey-muted">
             Loads from the server so customer chats always show here when you are signed in as admin.
