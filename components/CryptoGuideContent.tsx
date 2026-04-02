@@ -12,6 +12,8 @@ export function CryptoGuideContent() {
     crypto_exchange_name: "",
     crypto_exchange_url: "",
     active_crypto_coin: "ethereum",
+    crypto_wallet_address: "",
+    crypto_network: "",
   });
 
   useEffect(() => {
@@ -26,6 +28,8 @@ export function CryptoGuideContent() {
           crypto_exchange_name: d.crypto_exchange_name ?? "",
           crypto_exchange_url: d.crypto_exchange_url ?? "",
           active_crypto_coin: d.active_crypto_coin ?? "ethereum",
+          crypto_wallet_address: d.crypto_wallet_address ?? "",
+          crypto_network: d.crypto_network ?? "",
         }))
       )
       .catch(() => {});
@@ -58,46 +62,99 @@ export function CryptoGuideContent() {
       </section>
 
       <section>
-        <h3 className="font-display text-2xl text-honey-text">How to buy and send Litecoin using SimpleSwap</h3>
+        <h3 className="font-display text-2xl text-honey-text">Pay with Sentz</h3>
+        <p className="mt-2 text-sm text-honey-muted">
+          <a href="https://sentz.com" className="text-primary underline" target="_blank" rel="noreferrer">
+            Sentz
+          </a>{" "}
+          is a payment app for sending stablecoins quickly. Fund with a card, bank, Apple Pay, or Google Pay, then send
+          to our address. Always match the <strong className="text-honey-text">exact coin, network, and amount</strong>{" "}
+          shown on your Honey Well payment screen.
+        </p>
         <ol className="mt-4 list-decimal space-y-3 pl-6 text-honey-muted">
           <li>
-            Download the SimpleSwap app — search &quot;SimpleSwap&quot; in the App Store or Play Store, or visit
-            simpleswap.io
+            Install Sentz — search &quot;Sentz&quot; in the{" "}
+            <a
+              href="https://apps.apple.com/app/sentz-the-global-payment-app/id1631009610"
+              className="text-primary underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              App Store
+            </a>{" "}
+            or{" "}
+            <a
+              href="https://play.google.com/store/apps/details?id=com.mobilecoin.moby"
+              className="text-primary underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Google Play
+            </a>
+            , or open{" "}
+            <a href="https://sentz.com" className="text-primary underline" target="_blank" rel="noreferrer">
+              sentz.com
+            </a>
+            .
           </li>
-          <li>Open the Buy/Sell tab at the bottom of the app</li>
+          <li>Create your wallet in the app and complete any sign-up or verification steps Sentz asks for.</li>
+          <li>Add funds inside Sentz (for example debit card, bank transfer, Apple Pay, or Google Pay — options vary by region).</li>
           <li>
-            Set &quot;You send&quot; to EUR and &quot;You receive&quot; to LTC (Litecoin)
-            <br />
-            ⚠️ Important: HUF is not supported in SimpleSwap — use EUR only
+            On Honey Well, open checkout and choose crypto payment. Note the{" "}
+            <strong className="text-honey-text">exact amount</strong>,{" "}
+            <strong className="text-honey-text">asset</strong>
+            {settings.crypto_network ? (
+              <>
+                , and <strong className="text-honey-text">network</strong> ({settings.crypto_network})
+              </>
+            ) : (
+              <> and network</>
+            )}
+            .
           </li>
-          <li>Enter the EUR amount that matches your order total shown at checkout</li>
           <li>
-            When asked for a receiving address, paste exactly:
-            <br />
-            <code className="mt-1 inline-block rounded bg-honey-border/40 px-1 py-0.5 font-mono text-honey-text">
-              ltc1qwaqh7mzcv2t9ema2nldy789zw2vf88ke09gt6e
-            </code>
+            In Sentz, start a send / transfer to an external wallet address. Choose the same asset (and network, if the app
+            asks) as on your Honey Well payment page.
           </li>
-          <li>Tap Börse / Exchange to complete. SimpleSwap converts your EUR to LTC and sends it automatically</li>
           <li>
-            Come back to Honey Well and tap &quot;I&apos;ve sent payment&quot; to confirm your order. Confirmation
-            usually takes 5–15 minutes
+            Paste our receiving address exactly — same string as on the payment page
+            {settings.crypto_wallet_address ? (
+              <>
+                :
+                <br />
+                <code className="mt-1 inline-block max-w-full break-all rounded bg-honey-border/40 px-2 py-1 font-mono text-xs text-honey-text sm:text-sm">
+                  {settings.crypto_wallet_address}
+                </code>
+              </>
+            ) : (
+              <> (shown on the payment page after you place an order).</>
+            )}
           </li>
+          <li>
+            Enter the <strong className="text-honey-text">exact</strong> crypto amount from checkout — not an approximate
+            fiat conversion.
+          </li>
+          <li>
+            If Sentz has a memo, note, or reference field, paste your <strong className="text-honey-text">payment reference</strong>{" "}
+            from Honey Well checkout so we can match your transfer. Do not reuse a code from an older order.
+          </li>
+          <li>Confirm the send in Sentz, then return here and tap &quot;I&apos;ve sent payment&quot;. Confirmation usually takes a few minutes.</li>
         </ol>
-        <div className="mt-4 rounded-xl border border-amber-400/60 bg-amber-100/40 px-4 py-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
-          ⚠️ Common mistake: Do NOT select LTC → HUF as the pair — this is not supported and will show an error. Always
-          use EUR → LTC.
+        <div className="mt-4 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-950 dark:text-cyan-100">
+          If the coin on your order isn&apos;t available in Sentz, use any wallet that supports that asset and network,
+          and still send the exact amount and address from your Honey Well payment page.
         </div>
       </section>
 
       <section>
-        <h3 className="font-display text-2xl text-honey-text">Step by step</h3>
+        <h3 className="font-display text-2xl text-honey-text">Other wallets (optional)</h3>
         <ol className="mt-4 list-decimal space-y-3 pl-6 text-honey-muted">
           <li>
-            Download a crypto wallet
+            You can use another self-custody or exchange wallet if you prefer
             {settings.crypto_wallet_app_name && settings.crypto_wallet_app_url && (
               <>
-                :{" "}
+                {" "}
+                (admin suggestion:{" "}
                 <a
                   href={settings.crypto_wallet_app_url}
                   className="text-primary underline"
@@ -106,24 +163,26 @@ export function CryptoGuideContent() {
                 >
                   {settings.crypto_wallet_app_name}
                 </a>
+                )
               </>
             )}
+            .
           </li>
           <li>
-            Buy crypto
+            Acquire the coin elsewhere
             {settings.crypto_exchange_name && settings.crypto_exchange_url && (
               <>
                 {" "}
-                via{" "}
+                (e.g.{" "}
                 <a href={settings.crypto_exchange_url} className="text-primary underline" target="_blank" rel="noreferrer">
                   {settings.crypto_exchange_name}
                 </a>
+                )
               </>
-            )}
+            )}{" "}
+            if needed, then send the checkout amount to our address on the correct network.
           </li>
-          <li>Send the exact amount shown at checkout to our wallet address.</li>
-          <li>Wait for confirmation (usually 1–5 minutes).</li>
-          <li>Your order will be confirmed automatically after verification.</li>
+          <li>Wrong network or wrong asset can mean lost funds — double-check before you send.</li>
         </ol>
       </section>
 
