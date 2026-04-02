@@ -69,7 +69,7 @@ export function OrderCard({
 
   const isLegacyPickup = order.fulfillment_type === "pickup";
 
-  const { displayAddress, googleUrl, appleUrl, deadDropWarning, deadDropPhotos, deadDropVideoUrl, deadDropCoords, deadDropFindInstructions } =
+  const { displayAddress, googleUrl, appleUrl, deadDropWarning, deadDropPhotos, deadDropVideoUrl, deadDropFindInstructions } =
     useMemo(() => {
     if (order.fulfillment_type === "dead_drop" && order.dead_drop) {
       const dd = order.dead_drop;
@@ -83,7 +83,6 @@ export function OrderCard({
         deadDropWarning: dd.dig_up_when_alone_warning ?? null,
         deadDropPhotos: photos,
         deadDropVideoUrl: dd.location_video_url ?? null,
-        deadDropCoords: { latitude: dd.latitude, longitude: dd.longitude },
         deadDropFindInstructions: dd.instructions ?? null,
       };
     }
@@ -95,7 +94,6 @@ export function OrderCard({
         deadDropWarning: null,
         deadDropPhotos: [] as string[],
         deadDropVideoUrl: null,
-        deadDropCoords: null,
         deadDropFindInstructions: null,
       };
     }
@@ -106,7 +104,6 @@ export function OrderCard({
       deadDropWarning: null,
       deadDropPhotos: [] as string[],
       deadDropVideoUrl: null,
-      deadDropCoords: null,
       deadDropFindInstructions: null,
     };
   }, [order, shopAddress, mapsUrl, appleMapsUrl]);
@@ -397,11 +394,6 @@ export function OrderCard({
               <p className="mb-3 rounded-xl border border-green-500/40 bg-green-500/10 px-3 py-2 text-xs text-green-900 dark:text-green-100">
                 <span className="mr-1 font-semibold">Find:</span>
                 {deadDropFindInstructions}
-              </p>
-            )}
-            {order.fulfillment_type === "dead_drop" && deadDropCoords && (
-              <p className="mt-1 break-all font-mono text-xs text-honey-muted">
-                Coordinates: {deadDropCoords.latitude.toFixed(6)}, {deadDropCoords.longitude.toFixed(6)}
               </p>
             )}
             {order.fulfillment_type === "dead_drop" && deadDropWarning && (

@@ -10,8 +10,6 @@ type DeadDropRow = {
   is_active: boolean;
   created_at: string;
   instructions: string | null;
-  latitude: number;
-  longitude: number;
   product_id?: string | null;
   google_maps_url?: string | null;
   apple_maps_url?: string | null;
@@ -83,8 +81,6 @@ export default function AdminDeadDropsPage() {
   const [draft, setDraft] = useState({
     name: "",
     product_id: "",
-    latitude: "",
-    longitude: "",
     google_maps_url: "",
     apple_maps_url: "",
     instructions: "",
@@ -99,8 +95,6 @@ export default function AdminDeadDropsPage() {
   const [editDraft, setEditDraft] = useState({
     name: "",
     product_id: "",
-    latitude: "",
-    longitude: "",
     google_maps_url: "",
     apple_maps_url: "",
     instructions: "",
@@ -204,10 +198,11 @@ export default function AdminDeadDropsPage() {
     try {
       const raw = window.localStorage.getItem(DRAFT_LS_KEY);
       if (!raw) return;
-      const parsed = JSON.parse(raw) as Partial<typeof draft>;
+      const parsed = JSON.parse(raw) as Partial<typeof draft> & { latitude?: unknown; longitude?: unknown };
+      const { latitude: _lat, longitude: _lon, ...rest } = parsed;
       setDraft((d) => ({
         ...d,
-        ...parsed,
+        ...rest,
       }));
     } catch {
       // Ignore localStorage issues (private mode, etc.)
@@ -384,8 +379,8 @@ export default function AdminDeadDropsPage() {
       const payload: Record<string, unknown> = {
         name: draft.name.trim(),
         product_id: draft.product_id.trim() ? draft.product_id.trim() : null,
-        latitude: Number(draft.latitude) || 0,
-        longitude: Number(draft.longitude) || 0,
+        latitude: 0,
+        longitude: 0,
         google_maps_url: draft.google_maps_url || null,
         apple_maps_url: draft.apple_maps_url || null,
         instructions: draft.instructions || null,
@@ -426,8 +421,6 @@ export default function AdminDeadDropsPage() {
       setDraft({
         name: "",
         product_id: "",
-        latitude: "",
-        longitude: "",
         google_maps_url: "",
         apple_maps_url: "",
         instructions: "",
@@ -569,8 +562,6 @@ export default function AdminDeadDropsPage() {
     setEditDraft({
       name: row.name ?? "",
       product_id: row.product_id ?? "",
-      latitude: String(row.latitude ?? ""),
-      longitude: String(row.longitude ?? ""),
       google_maps_url: row.google_maps_url ?? "",
       apple_maps_url: row.apple_maps_url ?? "",
       instructions: row.instructions ?? "",
@@ -591,8 +582,8 @@ export default function AdminDeadDropsPage() {
       const payload: Record<string, unknown> = {
         name: editDraft.name.trim(),
         product_id: editDraft.product_id.trim() ? editDraft.product_id.trim() : null,
-        latitude: Number(editDraft.latitude) || 0,
-        longitude: Number(editDraft.longitude) || 0,
+        latitude: 0,
+        longitude: 0,
         google_maps_url: editDraft.google_maps_url || null,
         apple_maps_url: editDraft.apple_maps_url || null,
         instructions: editDraft.instructions || null,
@@ -695,24 +686,6 @@ export default function AdminDeadDropsPage() {
             </option>
           ))}
         </select>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <input
-            className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-            placeholder="Latitude"
-            value={draft.latitude}
-            enterKeyHint="next"
-            onChange={(e) => setDraft((d) => ({ ...d, latitude: e.target.value }))}
-            onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
-          />
-          <input
-            className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-            placeholder="Longitude"
-            value={draft.longitude}
-            enterKeyHint="next"
-            onChange={(e) => setDraft((d) => ({ ...d, longitude: e.target.value }))}
-            onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
-          />
-        </div>
         <input
           className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
           placeholder="Google Maps URL"
@@ -977,18 +950,6 @@ export default function AdminDeadDropsPage() {
                       </option>
                     ))}
                   </select>
-                  <input
-                    className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
-                    placeholder="Latitude"
-                    value={editDraft.latitude}
-                    onChange={(e) => setEditDraft((d) => ({ ...d, latitude: e.target.value }))}
-                  />
-                  <input
-                    className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
-                    placeholder="Longitude"
-                    value={editDraft.longitude}
-                    onChange={(e) => setEditDraft((d) => ({ ...d, longitude: e.target.value }))}
-                  />
                   <input
                     className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
                     placeholder="Google Maps URL"

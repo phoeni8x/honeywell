@@ -85,8 +85,6 @@ export interface Announcement {
 export interface DeadDropRow {
   id: string;
   name: string;
-  latitude: number;
-  longitude: number;
   google_maps_url: string | null;
   apple_maps_url: string | null;
   instructions: string | null;
