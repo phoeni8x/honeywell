@@ -157,7 +157,8 @@ export default function ProductPage() {
         )}
 
         <div className="mt-6 flex flex-wrap items-baseline gap-3">
-          {isDiscounted && (
+          {/* VIPs get the team_member price; don't show the crossed-out regular price */}
+          {isDiscounted && userType !== "team_member" && (
             <span className="text-lg text-honey-muted line-through">
               {formatPrice(Number(product.price_regular))}
             </span>

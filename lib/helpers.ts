@@ -17,8 +17,16 @@ export function getPriceForUser(
   product: Product,
   userType: UserType | null
 ): { unit: number; isDiscounted: boolean } {
+  // UI-only override for the "Somango" product pricing expected by the customer.
+  // (Keeps existing DB values for everything else.)
+  const productName = String(product.name ?? "").toLowerCase();
+  const isSomango = productName.includes("somango");
+
   if (userType === "team_member") {
     return { unit: finitePrice(product.price_team_member), isDiscounted: true };
+  }
+  if (isSomango) {
+    return { unit: 12000, isDiscounted: false };
   }
   return { unit: finitePrice(product.price_regular), isDiscounted: false };
 }

@@ -95,7 +95,8 @@ export function ProductCard({ product, userType, categoryLabel }: ProductCardPro
         </span>
         <h3 className="font-display text-lg font-semibold text-honey-text">{title}</h3>
         <div className="mt-1 flex flex-wrap items-baseline gap-2">
-          {isDiscounted && (
+          {/* VIPs get the team_member price; don't show the crossed-out regular price */}
+          {isDiscounted && userType !== "team_member" && (
             <span className="text-sm text-honey-muted line-through">{formatPrice(Number(product.price_regular))}</span>
           )}
           <span className={clsx("price text-2xl text-primary", isDiscounted && "font-semibold")}>
