@@ -116,14 +116,14 @@ export default function SplashPage() {
               setInfo(null);
               setBotUrl(null);
             }}
-            className="btn-primary w-full shadow-[0_0_24px_rgba(236,72,153,0.35)]"
+            className="w-full rounded border-2 border-blue-900 bg-blue-500 py-3 font-body font-semibold text-white shadow-[3px_3px_0_#1e3a8a] transition-all duration-200 hover:-translate-x-px hover:-translate-y-px hover:bg-blue-400 hover:shadow-[4px_4px_0_#1e3a8a] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#1e3a8a] dark:shadow-[0_0_24px_rgba(59,130,246,0.4)]"
           >
             I&apos;m a VIP
           </button>
           <button
             type="button"
             onClick={continueGuest}
-            className="btn-secondary w-full border-white text-white shadow-[3px_3px_0_rgba(255,255,255,0.25)] hover:bg-white/10"
+            className="w-full rounded border-2 border-red-950 bg-red-600 py-3 font-body font-semibold text-white shadow-[3px_3px_0_#7f1d1d] transition-all duration-200 hover:-translate-x-px hover:-translate-y-px hover:bg-red-500 hover:shadow-[4px_4px_0_#7f1d1d] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#7f1d1d] dark:shadow-[0_0_20px_rgba(239,68,68,0.35)]"
           >
             Continue as Guest
           </button>
