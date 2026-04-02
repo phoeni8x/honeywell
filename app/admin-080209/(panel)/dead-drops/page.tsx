@@ -32,6 +32,9 @@ export default function AdminDeadDropsPage() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [deadDropEnabled, setDeadDropEnabled] = useState<"1" | "0">("1");
   const [editingId, setEditingId] = useState<string | null>(null);
+  type UploadKind = "location_photo_url" | "location_photo_url_2" | "location_photo_url_3" | "location_video_url";
+  const [uploadingKind, setUploadingKind] = useState<UploadKind | null>(null);
+  const [deadDropColumnSet, setDeadDropColumnSet] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState({
     name: "",
     product_id: "",
@@ -81,6 +84,8 @@ export default function AdminDeadDropsPage() {
     ]);
     const list = ((data as DeadDropRow[]) ?? []) as DeadDropRow[];
     setRows(list);
+    const first = list[0];
+    setDeadDropColumnSet(new Set(first ? Object.keys(first) : []));
     setActiveDeadDropCount(list.filter((r) => r.is_active).length);
     setDeadDropEnabled(st?.value === "0" ? "0" : "1");
     setProducts((prods as ProductOption[]) ?? []);
@@ -89,6 +94,28 @@ export default function AdminDeadDropsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function uploadDeadDropMedia(kind: UploadKind, file: File) {
+    setUploadingKind(kind);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("kind", kind);
+
+      const res = await fetch("/api/admin/dead-drops/upload", { method: "POST", body: fd });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+
+      if (!res.ok || !data.url) {
+        showToast(data.error || "Upload failed. Try again.", false);
+        return;
+      }
+
+      setDraft((d) => ({ ...d, [kind]: data.url as string }));
+      showToast("Upload successful ✓");
+    } finally {
+      setUploadingKind(null);
+    }
+  }
 
   async function saveActive() {
     if (!draft.name.trim()) {
@@ -102,7 +129,7 @@ export default function AdminDeadDropsPage() {
     setLoading(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.from("dead_drops").insert({
+      const payload: Record<string, unknown> = {
         name: draft.name.trim(),
         product_id: draft.product_id.trim() ? draft.product_id.trim() : null,
         latitude: Number(draft.latitude) || 0,
@@ -110,15 +137,20 @@ export default function AdminDeadDropsPage() {
         google_maps_url: draft.google_maps_url || null,
         apple_maps_url: draft.apple_maps_url || null,
         instructions: draft.instructions || null,
+        // Photo #1 column exists in the current live schema.
         location_photo_url: draft.location_photo_url || null,
-        location_video_url: draft.location_video_url || null,
-        location_photo_url_2: draft.location_photo_url_2 || null,
-        location_photo_url_3: draft.location_photo_url_3 || null,
-        dig_up_when_alone_warning: draft.dig_up_when_alone_warning || null,
         active_from: draft.active_from ? new Date(draft.active_from).toISOString() : null,
         active_until: draft.active_until ? new Date(draft.active_until).toISOString() : null,
         is_active: true,
-      });
+      };
+
+      // Only include optional media columns when they exist in the current DB schema.
+      if (deadDropColumnSet.has("location_video_url")) payload.location_video_url = draft.location_video_url || null;
+      if (deadDropColumnSet.has("location_photo_url_2")) payload.location_photo_url_2 = draft.location_photo_url_2 || null;
+      if (deadDropColumnSet.has("location_photo_url_3")) payload.location_photo_url_3 = draft.location_photo_url_3 || null;
+      if (deadDropColumnSet.has("dig_up_when_alone_warning")) payload.dig_up_when_alone_warning = draft.dig_up_when_alone_warning || null;
+
+      const { error } = await supabase.from("dead_drops").insert(payload);
       if (error) {
         const msg = String(error.message ?? error.details ?? "").toLowerCase();
         if (msg.includes("max_active_dead_drops_reached")) {
@@ -261,7 +293,7 @@ export default function AdminDeadDropsPage() {
     setLoading(true);
     try {
       const supabase = createClient();
-      const payload = {
+      const payload: Record<string, unknown> = {
         name: editDraft.name.trim(),
         product_id: editDraft.product_id.trim() ? editDraft.product_id.trim() : null,
         latitude: Number(editDraft.latitude) || 0,
@@ -270,13 +302,15 @@ export default function AdminDeadDropsPage() {
         apple_maps_url: editDraft.apple_maps_url || null,
         instructions: editDraft.instructions || null,
         location_photo_url: editDraft.location_photo_url || null,
-        location_video_url: editDraft.location_video_url || null,
-        location_photo_url_2: editDraft.location_photo_url_2 || null,
-        location_photo_url_3: editDraft.location_photo_url_3 || null,
-        dig_up_when_alone_warning: editDraft.dig_up_when_alone_warning || null,
         active_from: editDraft.active_from ? new Date(editDraft.active_from).toISOString() : null,
         active_until: editDraft.active_until ? new Date(editDraft.active_until).toISOString() : null,
       };
+
+      if (deadDropColumnSet.has("location_video_url")) payload.location_video_url = editDraft.location_video_url || null;
+      if (deadDropColumnSet.has("location_photo_url_2")) payload.location_photo_url_2 = editDraft.location_photo_url_2 || null;
+      if (deadDropColumnSet.has("location_photo_url_3")) payload.location_photo_url_3 = editDraft.location_photo_url_3 || null;
+      if (deadDropColumnSet.has("dig_up_when_alone_warning")) payload.dig_up_when_alone_warning = editDraft.dig_up_when_alone_warning || null;
+
       const { error } = await supabase.from("dead_drops").update(payload).eq("id", id);
       if (error) {
         showToast("Failed to save changes.", false);
@@ -402,6 +436,19 @@ export default function AdminDeadDropsPage() {
           onChange={(e) => setDraft((d) => ({ ...d, location_photo_url: e.target.value }))}
           onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
         />
+        <div className="mt-2">
+          <input
+            type="file"
+            accept="image/*"
+            className="w-full text-xs"
+            disabled={uploadingKind === "location_photo_url"}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadDeadDropMedia("location_photo_url", f);
+              e.currentTarget.value = "";
+            }}
+          />
+        </div>
         <input
           className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
           placeholder="Photo URL #2 (optional)"
@@ -410,6 +457,22 @@ export default function AdminDeadDropsPage() {
           onChange={(e) => setDraft((d) => ({ ...d, location_photo_url_2: e.target.value }))}
           onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
         />
+        <div className="mt-2">
+          <input
+            type="file"
+            accept="image/*"
+            className="w-full text-xs"
+            disabled={uploadingKind === "location_photo_url_2"}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadDeadDropMedia("location_photo_url_2", f);
+              e.currentTarget.value = "";
+            }}
+          />
+          {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_photo_url_2") ? (
+            <p className="mt-1 text-[11px] text-amber-700">DB column for Photo #2 not available yet.</p>
+          ) : null}
+        </div>
         <input
           className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
           placeholder="Photo URL #3 (optional)"
@@ -418,6 +481,22 @@ export default function AdminDeadDropsPage() {
           onChange={(e) => setDraft((d) => ({ ...d, location_photo_url_3: e.target.value }))}
           onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
         />
+        <div className="mt-2">
+          <input
+            type="file"
+            accept="image/*"
+            className="w-full text-xs"
+            disabled={uploadingKind === "location_photo_url_3"}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadDeadDropMedia("location_photo_url_3", f);
+              e.currentTarget.value = "";
+            }}
+          />
+          {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_photo_url_3") ? (
+            <p className="mt-1 text-[11px] text-amber-700">DB column for Photo #3 not available yet.</p>
+          ) : null}
+        </div>
         <input
           className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
           placeholder="Video URL (optional)"
@@ -426,6 +505,22 @@ export default function AdminDeadDropsPage() {
           onChange={(e) => setDraft((d) => ({ ...d, location_video_url: e.target.value }))}
           onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
         />
+        <div className="mt-2">
+          <input
+            type="file"
+            accept="video/*"
+            className="w-full text-xs"
+            disabled={uploadingKind === "location_video_url"}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadDeadDropMedia("location_video_url", f);
+              e.currentTarget.value = "";
+            }}
+          />
+          {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_video_url") ? (
+            <p className="mt-1 text-[11px] text-amber-700">DB column for Video not available yet.</p>
+          ) : null}
+        </div>
         <textarea
           className="min-h-[64px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
           placeholder="Dig up when alone warning (optional)"
@@ -568,24 +663,85 @@ export default function AdminDeadDropsPage() {
                     value={editDraft.location_photo_url}
                     onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url: e.target.value }))}
                   />
+                  <div className="sm:col-span-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="w-full text-xs"
+                      disabled={uploadingKind === "location_photo_url"}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void uploadDeadDropMedia("location_photo_url", f);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  </div>
           <input
             className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
             placeholder="Photo URL #2"
             value={editDraft.location_photo_url_2}
             onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_2: e.target.value }))}
           />
+          <div className="mt-2 sm:col-span-2">
+            <input
+              type="file"
+              accept="image/*"
+              className="w-full text-xs"
+              disabled={uploadingKind === "location_photo_url_2"}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadDeadDropMedia("location_photo_url_2", f);
+                e.currentTarget.value = "";
+              }}
+            />
+            {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_photo_url_2") ? (
+              <p className="mt-1 text-[11px] text-amber-700">DB column for Photo #2 not available yet.</p>
+            ) : null}
+          </div>
           <input
             className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs"
             placeholder="Photo URL #3"
             value={editDraft.location_photo_url_3}
             onChange={(e) => setEditDraft((d) => ({ ...d, location_photo_url_3: e.target.value }))}
           />
+          <div className="mt-2 sm:col-span-2">
+            <input
+              type="file"
+              accept="image/*"
+              className="w-full text-xs"
+              disabled={uploadingKind === "location_photo_url_3"}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadDeadDropMedia("location_photo_url_3", f);
+                e.currentTarget.value = "";
+              }}
+            />
+            {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_photo_url_3") ? (
+              <p className="mt-1 text-[11px] text-amber-700">DB column for Photo #3 not available yet.</p>
+            ) : null}
+          </div>
           <input
             className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
             placeholder="Video URL"
             value={editDraft.location_video_url}
             onChange={(e) => setEditDraft((d) => ({ ...d, location_video_url: e.target.value }))}
           />
+          <div className="mt-2 sm:col-span-2">
+            <input
+              type="file"
+              accept="video/*"
+              className="w-full text-xs"
+              disabled={uploadingKind === "location_video_url"}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadDeadDropMedia("location_video_url", f);
+                e.currentTarget.value = "";
+              }}
+            />
+            {deadDropColumnSet.size > 0 && !deadDropColumnSet.has("location_video_url") ? (
+              <p className="mt-1 text-[11px] text-amber-700">DB column for Video not available yet.</p>
+            ) : null}
+          </div>
           <textarea
             className="min-h-[64px] rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
             placeholder="Dig up when alone warning"
