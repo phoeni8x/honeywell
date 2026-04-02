@@ -116,7 +116,11 @@ export function PendingApprovalQueue({
             <div className="text-center sm:px-4">
               <p className="font-semibold text-honey-text">{formatPrice(Number(o.total_price), shopCurrency)}</p>
               <p className="text-xs text-honey-muted">
-                {o.payment_method === "revolut" ? "Revolut" : o.payment_method === "crypto" ? "Crypto" : o.payment_method}
+                {o.payment_method === "revolut"
+                  ? "Bank transfer"
+                  : o.payment_method === "crypto"
+                    ? "Crypto"
+                    : o.payment_method}
               </p>
               <p className="text-xs text-honey-muted">{o.user_type === "team_member" ? "Team" : "Guest"}</p>
             </div>

@@ -1012,8 +1012,9 @@ function OrdersSection({
     const isDelivery = ft === "delivery";
     const isDeadDrop = ft === "dead_drop";
     const isPickup = ft === "pickup";
-    const legacyPickup = ft == null || ft === "";
-    const canPickupFlow = !isDelivery && (isPickup || isDeadDrop || legacyPickup);
+    const legacyNoFt = ft == null || ft === "";
+    /** Collection proof (photo) — dead drop and legacy orders without pickup/delivery type only */
+    const canCollectProofFlow = (isDeadDrop || legacyNoFt) && !isPickup && !isDelivery;
 
     return (
       <>
@@ -1027,7 +1028,7 @@ function OrdersSection({
             {o.fulfillment_type === "dead_drop"
               ? "Confirm payment received"
               : o.payment_method === "revolut"
-                ? "Approve payment successful"
+                ? "Approve bank transfer payment"
                 : "Confirm"}
           </button>
         )}
@@ -1039,7 +1040,7 @@ function OrdersSection({
             className="text-left text-xs font-semibold text-primary hover:underline disabled:opacity-50"
             onClick={() => void assignDeadDrop(o.id)}
           >
-            Assign dead drop (legacy queue)
+            Assign dead drop
           </button>
         )}
 
@@ -1064,17 +1065,6 @@ function OrdersSection({
           </>
         )}
 
-        {(isPickup || legacyPickup) && o.status === "confirmed" && (
-          <button
-            type="button"
-            disabled={actionLoading !== null}
-            className="text-left text-xs text-primary hover:underline disabled:opacity-50"
-            onClick={() => setStatus(o.id, "ready_for_pickup")}
-          >
-            Ready for pickup
-          </button>
-        )}
-
         {isDeadDrop && o.status === "confirmed" && (
           <button
             type="button"
@@ -1086,29 +1076,7 @@ function OrdersSection({
           </button>
         )}
 
-        {isDelivery && (o.status === "confirmed" || o.status === "waiting") && (
-          <button
-            type="button"
-            disabled={actionLoading !== null}
-            className="text-left text-xs text-primary hover:underline disabled:opacity-50"
-            onClick={() => setStatus(o.id, "out_for_delivery")}
-          >
-            Out for delivery
-          </button>
-        )}
-
-        {isDelivery && o.status === "out_for_delivery" && (
-          <button
-            type="button"
-            disabled={actionLoading !== null}
-            className="text-left text-xs text-primary hover:underline disabled:opacity-50"
-            onClick={() => setStatus(o.id, "delivered")}
-          >
-            Delivered
-          </button>
-        )}
-
-        {canPickupFlow && o.status === "pickup_submitted" && (
+        {canCollectProofFlow && o.status === "pickup_submitted" && (
           <button
             type="button"
             disabled={actionLoading !== null}
@@ -1125,7 +1093,7 @@ function OrdersSection({
           </Link>
         )}
 
-        {canPickupFlow &&
+        {canCollectProofFlow &&
           !["payment_pending", "picked_up", "cancelled", "payment_expired", "delivered"].includes(o.status) && (
             <button
               type="button"
@@ -1133,9 +1101,13 @@ function OrdersSection({
               className="text-left text-xs text-primary hover:underline disabled:opacity-50"
               onClick={() => markPickedUp(o)}
             >
-              Picked up
+              Collected
             </button>
           )}
+
+        {(isPickup || isDelivery) && o.status !== "cancelled" && o.status !== "picked_up" && o.status !== "delivered" && (
+          <span className="text-[11px] text-honey-muted">Legacy fulfillment — use cancel or DB if stuck</span>
+        )}
 
         {o.status !== "cancelled" && o.status !== "picked_up" && o.status !== "delivered" && (
           <button
@@ -1251,6 +1223,9 @@ function OrdersSection({
                 </td>
                 <td className="p-2 text-xs">
                   {o.fulfillment_type ?? "—"}
+                  {(o.fulfillment_type === "pickup" || o.fulfillment_type === "delivery") && (
+                    <span className="mt-1 block text-[10px] uppercase text-amber-700 dark:text-amber-400">legacy</span>
+                  )}
                   {o.fulfillment_type === "delivery" && o.delivery_address && (
                     <span className="mt-1 block max-w-[140px] text-honey-muted">{o.delivery_address}</span>
                   )}
@@ -1289,7 +1264,9 @@ function OrdersSection({
                   {Number(o.points_used ?? 0) > 0 ? `${Number(o.points_used)} pts` : "No"}
                 </td>
                 <td className="p-2">{o.user_type}</td>
-                <td className="p-2">{o.payment_method ?? "—"}</td>
+                <td className="p-2">
+                  {o.payment_method === "revolut" ? "bank transfer" : (o.payment_method ?? "—")}
+                </td>
                 <td className="p-2 text-xs">{ORDER_STATUS_LABELS[o.status] ?? o.status}</td>
               </tr>
             ))}
@@ -1514,7 +1491,7 @@ function SettingsSection({
   const keys = [
     {
       key: "revolut_payment_link",
-      label: "Revolut payment URL (used when customers choose “Pay right now” on delivery)",
+      label: "Bank transfer payment URL (team checkout — pay now link)",
     },
     { key: "crypto_tutorial_video_url", label: "Crypto guide — tutorial video embed URL (YouTube embed)" },
     { key: "crypto_wallet_app_name", label: "Crypto guide — recommended wallet app name" },
@@ -1762,78 +1739,31 @@ function SettingsSection({
         </div>
       </div>
       <div>
-        <label className="text-xs font-semibold text-honey-muted">Team fulfillment options</label>
+        <label className="text-xs font-semibold text-honey-muted">Dead drop checkout</label>
         <p className="mt-1 text-xs text-honey-muted">
-          Guests always use dead drop only (when dead drop is on and a location is active). Team members see the
-          options you enable below.
+          All new orders use dead drop. When disabled, customers cannot complete checkout. Manage slots under Fulfillment
+          → Dead drops.
         </p>
-        <div className="mt-3 space-y-3">
-          <div>
-            <label className="text-xs text-honey-muted">Dead drop</label>
-            <div className="mt-1 flex items-center gap-2">
-              <select
-                className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-                value={parseFulfillmentOptionEnabled(draft.fulfillment_dead_drop_enabled) ? "1" : "0"}
-                onChange={(e) => setDraft((d) => ({ ...d, fulfillment_dead_drop_enabled: e.target.value }))}
-              >
-                <option value="1">Enabled</option>
-                <option value="0">Disabled</option>
-              </select>
-              <button
-                type="button"
-                disabled={savingKey === "fulfillment_dead_drop_enabled"}
-                onClick={() => saveSetting("fulfillment_dead_drop_enabled", draft.fulfillment_dead_drop_enabled ?? "1")}
-                className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
-              >
-                {savingKey === "fulfillment_dead_drop_enabled" ? "Saving..." : "Save"}
-              </button>
-            </div>
-            {savedKey === "fulfillment_dead_drop_enabled" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+        <div className="mt-3">
+          <div className="flex items-center gap-2">
+            <select
+              className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              value={parseFulfillmentOptionEnabled(draft.fulfillment_dead_drop_enabled) ? "1" : "0"}
+              onChange={(e) => setDraft((d) => ({ ...d, fulfillment_dead_drop_enabled: e.target.value }))}
+            >
+              <option value="1">Enabled</option>
+              <option value="0">Disabled</option>
+            </select>
+            <button
+              type="button"
+              disabled={savingKey === "fulfillment_dead_drop_enabled"}
+              onClick={() => saveSetting("fulfillment_dead_drop_enabled", draft.fulfillment_dead_drop_enabled ?? "1")}
+              className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            >
+              {savingKey === "fulfillment_dead_drop_enabled" ? "Saving..." : "Save"}
+            </button>
           </div>
-          <div>
-            <label className="text-xs text-honey-muted">Pickup</label>
-            <div className="mt-1 flex items-center gap-2">
-              <select
-                className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-                value={parseFulfillmentOptionEnabled(draft.fulfillment_pickup_enabled) ? "1" : "0"}
-                onChange={(e) => setDraft((d) => ({ ...d, fulfillment_pickup_enabled: e.target.value }))}
-              >
-                <option value="1">Enabled</option>
-                <option value="0">Disabled</option>
-              </select>
-              <button
-                type="button"
-                disabled={savingKey === "fulfillment_pickup_enabled"}
-                onClick={() => saveSetting("fulfillment_pickup_enabled", draft.fulfillment_pickup_enabled ?? "1")}
-                className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
-              >
-                {savingKey === "fulfillment_pickup_enabled" ? "Saving..." : "Save"}
-              </button>
-            </div>
-            {savedKey === "fulfillment_pickup_enabled" && <p className="mt-1 text-xs text-green-600">Saved</p>}
-          </div>
-          <div>
-            <label className="text-xs text-honey-muted">Delivery</label>
-            <div className="mt-1 flex items-center gap-2">
-              <select
-                className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-                value={parseFulfillmentOptionEnabled(draft.fulfillment_delivery_enabled) ? "1" : "0"}
-                onChange={(e) => setDraft((d) => ({ ...d, fulfillment_delivery_enabled: e.target.value }))}
-              >
-                <option value="1">Enabled</option>
-                <option value="0">Disabled</option>
-              </select>
-              <button
-                type="button"
-                disabled={savingKey === "fulfillment_delivery_enabled"}
-                onClick={() => saveSetting("fulfillment_delivery_enabled", draft.fulfillment_delivery_enabled ?? "1")}
-                className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
-              >
-                {savingKey === "fulfillment_delivery_enabled" ? "Saving..." : "Save"}
-              </button>
-            </div>
-            {savedKey === "fulfillment_delivery_enabled" && <p className="mt-1 text-xs text-green-600">Saved</p>}
-          </div>
+          {savedKey === "fulfillment_dead_drop_enabled" && <p className="mt-1 text-xs text-green-600">Saved</p>}
         </div>
       </div>
       {keys.map(({ key, label }) => (

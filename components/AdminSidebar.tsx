@@ -13,7 +13,6 @@ import {
   ShoppingCart,
   Skull,
   Ticket,
-  Truck,
   Users,
 } from "lucide-react";
 import { ADMIN_BASE_PATH } from "@/lib/constants";
@@ -34,11 +33,7 @@ const tabs = [
   { id: "settings", label: "Settings", icon: Settings, href: `${ADMIN_BASE_PATH}?tab=settings` },
 ] as const;
 
-const part4 = [
-  { label: "Dead drops", href: `${ADMIN_BASE_PATH}/dead-drops`, icon: Skull },
-  { label: "Deliveries", href: `${ADMIN_BASE_PATH}/deliveries`, icon: Truck },
-  { label: "Pickup points", href: `${ADMIN_BASE_PATH}/pickup-points`, icon: MapPin },
-] as const;
+const part4 = [{ label: "Dead drops", href: `${ADMIN_BASE_PATH}/dead-drops`, icon: Skull }] as const;
 
 export function AdminSidebar({ className, onNavigate }: { className?: string; onNavigate?: () => void }) {
   const pathname = usePathname();
