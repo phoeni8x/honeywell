@@ -367,14 +367,10 @@ export async function POST(request: Request) {
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
   const header = request.headers.get("x-telegram-bot-api-secret-token");
 
-  if (process.env.NODE_ENV === "production") {
-    // Telegram only includes this header when you set a secret in setWebhook.
-    // If Telegram is configured without a secret, the header will be missing,
-    // and we should still accept updates (admin checks below restrict actions).
-    if (webhookSecret && header && header !== webhookSecret) {
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
-    }
-  } else if (webhookSecret && header !== webhookSecret) {
+  // Telegram only includes this header when you set a secret in setWebhook.
+  // If the header is missing, we still accept the update (admin checks below restrict actions).
+  // If the header exists but is wrong, reject.
+  if (webhookSecret && header && header !== webhookSecret) {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 401 });
   }
 
