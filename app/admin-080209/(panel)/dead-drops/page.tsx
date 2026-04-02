@@ -340,26 +340,37 @@ export default function AdminDeadDropsPage() {
     }
   }
 
+  /** Columns added in migration 036; older DBs lack some or all of these. */
+  const OPTIONAL_DEAD_DROP_WRITE_KEYS = [
+    "location_video_url",
+    "location_photo_url_2",
+    "location_photo_url_3",
+    "dig_up_when_alone_warning",
+  ] as const;
+
+  function deadDropErrorText(error: { message?: string; details?: string } | null): string {
+    return String(error?.message ?? error?.details ?? "").trim();
+  }
+
   function isMissingDeadDropColumnError(msg: string) {
     const m = msg.toLowerCase();
     return (
-      m.includes("could not find the") ||
+      (m.includes("could not find the") && m.includes("dead_drops")) ||
       (m.includes("does not exist") && m.includes("dead_drops")) ||
       (m.includes("column") && m.includes("dead_drops") && m.includes("schema"))
     );
   }
 
-  function stripOptionalDeadDropColumns(payload: Record<string, unknown>, msg: string) {
-    const m = msg.toLowerCase();
+  /** PostgREST schema cache: Could not find the 'col' column of 'dead_drops' ... */
+  function extractMissingDeadDropColumnName(msg: string): string | null {
+    const m = msg.match(/'([^']+)'\s+column\s+of\s+'dead_drops'/i);
+    return m?.[1] ?? null;
+  }
+
+  function stripAllOptionalDeadDropKeys(payload: Record<string, unknown>) {
     const next = { ...payload };
-    const candidates = [
-      "location_video_url",
-      "location_photo_url_2",
-      "location_photo_url_3",
-      "dig_up_when_alone_warning",
-    ] as const;
-    for (const k of candidates) {
-      if (m.includes(k)) delete (next as any)[k];
+    for (const k of OPTIONAL_DEAD_DROP_WRITE_KEYS) {
+      delete (next as Record<string, unknown>)[k];
     }
     return next;
   }
@@ -395,28 +406,40 @@ export default function AdminDeadDropsPage() {
         is_active: true,
       };
 
-      let insertPayload = payload;
-      let { error } = await supabase.from("dead_drops").insert(insertPayload);
-      if (error) {
-        const details = String(error.message ?? (error as any).details ?? "").trim();
-        const msg = details.toLowerCase();
-        // If DB is missing optional media columns, retry without those keys so admin can still save the slot.
-        if (isMissingDeadDropColumnError(details)) {
-          insertPayload = stripOptionalDeadDropColumns(insertPayload, details);
-          const retry = await supabase.from("dead_drops").insert(insertPayload);
-          error = retry.error;
-          if (!error) {
-            showToast("Dead drop saved ✓ (Some media fields not saved yet — DB columns need migration)");
-          }
+      let insertPayload: Record<string, unknown> = { ...payload };
+      let strippedOptional = false;
+      let lastDetails = "";
+      let insertOk = false;
+      for (let i = 0; i < 16; i++) {
+        const { error } = await supabase.from("dead_drops").insert(insertPayload);
+        if (!error) {
+          insertOk = true;
+          break;
         }
-        if (error) {
-          if (msg.includes("max_active_dead_drops_reached")) {
-            showToast(`Max active dead drops reached (${MAX_ACTIVE_DEAD_DROPS}). Deactivate some first.`, false);
-          } else {
-            showToast(`Adding failed: ${details ? details.slice(0, 160) : "Try again."}`, false);
-          }
+        lastDetails = deadDropErrorText(error);
+        const msg = lastDetails.toLowerCase();
+        if (msg.includes("max_active_dead_drops_reached")) {
+          showToast(`Max active dead drops reached (${MAX_ACTIVE_DEAD_DROPS}). Deactivate some first.`, false);
           return;
         }
+        if (!isMissingDeadDropColumnError(lastDetails)) {
+          showToast(`Adding failed: ${lastDetails ? lastDetails.slice(0, 160) : "Try again."}`, false);
+          return;
+        }
+        const col = extractMissingDeadDropColumnName(lastDetails);
+        if (col && Object.prototype.hasOwnProperty.call(insertPayload, col)) {
+          const next = { ...insertPayload };
+          delete (next as Record<string, unknown>)[col];
+          insertPayload = next;
+          strippedOptional = true;
+          continue;
+        }
+        insertPayload = stripAllOptionalDeadDropKeys(insertPayload);
+        strippedOptional = true;
+      }
+      if (!insertOk) {
+        showToast(`Adding failed: ${lastDetails ? lastDetails.slice(0, 160) : "Try again."}`, false);
+        return;
       }
       setDraft({
         name: "",
@@ -437,7 +460,11 @@ export default function AdminDeadDropsPage() {
       } catch {
         // ignore
       }
-      showToast("Dead drop saved and set as active ✓");
+      showToast(
+        strippedOptional
+          ? "Dead drop saved ✓ Apply Supabase migration 036 to persist extra photos, video, and dig-up warning."
+          : "Dead drop saved and set as active ✓"
+      );
       load();
     } finally {
       setLoading(false);
@@ -596,26 +623,42 @@ export default function AdminDeadDropsPage() {
         active_until: editDraft.active_until ? new Date(editDraft.active_until).toISOString() : null,
       };
 
-      let updatePayload = payload;
-      let { error } = await supabase.from("dead_drops").update(updatePayload).eq("id", id);
-      if (error) {
-        const details = String(error.message ?? (error as any).details ?? "").trim();
-        // If DB is missing optional media columns, retry without those keys so edits can still be saved.
-        if (isMissingDeadDropColumnError(details)) {
-          updatePayload = stripOptionalDeadDropColumns(updatePayload, details);
-          const retry = await supabase.from("dead_drops").update(updatePayload).eq("id", id);
-          error = retry.error;
-          if (!error) {
-            showToast("Dead drop updated ✓ (Some media fields not saved yet — DB columns need migration)");
-          }
+      let updatePayload: Record<string, unknown> = { ...payload };
+      let strippedOptional = false;
+      let lastDetails = "";
+      let updateOk = false;
+      for (let i = 0; i < 16; i++) {
+        const { error } = await supabase.from("dead_drops").update(updatePayload).eq("id", id);
+        if (!error) {
+          updateOk = true;
+          break;
         }
-        if (error) {
-          showToast(`Updating failed: ${details ? details.slice(0, 160) : "Try again."}`, false);
+        lastDetails = deadDropErrorText(error);
+        if (!isMissingDeadDropColumnError(lastDetails)) {
+          showToast(`Updating failed: ${lastDetails ? lastDetails.slice(0, 160) : "Try again."}`, false);
           return;
         }
+        const col = extractMissingDeadDropColumnName(lastDetails);
+        if (col && Object.prototype.hasOwnProperty.call(updatePayload, col)) {
+          const next = { ...updatePayload };
+          delete (next as Record<string, unknown>)[col];
+          updatePayload = next;
+          strippedOptional = true;
+          continue;
+        }
+        updatePayload = stripAllOptionalDeadDropKeys(updatePayload);
+        strippedOptional = true;
+      }
+      if (!updateOk) {
+        showToast(`Updating failed: ${lastDetails ? lastDetails.slice(0, 160) : "Try again."}`, false);
+        return;
       }
       setEditingId(null);
-      showToast("Dead drop updated ✓");
+      showToast(
+        strippedOptional
+          ? "Dead drop updated ✓ Apply Supabase migration 036 for extra photos, video, and dig-up warning."
+          : "Dead drop updated ✓"
+      );
       await load();
     } finally {
       setLoading(false);
