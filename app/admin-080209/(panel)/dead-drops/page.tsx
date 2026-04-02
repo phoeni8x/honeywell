@@ -34,6 +34,7 @@ export default function AdminDeadDropsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   type UploadKind = "location_photo_url" | "location_photo_url_2" | "location_photo_url_3" | "location_video_url";
   const [uploadingKind, setUploadingKind] = useState<UploadKind | null>(null);
+  const DRAFT_LS_KEY = "honeywell_admin_dead_drops_draft_v1";
   const [draft, setDraft] = useState({
     name: "",
     product_id: "",
@@ -105,6 +106,30 @@ export default function AdminDeadDropsPage() {
       video.src = url;
     });
   }
+
+  useEffect(() => {
+    // Persist draft so if the Telegram mini-app refreshes, we don't lose what admin typed/uploaded.
+    try {
+      const raw = window.localStorage.getItem(DRAFT_LS_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<typeof draft>;
+      setDraft((d) => ({
+        ...d,
+        ...parsed,
+      }));
+    } catch {
+      // Ignore localStorage issues (private mode, etc.)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(DRAFT_LS_KEY, JSON.stringify(draft));
+    } catch {
+      // ignore
+    }
+  }, [draft]);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -199,11 +224,20 @@ export default function AdminDeadDropsPage() {
 
       const { error } = await supabase.from("dead_drops").insert(payload);
       if (error) {
-        const msg = String(error.message ?? error.details ?? "").toLowerCase();
+        const details = String(error.message ?? (error as any).details ?? "").trim();
+        const msg = details.toLowerCase();
         if (msg.includes("max_active_dead_drops_reached")) {
           showToast(`Max active dead drops reached (${MAX_ACTIVE_DEAD_DROPS}). Deactivate some first.`, false);
+        } else if (
+          msg.includes("does not exist") &&
+          (msg.includes("location_photo_url_2") ||
+            msg.includes("location_photo_url_3") ||
+            msg.includes("location_video_url") ||
+            msg.includes("dig_up_when_alone_warning"))
+        ) {
+          showToast("Adding failed: DB is missing dead-drops media columns (photo #2/#3, video, warning). Please apply the migration so these columns exist.", false);
         } else {
-          showToast("Failed to save. Try again.", false);
+          showToast(`Adding failed: ${details ? details.slice(0, 160) : "Try again."}`, false);
         }
         return;
       }
@@ -223,6 +257,11 @@ export default function AdminDeadDropsPage() {
         active_from: "",
         active_until: "",
       });
+      try {
+        window.localStorage.removeItem(DRAFT_LS_KEY);
+      } catch {
+        // ignore
+      }
       showToast("Dead drop saved and set as active ✓");
       load();
     } finally {
@@ -386,7 +425,19 @@ export default function AdminDeadDropsPage() {
 
       const { error } = await supabase.from("dead_drops").update(payload).eq("id", id);
       if (error) {
-        showToast("Failed to save changes.", false);
+        const details = String(error.message ?? (error as any).details ?? "").trim();
+        const msg = details.toLowerCase();
+        if (
+          msg.includes("does not exist") &&
+          (msg.includes("location_photo_url_2") ||
+            msg.includes("location_photo_url_3") ||
+            msg.includes("location_video_url") ||
+            msg.includes("dig_up_when_alone_warning"))
+        ) {
+          showToast("Updating failed: DB is missing dead-drops media columns (photo #2/#3, video, warning). Please apply the migration so these columns exist.", false);
+        } else {
+          showToast(`Updating failed: ${details ? details.slice(0, 160) : "Try again."}`, false);
+        }
         return;
       }
       setEditingId(null);
@@ -615,7 +666,7 @@ export default function AdminDeadDropsPage() {
         </div>
         <button
           type="button"
-          disabled={loading}
+          disabled={loading || uploadingKind !== null}
           onClick={saveActive}
           className="rounded-full bg-primary px-6 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
