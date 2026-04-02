@@ -69,7 +69,7 @@ export function HomePageInner() {
           <p className="mx-auto mt-6 max-w-xl text-balance bg-gradient-to-r from-pink-300 via-amber-200 to-cyan-300 bg-clip-text text-xl italic text-transparent md:text-2xl">
             Welcome to our magical well
           </p>
-          <Link href="/shop" className="btn-primary mt-8 inline-flex">
+          <Link href="/shop" className="btn-cta-green mt-8 inline-flex">
             Browse products
           </Link>
         </div>

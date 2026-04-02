@@ -205,6 +205,30 @@ body {
     box-shadow: 1px 1px 0 var(--color-primary-dark);
   }
 
+  /* Hero / emphasis CTA — green (Browse products) */
+  .btn-cta-green {
+    background: #22c55e;
+    color: var(--color-text-on-primary);
+    font-family: var(--font-dm), system-ui, sans-serif;
+    font-weight: 600;
+    border: 2px solid #15803d;
+    border-radius: 4px;
+    padding: 12px 28px;
+    transition: all 0.2s ease;
+    box-shadow: 3px 3px 0 #14532d;
+  }
+
+  .btn-cta-green:hover {
+    background: #4ade80;
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 #14532d;
+  }
+
+  .btn-cta-green:active {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 #14532d;
+  }
+
   .btn-secondary {
     background: transparent;
     color: var(--color-primary);
