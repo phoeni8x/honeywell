@@ -71,7 +71,7 @@ export function BrandHoneyWellTitle({
   if (spread) {
     const smSpread =
       size === "sm"
-        ? "text-base sm:text-lg md:text-xl lg:text-2xl"
+        ? "text-[clamp(0.7rem,3.4vw,1rem)] sm:text-base md:text-xl lg:text-2xl"
         : size === "lg"
           ? sizeCls
           : "text-xl sm:text-2xl md:text-3xl";
@@ -80,7 +80,7 @@ export function BrandHoneyWellTitle({
     return (
       <span
         className={clsx(
-          "flex min-w-0 flex-1 items-baseline gap-3 sm:gap-6 md:gap-10 lg:gap-14",
+          "flex min-h-[1.25em] min-w-0 flex-1 items-baseline gap-1.5 sm:gap-4 md:gap-8 lg:gap-14",
           smSpread,
           className
         )}
