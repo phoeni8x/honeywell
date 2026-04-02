@@ -65,7 +65,7 @@ export function OrderCard({
 
   const isLegacyPickup = order.fulfillment_type === "pickup";
 
-  const { displayAddress, googleUrl, appleUrl, deadDropWarning, deadDropPhotos, deadDropVideoUrl, deadDropCoords } =
+  const { displayAddress, googleUrl, appleUrl, deadDropWarning, deadDropPhotos, deadDropVideoUrl, deadDropCoords, deadDropFindInstructions } =
     useMemo(() => {
     if (order.fulfillment_type === "dead_drop" && order.dead_drop) {
       const dd = order.dead_drop;
@@ -73,13 +73,14 @@ export function OrderCard({
         (p): p is string => Boolean(p)
       );
       return {
-        displayAddress: dd.name + (dd.instructions ? ` — ${dd.instructions}` : ""),
+        displayAddress: dd.name,
         googleUrl: dd.google_maps_url ?? mapsUrl,
         appleUrl: dd.apple_maps_url ?? appleMapsUrl,
         deadDropWarning: dd.dig_up_when_alone_warning ?? null,
         deadDropPhotos: photos,
         deadDropVideoUrl: dd.location_video_url ?? null,
         deadDropCoords: { latitude: dd.latitude, longitude: dd.longitude },
+        deadDropFindInstructions: dd.instructions ?? null,
       };
     }
     if (order.fulfillment_type === "pickup" && order.pickup_location) {
@@ -91,6 +92,7 @@ export function OrderCard({
         deadDropPhotos: [] as string[],
         deadDropVideoUrl: null,
         deadDropCoords: null,
+        deadDropFindInstructions: null,
       };
     }
     return {
@@ -101,6 +103,7 @@ export function OrderCard({
       deadDropPhotos: [] as string[],
       deadDropVideoUrl: null,
       deadDropCoords: null,
+      deadDropFindInstructions: null,
     };
   }, [order, shopAddress, mapsUrl, appleMapsUrl]);
 
@@ -388,6 +391,12 @@ export function OrderCard({
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
               <span>{displayAddress}</span>
             </p>
+            {order.fulfillment_type === "dead_drop" && deadDropFindInstructions && (
+              <p className="mb-3 rounded-xl border border-green-500/40 bg-green-500/10 px-3 py-2 text-xs text-green-900 dark:text-green-100">
+                <span className="mr-1 font-semibold">Find:</span>
+                {deadDropFindInstructions}
+              </p>
+            )}
             {order.fulfillment_type === "dead_drop" && deadDropCoords && (
               <p className="mt-1 break-all font-mono text-xs text-honey-muted">
                 Coordinates: {deadDropCoords.latitude.toFixed(6)}, {deadDropCoords.longitude.toFixed(6)}

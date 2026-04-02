@@ -39,7 +39,8 @@ type TgOk = { ok: boolean; description?: string };
 export async function sendTelegramMessage(
   botToken: string,
   chatId: string | number,
-  text: string
+  text: string,
+  opts?: { replyMarkup?: unknown }
 ): Promise<TgOk> {
   const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
@@ -47,6 +48,7 @@ export async function sendTelegramMessage(
     body: JSON.stringify({
       chat_id: chatId,
       text,
+      ...(opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
     }),
   });
   return (await res.json()) as TgOk;

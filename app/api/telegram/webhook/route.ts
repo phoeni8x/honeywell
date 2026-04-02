@@ -1,5 +1,8 @@
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
+import { executeAdminApproveOrder } from "@/lib/admin-approve-order";
+import { notifyCustomerPush } from "@/lib/push-notify";
+import { sanitizePlainText } from "@/lib/sanitize";
 import {
   banChatMemberApi,
   getChannelMembership,
@@ -21,7 +24,14 @@ type TgMessage = {
   photo?: TgPhotoSize[];
 };
 
-type TelegramUpdate = { message?: TgMessage };
+type TelegramCallbackQuery = {
+  id: string;
+  from?: { id: number; username?: string };
+  data?: string;
+  message?: { chat?: { id: number; type?: string } };
+};
+
+type TelegramUpdate = { message?: TgMessage; callback_query?: TelegramCallbackQuery };
 
 const USERNAME_REQUIRED_MESSAGE =
   "Please set a public Telegram username first (Settings → Telegram → Username). Honey Well needs it before we can verify you or link your account — then try again.";
@@ -375,6 +385,105 @@ export async function POST(request: Request) {
     update = await request.json();
   } catch {
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+  }
+
+  // Inline keyboard actions (admin-only)
+  const callback = update.callback_query;
+  if (callback?.id && callback.from?.id && callback.data) {
+    const fromId = callback.from.id;
+    if (!isAdminTelegram(fromId)) {
+      await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ callback_query_id: callback.id, text: "Not authorized." }),
+      }).catch(() => {});
+      return NextResponse.json({ ok: true });
+    }
+
+    const svc = createServiceClient();
+    const [cmd, orderId] = callback.data.split(":", 2) as [string, string];
+
+    let answerText = "Action failed.";
+    try {
+      if (!orderId) throw new Error("Missing order id");
+
+      if (cmd === "HW_APPROVE") {
+        const result = await executeAdminApproveOrder(orderId);
+        answerText = result.success ? "Payment approved ✓" : String(result.error ?? "Could not approve.");
+      } else if (cmd === "HW_DECLINE") {
+        const reason = "Declined in admin bot";
+        const { data: order, error: fetchErr } = await svc
+          .from("orders")
+          .select("id, status, customer_token, order_number")
+          .eq("id", orderId)
+          .maybeSingle();
+        if (fetchErr || !order) throw new Error("Order not found");
+
+        const st = String(order.status);
+        if (st !== "payment_pending" && st !== "awaiting_dead_drop") throw new Error("Order not pending approval");
+        const awaitingDrop = st === "awaiting_dead_drop";
+
+        const now = new Date().toISOString();
+        const { error: upErr } = await svc
+          .from("orders")
+          .update({
+            status: "cancelled",
+            updated_at: now,
+            rejection_reason: sanitizePlainText(reason, 2000) || null,
+          })
+          .eq("id", orderId)
+          .in("status", awaitingDrop ? ["awaiting_dead_drop"] : ["payment_pending"]);
+
+        if (upErr) throw upErr;
+
+        const customerToken = order.customer_token as string | undefined;
+        const orderNumber = (order.order_number as string | undefined) ?? orderId.slice(0, 8);
+        if (customerToken) {
+          void notifyCustomerPush(customerToken, {
+            title: "Order update",
+            body: `Order ${orderNumber} was not approved. Contact support if you have questions.`,
+            url: "/home",
+            tag: `reject-${orderId}`,
+          });
+        }
+
+        answerText = "Declined ✓";
+      } else if (cmd === "HW_GIVE_DROP") {
+        const { error: rpcErr } = await svc.rpc("assign_dead_drop_for_order", { p_order_id: orderId });
+        if (rpcErr) throw rpcErr;
+
+        const { data: order } = await svc
+          .from("orders")
+          .select("customer_token, order_number")
+          .eq("id", orderId)
+          .maybeSingle();
+
+        const customerToken = order?.customer_token as string | undefined;
+        if (customerToken) {
+          void notifyCustomerPush(customerToken, {
+            title: "Dead drop ready",
+            body: "Open your order for photos, map link, and coordinates.",
+            url: `/account/orders/${orderId}/track`,
+            tag: `order-${orderId}-drop`,
+          });
+        }
+
+        answerText = "Dead drop assigned ✓";
+      } else {
+        answerText = "Unknown action.";
+      }
+    } catch (e) {
+      console.error("[telegram admin inline action]", e);
+      answerText = "Action failed (order state may not match).";
+    }
+
+    await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callback_query_id: callback.id, text: answerText }),
+    }).catch(() => {});
+
+    return NextResponse.json({ ok: true });
   }
 
   const msg = update.message;

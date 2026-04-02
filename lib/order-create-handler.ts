@@ -49,6 +49,7 @@ const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
 };
 
 async function notifyTelegramAboutOrder(params: {
+  orderId: string;
   customerUsername: string | null;
   deliveryAddress: string | null;
   orderAmount: number | string | null;
@@ -75,7 +76,17 @@ async function notifyTelegramAboutOrder(params: {
     `5) Payment reference (bank transfer / crypto memo): ${payRef}`,
   ].join("\n");
 
-  const tg = await sendTelegramMessage(botToken, chatId, message);
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: "✅ Accept payment", callback_data: `HW_APPROVE:${params.orderId}` },
+        { text: "❌ Decline", callback_data: `HW_DECLINE:${params.orderId}` },
+      ],
+      [{ text: "📦 Give drop", callback_data: `HW_GIVE_DROP:${params.orderId}` }],
+    ],
+  };
+
+  const tg = await sendTelegramMessage(botToken, chatId, message, { replyMarkup: keyboard });
   if (!tg.ok) {
     console.error("[telegram order notify]", tg.description ?? "sendMessage failed");
   }
@@ -296,6 +307,7 @@ export async function handleCreateOrder(request: Request) {
       tag: `new-order-${orderId}`,
     });
     void notifyTelegramAboutOrder({
+      orderId,
       customerUsername: (createdOrder?.customer_username as string | null | undefined) ?? customerUsername ?? null,
       deliveryAddress: (createdOrder?.delivery_address as string | null | undefined) ?? null,
       orderAmount: (createdOrder?.total_price as number | string | null | undefined) ?? null,
