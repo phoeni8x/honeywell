@@ -47,10 +47,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid upload kind" }, { status: 400 });
     }
 
-    // Practical limit to avoid huge videos breaking uploads.
-    const maxBytes = 35 * 1024 * 1024; // 35MB
+    // Practical limit to avoid huge uploads breaking the pipeline.
+    // iPhone clips around ~2 minutes can easily exceed 35MB.
+    const maxBytes = 100 * 1024 * 1024; // 100MB
     if (file.size > maxBytes) {
       return NextResponse.json({ error: "File is too large. Please use a smaller file." }, { status: 400 });
+    }
+
+    if (kind === "location_video_url") {
+      // Basic type guard to prevent non-video files being stored as videos.
+      const ct = (file.type || "").toLowerCase();
+      if (!ct.startsWith("video/")) {
+        return NextResponse.json({ error: "Please upload a valid video file." }, { status: 400 });
+      }
     }
 
     const svc = createServiceClient();

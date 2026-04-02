@@ -74,6 +74,38 @@ export default function AdminDeadDropsPage() {
     window.setTimeout(() => setToast(null), 3000);
   }
 
+  const MAX_VIDEO_DURATION_SECONDS = 130; // ~2 minutes
+  const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // match backend limit
+
+  async function readVideoDurationSeconds(file: File): Promise<number | null> {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement("video");
+
+      const cleanup = () => {
+        URL.revokeObjectURL(url);
+        try {
+          video.src = "";
+        } catch {
+          // ignore
+        }
+      };
+
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        const dur = video.duration;
+        cleanup();
+        resolve(Number.isFinite(dur) && !Number.isNaN(dur) ? dur : null);
+      };
+      video.onerror = () => {
+        cleanup();
+        resolve(null);
+      };
+
+      video.src = url;
+    });
+  }
+
   const load = useCallback(async () => {
     const supabase = createClient();
     const [{ data }, { data: st }, { data: prods }] = await Promise.all([
@@ -93,6 +125,26 @@ export default function AdminDeadDropsPage() {
   }, [load]);
 
   async function uploadDeadDropMedia(kind: UploadKind, file: File) {
+    if (kind === "location_video_url") {
+      const ct = (file.type || "").toLowerCase();
+      if (!ct.startsWith("video/")) {
+        showToast("Please upload a valid video file.", false);
+        return;
+      }
+
+      if (file.size > MAX_VIDEO_BYTES) {
+        showToast("Video is too large. Please keep it under ~100MB.", false);
+        return;
+      }
+
+      // Use duration metadata as the main UX constraint (iPhone clips vary a lot in size).
+      const durationSeconds = await readVideoDurationSeconds(file);
+      if (durationSeconds !== null && durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
+        showToast("Video is too long. Please keep it around ~2 minutes.", false);
+        return;
+      }
+    }
+
     setUploadingKind(kind);
     try {
       const fd = new FormData();
