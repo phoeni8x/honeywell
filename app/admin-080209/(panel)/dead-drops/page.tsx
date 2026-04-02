@@ -230,12 +230,39 @@ export default function AdminDeadDropsPage() {
     setLoading(true);
     try {
       const supabase = createClient();
+      // Dead drops can be referenced by existing orders (`orders.dead_drop_id` FK).
+      // If referenced, hard delete will fail; we de-activate instead.
+      const { data: used, error: usedErr } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("dead_drop_id", id)
+        .limit(1);
+
+      if (usedErr) {
+        console.error("[dead-drop delete] orders check failed", usedErr);
+        showToast("Failed to delete (cannot check usage). Try again.", false);
+        return;
+      }
+
+      if (used && used.length > 0) {
+        const { error: deactivateErr } = await supabase.from("dead_drops").update({ is_active: false }).eq("id", id);
+        if (deactivateErr) {
+          console.error("[dead-drop delete] deactivate failed", deactivateErr);
+          showToast("Failed to deactivate. Try again.", false);
+          return;
+        }
+        showToast("Dead drop is used by existing orders — deactivated instead ✓", true);
+        await load();
+        return;
+      }
+
       const { error } = await supabase.from("dead_drops").delete().eq("id", id);
       if (error) {
+        console.error("[dead-drop delete] hard delete failed", error);
         showToast("Failed to delete. Try again.", false);
         return;
       }
-      showToast("Dead drop deleted ✓");
+      showToast("Dead drop deleted ✓", true);
       load();
     } finally {
       setLoading(false);
