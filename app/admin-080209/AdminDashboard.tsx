@@ -1220,7 +1220,6 @@ function OrdersSection({
               <th className="p-2">Product</th>
               <th className="p-2">Qty</th>
               <th className="p-2">Time</th>
-              <th className="p-2">Points Used</th>
               <th className="p-2">Type</th>
               <th className="p-2">Pay</th>
               <th className="p-2">Status</th>
@@ -1270,9 +1269,6 @@ function OrdersSection({
                       minute: "2-digit",
                     })}
                   </span>
-                </td>
-                <td className="p-2 text-xs">
-                  {Number(o.points_used ?? 0) > 0 ? `${Number(o.points_used)} pts` : "No"}
                 </td>
                 <td className="p-2">{o.user_type}</td>
                 <td className="p-2">
