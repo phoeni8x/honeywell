@@ -137,7 +137,7 @@ export function CryptoPayContent() {
       <p className="mt-4 text-pretty text-honey-muted">
         Send the exact crypto amount below (includes a 1,000 HUF conversion buffer). Your order reference is tied to
         this browser.{" "}
-        <Link href="/crypto-guide" className="text-primary underline">
+        <Link href="/home#crypto-guide" className="text-primary underline">
           New to crypto? Read the guide
         </Link>
       </p>
@@ -211,8 +211,8 @@ export function CryptoPayContent() {
       )}
 
       <p className="mt-6 text-sm text-honey-muted">
-        Pay only this coin and network — the shop admin chooses which asset is active. Live rates on this page include
-        BTC, ETH, USDT, LTC, and SOL for reference.
+        Pay only this coin and network — the shop admin chooses which asset is active. The amount above is what you must
+        send for this order.
       </p>
 
       <button

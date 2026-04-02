@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
-    const allowed = ["order", "payment", "pickup", "product", "other"];
+    const allowed = ["order", "payment", "fulfillment", "product", "other"];
     const cat = allowed.includes(category) ? category : "other";
 
     if (orderId) {

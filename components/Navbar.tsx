@@ -12,8 +12,7 @@ const links = [
   { href: "/home", label: "Home" },
   { href: "/shop", label: "Shop" },
   { href: "/order-history", label: "My Orders" },
-  { href: "/crypto-rates", label: "Rates" },
-  { href: "/crypto-guide", label: "Crypto guide" },
+  { href: "/news", label: "News" },
 ];
 
 export function Navbar() {

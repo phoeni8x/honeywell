@@ -1,13 +1,11 @@
 "use client";
 
-import { AnnouncementCard } from "@/components/AnnouncementCard";
-import { FulfillmentLocationsInfo } from "@/components/FulfillmentLocationsInfo";
+import { CryptoGuideContent } from "@/components/CryptoGuideContent";
 import { HoneycombBg } from "@/components/HoneycombBg";
 import { LS_REFERRED_BY, LS_USER_TYPE } from "@/lib/constants";
-import { createClient } from "@/lib/supabase/client";
-import type { Announcement, UserType } from "@/types";
+import type { UserType } from "@/types";
 import clsx from "clsx";
-import { ChevronDown, Leaf } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -16,12 +14,7 @@ type TaglineRow = { title: string; body: string };
 
 export function HomePageInner() {
   const searchParams = useSearchParams();
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [tagline, setTagline] = useState<string | null>(null);
-  const [settings, setSettings] = useState({
-    shop_address: "",
-    google_maps_url: "",
-  });
   const [userType, setUserType] = useState<UserType | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
@@ -39,27 +32,10 @@ export function HomePageInner() {
   }, []);
 
   useEffect(() => {
-    const supabase = createClient();
-    (async () => {
-      const { data } = await supabase
-        .from("announcements")
-        .select("*")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(12);
-      setAnnouncements((data as Announcement[]) ?? []);
-    })().catch(() => {
-      /* Supabase offline */
-    });
-
     fetch("/api/settings/public")
       .then((r) => r.json())
       .then((d) => {
         if (d.hero_tagline) setTagline(d.hero_tagline);
-        setSettings({
-          shop_address: typeof d.shop_address === "string" ? d.shop_address : "",
-          google_maps_url: typeof d.google_maps_url === "string" ? d.google_maps_url : "",
-        });
       })
       .catch(() => {});
   }, []);
@@ -75,11 +51,11 @@ export function HomePageInner() {
     },
     {
       title: "3. Pay",
-      body: "Team members can pay the remainder with Revolut or cryptocurrency — your choice at checkout. Guests pay with cryptocurrency.",
+      body: "Team members can pay the remainder with bank transfer or cryptocurrency — your choice at checkout. Guests pay with cryptocurrency.",
     },
     {
-      title: "4. Pick up",
-      body: "When your order is ready, pick up at our location. Upload a quick photo when you collect.",
+      title: "4. Collect",
+      body: "When your order is ready, you will receive your dead-drop details here. Follow the instructions from the team.",
     },
   ];
 
@@ -99,8 +75,7 @@ export function HomePageInner() {
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Welcome</p>
           <h1 className="mt-3 font-display text-4xl font-semibold text-honey-text md:text-5xl">Honey Well</h1>
           <p className="mx-auto mt-4 max-w-xl text-balance text-lg text-honey-muted">
-            {tagline ??
-              "Seasonal blooms, daily vitamins, and calm service — curated for our community."}
+            {tagline ?? "Seasonal blooms, daily vitamins, and calm service — curated for our community."}
           </p>
           <Link href="/shop" className="btn-primary mt-8 inline-flex">
             Browse products
@@ -108,34 +83,16 @@ export function HomePageInner() {
         </div>
       </section>
 
-      <section>
-        <h2 className="font-display text-2xl text-honey-text">Dead drop &amp; pickup</h2>
-        <p className="mt-2 text-sm text-honey-muted">Where to collect — no phone tracking, just the spots your team sets in admin.</p>
-        <div className="mt-6">
-          <FulfillmentLocationsInfo />
-        </div>
-      </section>
-
       {userType === "team_member" && (
         <div className="rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-accent/10 to-primary/5 px-6 py-5 text-center dark:from-primary/20 dark:via-accent/15">
           <p className="font-display text-lg text-honey-text">
-            Welcome back, team member! You have access to exclusive discounts and can pay with Revolut or crypto.
+            Welcome back, team member! You have access to exclusive discounts and can pay with bank transfer or crypto.
           </p>
         </div>
       )}
 
-      <section>
-        <h2 className="font-display text-3xl text-honey-text">News &amp; updates</h2>
-        <p className="mt-2 text-honey-muted">Latest announcements from the Honey Well team.</p>
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          {announcements.length === 0 ? (
-            <p className="col-span-full rounded-2xl border border-dashed border-honey-border bg-bg/50 px-6 py-12 text-center text-honey-muted">
-              No announcements yet — check back soon.
-            </p>
-          ) : (
-            announcements.map((a) => <AnnouncementCard key={a.id} announcement={a} />)
-          )}
-        </div>
+      <section id="crypto-guide" className="scroll-mt-24 rounded-3xl border-2 border-honey-border bg-surface/80 px-6 py-10 dark:bg-surface-dark/80 md:px-10">
+        <CryptoGuideContent />
       </section>
 
       <section>
@@ -159,69 +116,17 @@ export function HomePageInner() {
             </div>
           ))}
         </div>
-        <div className="mt-8 rounded-2xl border border-honey-border bg-bg/50 p-6 dark:bg-black/20">
-          <p className="text-sm font-semibold text-honey-text">Pickup location</p>
-          <p className="mt-2 text-sm text-honey-muted">
-            Address and map are configured in admin. Embed a Google Map here once your address is set in Settings.
-          </p>
-          {settings.google_maps_url ? (
-            <a
-              href={settings.google_maps_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 flex h-48 items-center justify-center rounded-xl border border-honey-border bg-surface text-sm font-medium text-primary underline hover:bg-primary/5 dark:bg-surface-dark"
-            >
-              📍 {settings.shop_address || "Open location in Google Maps"}
-            </a>
-          ) : (
-            <div className="mt-4 flex h-48 items-center justify-center rounded-xl border border-dashed border-honey-border bg-surface text-sm text-honey-muted dark:bg-surface-dark">
-              Map location not configured yet — add your address in admin Settings.
-            </div>
-          )}
-        </div>
       </section>
 
       <section className="rounded-3xl border-2 border-amber-300 bg-amber-50/70 px-6 py-8 dark:border-amber-500/40 dark:bg-amber-900/10 md:px-8">
         <h2 className="font-display text-3xl text-honey-text">Terms &amp; conditions</h2>
-        <p className="mt-2 text-sm text-honey-muted">
-          By using Honey Well, you agree to follow these rules.
-        </p>
+        <p className="mt-2 text-sm text-honey-muted">By using Honey Well, you agree to follow these rules.</p>
         <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-honey-text">
           <li>No abusive, fraudulent, or mischievous behavior. Serious violations can lead to a permanent ban.</li>
           <li>All payments are treated as instant and final once sent.</li>
           <li>No credits, no pay-later, and no unpaid reservations.</li>
         </ul>
-        <p className="mt-4 text-sm font-medium text-honey-text">
-          In case of any issue, feel free to contact support anytime.
-        </p>
-      </section>
-
-      <section className="relative overflow-hidden rounded-3xl border-2 border-honey-border bg-gradient-to-br from-blush/40 via-bg to-primary/10 px-6 py-12 dark:from-[#1a1400] dark:via-bg dark:to-surface-dark md:px-10">
-        <Leaf className="absolute -right-8 -top-8 h-24 w-24 text-primary/25" />
-        <div className="relative grid gap-10 md:grid-cols-2">
-          <div>
-            <h2 className="font-display text-3xl text-honey-text">About Honey Well</h2>
-            <p className="mt-4 text-sm leading-relaxed text-honey-muted">
-              Honey Well brings together botanical beauty and thoughtful wellness. We source fresh flowers and
-              quality vitamin supplements so you can brighten your space and support your routine in one calm,
-              trustworthy place.
-            </p>
-          </div>
-          <div className="space-y-6">
-            <div className="rounded-2xl bg-surface/80 p-5 shadow-sm dark:bg-surface-dark/80">
-              <h3 className="font-accent text-xl italic text-primary">Flowers</h3>
-              <p className="mt-2 text-sm text-honey-muted">
-                Seasonal stems, soft palettes, and arrangements that feel hand-picked — never mass-produced.
-              </p>
-            </div>
-            <div className="rounded-2xl bg-surface/80 p-5 shadow-sm dark:bg-surface-dark/80">
-              <h3 className="font-accent text-xl italic text-primary">Vitamins</h3>
-              <p className="mt-2 text-sm text-honey-muted">
-                B, C, and D supplements chosen for clarity and consistency — clear labels, honest pricing.
-              </p>
-            </div>
-          </div>
-        </div>
+        <p className="mt-4 text-sm font-medium text-honey-text">In case of any issue, feel free to contact support anytime.</p>
       </section>
     </div>
   );

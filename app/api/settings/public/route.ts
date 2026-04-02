@@ -77,8 +77,8 @@ function emptyPayload() {
     shop_currency: "HUF",
     shop_open: "1",
     fulfillment_dead_drop_enabled: "1",
-    fulfillment_pickup_enabled: "1",
-    fulfillment_delivery_enabled: "1",
+    fulfillment_pickup_enabled: "0",
+    fulfillment_delivery_enabled: "0",
     maintenance_mode: "0",
     maintenance_message: "Honey Well is currently under maintenance and testing. Please check back later.",
     maintenance_eta: "",
@@ -131,8 +131,8 @@ export async function GET() {
         shop_currency: map.shop_currency ?? "HUF",
         shop_open: map.shop_open ?? "1",
         fulfillment_dead_drop_enabled: map.fulfillment_dead_drop_enabled ?? "1",
-        fulfillment_pickup_enabled: map.fulfillment_pickup_enabled ?? "1",
-        fulfillment_delivery_enabled: map.fulfillment_delivery_enabled ?? "1",
+        fulfillment_pickup_enabled: map.fulfillment_pickup_enabled ?? "0",
+        fulfillment_delivery_enabled: map.fulfillment_delivery_enabled ?? "0",
         maintenance_mode: map.maintenance_mode ?? "0",
         maintenance_message:
           map.maintenance_message ??

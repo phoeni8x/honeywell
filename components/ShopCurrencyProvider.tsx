@@ -26,8 +26,8 @@ export function ShopCurrencyProvider({ children }: { children: React.ReactNode }
   const [shopOpen, setShopOpen] = useState(true);
   const [fulfillmentOptions, setFulfillmentOptions] = useState<FulfillmentOptions>({
     deadDrop: true,
-    pickup: true,
-    delivery: true,
+    pickup: false,
+    delivery: false,
   });
 
   const load = useCallback(() => {
@@ -75,7 +75,7 @@ export function useShopCurrency(): ShopCurrencyContextValue {
     return {
       currency: "HUF",
       shopOpen: true,
-      fulfillmentOptions: { deadDrop: true, pickup: true, delivery: true },
+      fulfillmentOptions: { deadDrop: true, pickup: false, delivery: false },
       formatPrice: (n: number) => formatPriceAmount(n, "HUF"),
       refresh: () => {},
     };

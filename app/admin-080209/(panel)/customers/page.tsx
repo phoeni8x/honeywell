@@ -80,7 +80,7 @@ export default function AdminCustomersPage() {
         <div className="flex gap-2">
           <input
             className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-            placeholder="Search username (e.g. @ruby) or token..."
+            placeholder="Search username (e.g. @Glorilla) or token..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {

@@ -7,7 +7,7 @@ interface RevolutModalProps {
   open: boolean;
   onClose: () => void;
   revolutUrl: string;
-  /** Shown above the link so the customer can copy before opening Revolut. */
+  /** Shown above the link so the customer can copy before opening the payment page. */
   paymentReferenceCode?: string;
 }
 
@@ -66,9 +66,10 @@ export function RevolutModal({ open, onClose, revolutUrl, paymentReferenceCode }
         >
           <X className="h-5 w-5" />
         </button>
-        <h2 className="font-display text-2xl text-honey-text">Pay with Revolut</h2>
+        <h2 className="font-display text-2xl text-honey-text">Pay with bank transfer</h2>
         <p className="mt-2 text-sm text-honey-muted">
-          Copy your payment reference first, then open Revolut and paste it into the reference / memo field before sending.
+          Copy your payment reference first, then open your bank transfer link and paste it into the reference / memo
+          field before sending.
         </p>
         {paymentReferenceCode ? (
           <div className="mt-4 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3">
@@ -86,12 +87,12 @@ export function RevolutModal({ open, onClose, revolutUrl, paymentReferenceCode }
           className="mt-6 flex min-h-[56px] items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-base font-semibold text-white transition hover:bg-primary-light active:scale-95"
           style={{ WebkitTapHighlightColor: "transparent" }}
         >
-          Open Revolut payment
+          Open bank transfer payment
           <ExternalLink className="h-5 w-5" />
         </a>
         {!revolutUrl && (
           <p className="mt-3 text-center text-xs text-amber-600 dark:text-amber-400">
-            Admin has not set a Revolut link yet.
+            Admin has not set a bank transfer link yet.
           </p>
         )}
           <button

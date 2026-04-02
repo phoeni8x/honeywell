@@ -47,11 +47,11 @@ export default function BuyBeesPage() {
     }
     if (method === "revolut") {
       if (!revolutUrl) {
-        showToast("Revolut link not configured yet — contact admin.");
+        showToast("Bank transfer link not configured yet — contact admin.");
         return;
       }
       window.open(revolutUrl, "_blank", "noopener,noreferrer");
-      showToast("Opening Revolut — send payment then notify admin to credit your Bees.");
+      showToast("Opening payment link — send payment then notify admin to credit your Bees.");
     } else {
       const token = getOrCreateCustomerToken();
       const params = new URLSearchParams({ beesAmount: String(amountBees), hufAmount: String(amountHuf) });
@@ -127,7 +127,7 @@ export default function BuyBeesPage() {
             method === "revolut" ? "bg-primary text-white" : "border border-honey-border text-honey-muted hover:border-primary/40"
           }`}
         >
-          Revolut
+          Bank transfer
         </button>
         <button
           type="button"
@@ -155,7 +155,7 @@ export default function BuyBeesPage() {
         disabled={!amountHuf || amountHuf <= 0}
         className="w-full rounded-full bg-primary py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {method === "revolut" ? "Buy with Revolut" : "Buy with Crypto (LTC)"}
+        {method === "revolut" ? "Buy with bank transfer" : "Buy with Crypto (LTC)"}
       </button>
 
       <p className="text-center text-sm text-honey-muted">

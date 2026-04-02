@@ -1,7 +1,5 @@
 "use client";
 
-import { FulfillmentLocationsInfo } from "@/components/FulfillmentLocationsInfo";
-import { LocationBanner } from "@/components/LocationBanner";
 import { ProductCard } from "@/components/ProductCard";
 import { LS_USER_TYPE } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
@@ -135,7 +133,6 @@ export default function ShopPage() {
 
   return (
     <div className="space-y-8">
-      <LocationBanner />
       <div className="relative overflow-hidden rounded-2xl border-2 border-honey-border bg-surface px-6 py-8 dark:bg-surface-dark">
         <div className="honeycomb-bg pointer-events-none absolute inset-0 opacity-40" />
         <div className="relative z-10">
@@ -144,7 +141,6 @@ export default function ShopPage() {
         </div>
       </div>
 
-      <FulfillmentLocationsInfo />
       {hasPreorderProducts && (
         <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
           Pre-order available on selected products. Items marked with a Pre-order chip can be ordered even when out of stock.

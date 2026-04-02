@@ -30,14 +30,16 @@ const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
   insufficient_stock: "Not enough stock for this quantity. Try a smaller amount.",
   guest_no_wallet_spend: "Guests cannot use this wallet option.",
   guest_fulfillment_invalid: "Guests can only use dead drop fulfillment.",
-  guest_revolut_forbidden: "Guests cannot pay with Revolut.",
+  guest_revolut_forbidden: "Guests cannot pay with bank transfer (team members only).",
   dead_drop_unavailable: "No dead drop available right now. Please try again later.",
   pickup_team_only: "Pickup is available for team members only.",
   pickup_location_required: "Please choose a pickup point.",
   invalid_pickup_point: "Selected pickup point is invalid or inactive.",
   delivery_team_only: "Delivery is available for team members only.",
   delivery_address_required: "Please enter a delivery address.",
-  invalid_revolut_pay_timing: "Invalid Revolut timing selection. Please retry.",
+  invalid_revolut_pay_timing: "Invalid payment timing. Please retry checkout.",
+  pay_on_delivery_disabled: "Pay-on-delivery is no longer available. Choose dead drop and pay now.",
+  fulfillment_pickup_delivery_disabled: "Pickup and delivery are no longer available. All orders use dead drop.",
   preorder_pay_now_required: "Pre-order requires pay-now. Pay-on-delivery is not available.",
   points_min_order_total: "Points can be used only on orders of at least 50,000 HUF.",
   points_insufficient: "You don't have enough points for this order.",
@@ -67,10 +69,10 @@ async function notifyTelegramAboutOrder(params: {
   const message = [
     "New customer order",
     `1) Customer username: ${username}`,
-    `2) Delivery address: ${address}`,
+    `2) Location / notes: ${address}`,
     `3) Customer amount (total): ${amount}`,
     `4) Product type: ${product}`,
-    `5) Payment reference (Revolut/crypto memo): ${payRef}`,
+    `5) Payment reference (bank transfer / crypto memo): ${payRef}`,
   ].join("\n");
 
   const tg = await sendTelegramMessage(botToken, chatId, message);
@@ -143,12 +145,16 @@ export async function handleCreateOrder(request: Request) {
     const bUsed = typeof bees_used === "number" && bees_used > 0 ? bees_used : 0;
     const pUsed = typeof points_used === "number" && points_used > 0 ? Math.floor(points_used) : 0;
 
-    const ft = fulfillment_type as string | undefined;
-    if (ft && !["dead_drop", "pickup", "delivery"].includes(ft)) {
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+    const ftRaw = fulfillment_type as string | undefined;
+    if (ftRaw === "pickup" || ftRaw === "delivery") {
+      return NextResponse.json(
+        { error: ORDER_ERROR_MESSAGE_MAP.fulfillment_pickup_delivery_disabled },
+        { status: 400 }
+      );
     }
-    if (user_type === "guest" && ft && (ft === "pickup" || ft === "delivery")) {
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
+    const ft = ftRaw && ftRaw !== "" ? ftRaw : "dead_drop";
+    if (ft !== "dead_drop") {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const refCode = referred_by ? sanitizePlainText(referred_by, 32) : "";
@@ -161,10 +167,10 @@ export async function handleCreateOrder(request: Request) {
       : null;
 
     let revolutTimingParam: string | null = null;
-    if (
-      typeof revolut_pay_timing === "string" &&
-      (revolut_pay_timing === "pay_now" || revolut_pay_timing === "pay_on_delivery")
-    ) {
+    if (typeof revolut_pay_timing === "string" && revolut_pay_timing === "pay_on_delivery") {
+      return NextResponse.json({ error: ORDER_ERROR_MESSAGE_MAP.pay_on_delivery_disabled }, { status: 400 });
+    }
+    if (typeof revolut_pay_timing === "string" && revolut_pay_timing === "pay_now") {
       revolutTimingParam = revolut_pay_timing;
     }
 
@@ -173,12 +179,7 @@ export async function handleCreateOrder(request: Request) {
     const { data: settingsRows } = await supabase
       .from("settings")
       .select("key, value")
-      .in("key", [
-        "shop_open",
-        "fulfillment_dead_drop_enabled",
-        "fulfillment_pickup_enabled",
-        "fulfillment_delivery_enabled",
-      ]);
+      .in("key", ["shop_open", "fulfillment_dead_drop_enabled"]);
     const settingsMap = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value])) as Record<
       string,
       string
@@ -187,13 +188,7 @@ export async function handleCreateOrder(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
 
-    if (ft === "dead_drop" && !parseFulfillmentOptionEnabled(settingsMap.fulfillment_dead_drop_enabled)) {
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
-    }
-    if (ft === "pickup" && !parseFulfillmentOptionEnabled(settingsMap.fulfillment_pickup_enabled)) {
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
-    }
-    if (ft === "delivery" && !parseFulfillmentOptionEnabled(settingsMap.fulfillment_delivery_enabled)) {
+    if (!parseFulfillmentOptionEnabled(settingsMap.fulfillment_dead_drop_enabled)) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
 
@@ -203,7 +198,7 @@ export async function handleCreateOrder(request: Request) {
       p_quantity: quantity,
       p_user_type: user_type,
       p_payment_method: pm,
-      p_fulfillment_type: ft ?? null,
+      p_fulfillment_type: ft,
       p_dead_drop_id: dead_drop_id ?? null,
       p_location_id: location_id ?? null,
       p_delivery_address: delivery_address ? sanitizePlainText(delivery_address, 500) : null,

@@ -7,8 +7,7 @@ import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { getOrderIssueTelegramUrl } from "@/lib/support-telegram";
 import type { OrderWithProduct } from "@/types";
 import clsx from "clsx";
-import { Copy, ExternalLink, LifeBuoy, MapPin, Navigation, Truck } from "lucide-react";
-import Link from "next/link";
+import { Copy, ExternalLink, LifeBuoy, MapPin, Navigation } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ConfettiBurst } from "./ConfettiBurst";
 import { ProductImage } from "./ProductImage";
@@ -19,7 +18,7 @@ interface OrderCardProps {
   shopAddress: string;
   mapsUrl: string;
   appleMapsUrl: string;
-  /** Admin-configured Revolut link (settings). */
+  /** Admin-configured bank transfer payment link (settings). */
   revolutPaymentLink?: string;
   customerToken: string;
   onPhotoUploaded?: () => void;
@@ -64,6 +63,8 @@ export function OrderCard({
     order.revolut_pay_timing === "pay_on_delivery" &&
     order.status === "delivered";
 
+  const isLegacyPickup = order.fulfillment_type === "pickup";
+
   const { displayAddress, googleUrl, appleUrl } = useMemo(() => {
     if (order.fulfillment_type === "dead_drop" && order.dead_drop) {
       return {
@@ -82,13 +83,17 @@ export function OrderCard({
     return { displayAddress: shopAddress, googleUrl: mapsUrl, appleUrl: appleMapsUrl };
   }, [order, shopAddress, mapsUrl, appleMapsUrl]);
 
-  const showPickup =
+  const showLocationSection =
     order.fulfillment_type !== "delivery" &&
     (order.status === "ready_for_pickup" ||
       order.status === "ready_at_drop" ||
       order.status === "confirmed" ||
       order.status === "customer_arrived" ||
       order.status === "pickup_submitted");
+
+  const showMarkPickedUp =
+    !isLegacyPickup &&
+    (order.status === "ready_for_pickup" || order.status === "ready_at_drop" || order.status === "confirmed");
 
   async function cancelOrder() {
     if (!canCustomerCancelOrder(order)) return;
@@ -218,8 +223,8 @@ export function OrderCard({
                 <div className="mt-3 rounded-2xl border-2 border-primary/35 bg-primary/5 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-honey-muted">Payment reference</p>
                   <p className="mt-1 text-xs text-honey-muted">
-                    Put this in the <strong className="text-honey-text">memo / reference</strong> field when you pay (Revolut or
-                    crypto). Each order has its own code — do not reuse an old one.
+                    Put this in the <strong className="text-honey-text">memo / reference</strong> field when you pay (bank
+                    transfer or crypto). Each order has its own code — do not reuse an old one.
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="font-mono text-lg font-bold tracking-wider text-primary">
@@ -255,15 +260,6 @@ export function OrderCard({
             <p className="mt-1 text-xs text-honey-muted">
               {new Date(order.created_at).toLocaleString("en-GB")}
             </p>
-            {order.fulfillment_type === "delivery" && order.status === "out_for_delivery" && (
-              <Link
-                href={`/account/orders/${order.id}/track`}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/25"
-              >
-                <Truck className="h-3.5 w-3.5" />
-                Track delivery
-              </Link>
-            )}
             {showRevolutPayNowBanner && (
               <div className="mt-3 rounded-2xl border-2 border-amber-400/60 bg-amber-50 px-4 py-3 dark:bg-amber-400/10">
                 <p className="mb-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
@@ -284,11 +280,11 @@ export function OrderCard({
                     }
                   }}
                 >
-                  Open Revolut payment
+                  Open bank transfer payment
                   <ExternalLink className="h-4 w-4" />
                 </a>
                 <p className="mt-2 text-center text-xs text-amber-600 dark:text-amber-400">
-                  Tap to open Revolut, send payment, then come back here.
+                  Tap to open your payment link, send payment, then come back here.
                 </p>
                 {revolutLinkError && (
                   <p className="mt-1 text-center text-xs text-red-600 dark:text-red-400">{revolutLinkError}</p>
@@ -315,11 +311,11 @@ export function OrderCard({
                     }
                   }}
                 >
-                  Pay with Revolut
+                  Pay with bank transfer
                   <ExternalLink className="h-4 w-4" />
                 </a>
                 <p className="mt-2 text-center text-xs text-honey-muted">
-                  Tap to open Revolut, send payment, then admin marks as paid.
+                  Tap to open your payment link, send payment, then admin marks as paid.
                 </p>
                 {revolutLinkError && (
                   <p className="mt-1 text-center text-xs text-red-600 dark:text-red-400">{revolutLinkError}</p>
@@ -365,12 +361,17 @@ export function OrderCard({
           </div>
         </div>
 
-        {showPickup && (
+        {showLocationSection && (
           <div className="border-t border-honey-border bg-bg/50 px-4 py-4 dark:bg-black/20">
             <p className="mb-3 flex items-start gap-2 text-sm text-honey-text">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
               <span>{displayAddress}</span>
             </p>
+            {isLegacyPickup && (
+              <p className="mb-3 text-xs text-honey-muted">
+                Older pickup order — contact support if you need help completing this order.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               <a
                 href={googleUrl}
@@ -389,15 +390,13 @@ export function OrderCard({
               >
                 Open in Apple Maps
               </a>
-              {(order.status === "ready_for_pickup" ||
-                order.status === "ready_at_drop" ||
-                order.status === "confirmed") && (
+              {showMarkPickedUp && (
                 <button
                   type="button"
                   onClick={() => setShowPhoto(true)}
                   className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-light"
                 >
-                  Mark as Picked Up
+                  Mark as collected
                 </button>
               )}
             </div>

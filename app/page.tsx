@@ -98,7 +98,7 @@ export default function SplashPage() {
       <div className="relative z-10 flex max-w-lg flex-col items-center text-center">
         <h1 className="font-display text-5xl font-semibold tracking-tight text-primary md:text-6xl">Honey Well</h1>
         <p className="mt-4 max-w-md text-balance font-body text-lg italic text-white/90">
-          Fresh flowers. Pure wellness. Delivered with care.
+          Fresh flowers. Pure wellness. Curated with care.
         </p>
 
         <div className="mt-12 flex w-full max-w-sm flex-col gap-4">
@@ -146,13 +146,13 @@ export default function SplashPage() {
               again to finish. We&apos;ll check if you belong to our beehive zzzzz.
             </p>
             <p className="mt-2 text-xs text-honey-muted">
-              Example: if Telegram shows <span className="font-medium text-honey-text">@ruby</span>, type{" "}
-              <code className="rounded bg-honey-border/50 px-1">ruby</code> or{" "}
-              <code className="rounded bg-honey-border/50 px-1">@ruby</code> — letters only, no spaces.
+              Example: if Telegram shows <span className="font-medium text-honey-text">@Glorilla</span>, type{" "}
+              <code className="rounded bg-honey-border/50 px-1">Glorilla</code> or{" "}
+              <code className="rounded bg-honey-border/50 px-1">@Glorilla</code> — letters only, no spaces.
             </p>
             <input
               type="text"
-              placeholder="e.g. ruby or @ruby"
+              placeholder="e.g. Glorilla or @Glorilla"
               autoComplete="username"
               value={username}
               onChange={(e) => {
