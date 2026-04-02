@@ -25,6 +25,9 @@ interface OrderCardProps {
 }
 
 function canCustomerCancelOrder(order: OrderWithProduct): boolean {
+  // Dead-drop location is a "locked" assignment; once assigned we don't allow customer cancellation.
+  if (order.fulfillment_type === "dead_drop" && order.status === "confirmed" && order.dead_drop_id) return false;
+
   const payAfterDelivery =
     (order as { pay_after_delivery?: boolean }).pay_after_delivery === true ||
     order.revolut_pay_timing === "pay_on_delivery";
@@ -275,9 +278,7 @@ export function OrderCard({
                 {order.fulfillment_type.replace(/_/g, " ")}
               </p>
             )}
-            <p className="mt-1 text-sm text-honey-muted">
-              Qty {order.quantity} · Total {formatPrice(Number(order.total_price))}
-            </p>
+            <p className="mt-1 text-sm text-honey-muted">Total {formatPrice(Number(order.total_price))}</p>
             {order.order_number && (
               <p className="mt-1 font-mono text-xs text-primary">{order.order_number}</p>
             )}

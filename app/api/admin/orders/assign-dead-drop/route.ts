@@ -39,6 +39,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
+    // Stock deduction: in the broken live state, dead-drop slot assignment doesn't always decrement product stock.
+    // We only deduct when the order is now confirmed and `defer_stock_until_approval` is still true.
+    const { data: updatedOrder } = await svc
+      .from("orders")
+      .select("product_id,quantity,defer_stock_until_approval,status,dead_drop_id,fulfillment_type")
+      .eq("id", orderId)
+      .maybeSingle();
+
+    if (
+      updatedOrder &&
+      updatedOrder.fulfillment_type === "dead_drop" &&
+      updatedOrder.status === "confirmed" &&
+      updatedOrder.dead_drop_id &&
+      updatedOrder.defer_stock_until_approval
+    ) {
+      const productId = updatedOrder.product_id as string | null;
+      const qty = Number(updatedOrder.quantity ?? 0);
+      if (productId && qty > 0) {
+        const { data: product } = await svc.from("products").select("stock_quantity").eq("id", productId).maybeSingle();
+        const stock = Number(product?.stock_quantity ?? 0);
+        if (stock < qty) {
+          return NextResponse.json(
+            { error: "Insufficient stock to confirm dead drop.", code: "insufficient_stock" },
+            { status: 400 }
+          );
+        }
+        const { error: stockUpErr } = await svc.from("products").update({ stock_quantity: stock - qty }).eq("id", productId);
+        if (stockUpErr) {
+          return NextResponse.json({ error: "Failed to deduct stock.", code: "stock_update_failed" }, { status: 400 });
+        }
+        await svc.from("orders").update({ defer_stock_until_approval: false }).eq("id", orderId);
+      }
+    }
+
     const { data: order } = await svc
       .from("orders")
       .select("customer_token, order_number")

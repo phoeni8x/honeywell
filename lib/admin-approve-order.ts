@@ -43,6 +43,41 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
 
   const now = new Date().toISOString();
 
+  async function maybeDeductDeadDropStockIfConfirmed() {
+    const { data: refreshed } = await svc
+      .from("orders")
+      .select("product_id,quantity,defer_stock_until_approval,status,dead_drop_id,fulfillment_type")
+      .eq("id", orderId)
+      .maybeSingle();
+
+    if (
+      !refreshed ||
+      refreshed.fulfillment_type !== "dead_drop" ||
+      refreshed.status !== "confirmed" ||
+      !refreshed.dead_drop_id ||
+      !refreshed.defer_stock_until_approval
+    ) {
+      return;
+    }
+
+    const productId = refreshed.product_id as string | null;
+    const qty = Number(refreshed.quantity ?? 0);
+    if (!productId || qty <= 0) return;
+
+    const { data: product } = await svc.from("products").select("stock_quantity").eq("id", productId).maybeSingle();
+    const stock = Number(product?.stock_quantity ?? 0);
+    if (stock < qty) {
+      throw new Error("insufficient_stock");
+    }
+
+    const { error: stockUpErr } = await svc.from("products").update({ stock_quantity: stock - qty }).eq("id", productId);
+    if (stockUpErr) {
+      throw new Error("stock_update_failed");
+    }
+
+    await svc.from("orders").update({ defer_stock_until_approval: false }).eq("id", orderId);
+  }
+
   // Dead drop (two-step checkout): confirm payment → deduct stock + claim one slot → confirmed with coordinates.
   if (order.fulfillment_type === "dead_drop") {
     if (!order.dead_drop_id) {
@@ -80,6 +115,13 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
           url: `/account/orders/${orderId}/track`,
           tag: `order-${orderId}-drop`,
         });
+      }
+
+      // Ensure stock gets deducted after dead-drop is fully confirmed.
+      try {
+        await maybeDeductDeadDropStockIfConfirmed();
+      } catch (e) {
+        return { success: false, error: "Dead drop stock deduction failed.", status: 400 };
       }
 
       return {
@@ -120,6 +162,14 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
         console.error("[admin approve]", upErr);
         return { success: false, error: "Order update failed", status: 400 };
       }
+    }
+
+    // In the broken live state, dead_drop_id might be present already and stock might not be deducted.
+    // Deduct only when the order is confirmed and `defer_stock_until_approval` is still true.
+    try {
+      await maybeDeductDeadDropStockIfConfirmed();
+    } catch (e) {
+      return { success: false, error: "Dead drop stock deduction failed.", status: 400 };
     }
 
     const customerToken = order.customer_token as string | undefined;

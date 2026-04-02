@@ -31,6 +31,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });
     }
 
+    // Dead-drop: once the location is assigned (confirmed + dead_drop_id set), block customer cancellation.
+    // This prevents stock/slot mismatches after fulfillment handoff.
+    if (order.fulfillment_type === "dead_drop" && order.status === "confirmed" && order.dead_drop_id) {
+      return NextResponse.json(
+        { error: "This dead-drop order cannot be cancelled after the location is assigned." },
+        { status: 403 }
+      );
+    }
+
     // Only allow customer cancellation for revolut pay-after-delivery orders
     const isRevolutPayAfterDelivery =
       order.payment_method === "revolut" && order.pay_after_delivery === true;
