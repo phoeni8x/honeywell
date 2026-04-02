@@ -5,6 +5,7 @@ import { formatPrice } from "@/lib/helpers";
 import type { Order, Product } from "@/types";
 import type { ShopCurrency } from "@/lib/currency";
 import clsx from "clsx";
+import { RainbowHeading } from "@/components/BrandHoneyWellTitle";
 import Image from "next/image";
 import { useCallback, useState } from "react";
 
@@ -152,7 +153,11 @@ export function PendingApprovalQueue({
       {confirmOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog">
           <div className="w-full max-w-md rounded-2xl border border-honey-border bg-surface p-6 shadow-xl dark:bg-surface-dark">
-            <h3 className="font-display text-lg text-honey-text">Approve payment?</h3>
+            <RainbowHeading
+              as="h3"
+              text="APPROVE PAYMENT?"
+              className="text-lg font-display tracking-[0.12em]"
+            />
             <p className="mt-2 text-sm text-honey-muted">
               Confirm approval for <span className="font-mono text-primary">{confirmOrder.order_number ?? confirmOrder.id}</span>
               {(confirmOrder as Order & { payment_reference_code?: string | null }).payment_reference_code ? (
@@ -181,7 +186,7 @@ export function PendingApprovalQueue({
               </button>
               <button
                 type="button"
-                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                className="rounded-lg border-2 border-[#15803d] bg-[#22c55e] px-4 py-2 text-sm font-semibold text-white shadow-[3px_3px_0_#14532d] transition hover:bg-[#4ade80] hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0_#14532d] active:translate-x-px active:shadow-[1px_1px_0_#14532d] disabled:opacity-50 disabled:translate-x-0 disabled:shadow-none"
                 onClick={() => void handleApprove()}
                 disabled={busy}
               >
@@ -195,7 +200,7 @@ export function PendingApprovalQueue({
       {rejectOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog">
           <div className="w-full max-w-md rounded-2xl border border-honey-border bg-surface p-6 shadow-xl dark:bg-surface-dark">
-            <h3 className="font-display text-lg text-honey-text">Reject order</h3>
+            <RainbowHeading as="h3" text="REJECT ORDER" className="text-lg font-display tracking-[0.12em]" />
             <p className="mt-1 font-mono text-xs text-primary">{rejectOrder.order_number ?? rejectOrder.id}</p>
             <label className="mt-3 block text-xs font-semibold text-honey-muted">Reason (optional)</label>
             <textarea
