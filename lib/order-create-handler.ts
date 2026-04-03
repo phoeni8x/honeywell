@@ -5,7 +5,7 @@ import { sanitizePlainText } from "@/lib/sanitize";
 import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { parseShopOpen } from "@/lib/shop-open";
-import { sendTelegramMessage } from "@/lib/telegram";
+import { notifyTelegramNewOrder } from "@/lib/telegram-order-notify";
 import type { PaymentMethod, UserType } from "@/types";
 import { NextResponse } from "next/server";
 
@@ -47,50 +47,6 @@ const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
   wallet_required: "Your wallet is not ready yet. Refresh and try again.",
   invalid_payment_method: "Selected payment method is invalid for this order.",
 };
-
-async function notifyTelegramAboutOrder(params: {
-  orderId: string;
-  customerUsername: string | null;
-  deliveryAddress: string | null;
-  orderAmount: number | string | null;
-  productType: string | null;
-  paymentReferenceCode: string | null;
-}) {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  const chatId = process.env.TELEGRAM_ORDER_CHAT_ID?.trim() || process.env.ADMIN_TELEGRAM_USER_ID?.trim();
-  if (!botToken || !chatId) return;
-
-  const username = params.customerUsername ? `@${params.customerUsername.replace(/^@/, "")}` : "N/A";
-  const address = params.deliveryAddress?.trim() || "N/A";
-  const amountNum = params.orderAmount == null ? NaN : Number(params.orderAmount);
-  const amount = Number.isFinite(amountNum) ? String(amountNum) : "N/A";
-  const product = params.productType?.trim() || "N/A";
-  const payRef = params.paymentReferenceCode?.trim() || "N/A";
-
-  const message = [
-    "New customer order",
-    `1) Customer username: ${username}`,
-    `2) Location / notes: ${address}`,
-    `3) Customer amount (total): ${amount}`,
-    `4) Product type: ${product}`,
-    `5) Payment reference (bank transfer / crypto memo): ${payRef}`,
-  ].join("\n");
-
-  const keyboard = {
-    inline_keyboard: [
-      [
-        { text: "✅ Accept payment", callback_data: `HW_APPROVE:${params.orderId}` },
-        { text: "❌ Decline", callback_data: `HW_DECLINE:${params.orderId}` },
-      ],
-      [{ text: "📦 Give drop", callback_data: `HW_GIVE_DROP:${params.orderId}` }],
-    ],
-  };
-
-  const tg = await sendTelegramMessage(botToken, chatId, message, { replyMarkup: keyboard });
-  if (!tg.ok) {
-    console.error("[telegram order notify]", tg.description ?? "sendMessage failed");
-  }
-}
 
 export async function handleCreateOrder(request: Request) {
   try {
@@ -306,7 +262,7 @@ export async function handleCreateOrder(request: Request) {
       url: "/admin-080209?tab=orders",
       tag: `new-order-${orderId}`,
     });
-    void notifyTelegramAboutOrder({
+    void notifyTelegramNewOrder({
       orderId,
       customerUsername: (createdOrder?.customer_username as string | null | undefined) ?? customerUsername ?? null,
       deliveryAddress: (createdOrder?.delivery_address as string | null | undefined) ?? null,

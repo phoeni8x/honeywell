@@ -1,6 +1,6 @@
 import { generatePaymentReferenceCodeClient } from "@/lib/payment-reference";
 import { createServiceClient } from "@/lib/supabase/admin";
-import { sendTelegramMessage } from "@/lib/telegram";
+import { notifyTelegramNewOrder } from "@/lib/telegram-order-notify";
 
 const DEMO_ORDER_MARKER = "__HW_DEMO__";
 const DEMO_TICKET_SUBJECT_PREFIX = "[HW Demo]";
@@ -22,27 +22,8 @@ export type SeedCustomerDemoResult =
 export async function seedCustomerDemoData(customerToken: string): Promise<SeedCustomerDemoResult> {
   const supabase = createServiceClient();
 
-  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  const chatId = process.env.TELEGRAM_ORDER_CHAT_ID?.trim() || process.env.ADMIN_TELEGRAM_USER_ID?.trim();
-  const demoCustomerUsername = `mock_customer_${customerToken.slice(0, 6)}`; // placeholder for testing telegram formatting
-  const demoDeliveryAddress = "Mock delivery address (seed demo)";
-
-  async function notifyTelegramAboutMockOrder(params: {
-    orderAmount: number;
-    productType: string | null;
-  }) {
-    if (!botToken || !chatId) return;
-    const product = params.productType?.trim() || "N/A";
-    const message = [
-      "New customer order",
-      `1) Customer username: @${demoCustomerUsername}`,
-      `2) Delivery address: ${demoDeliveryAddress}`,
-      `3) Customer amount (total): ${String(params.orderAmount)}`,
-      `4) Product type: ${product}`,
-    ].join("\n");
-    const tg = await sendTelegramMessage(botToken, chatId, message);
-    if (!tg.ok) console.error("[telegram mock order notify]", tg.description ?? "sendMessage failed");
-  }
+  const demoCustomerUsername = `mock_customer_${customerToken.slice(0, 6)}`;
+  const demoDeliveryAddress = "Demo — /account seed (same Telegram format as a real purchase)";
 
   await supabase
     .from("orders")
@@ -92,14 +73,22 @@ export async function seedCustomerDemoData(customerToken: string): Promise<SeedC
       referral_code_used: DEMO_ORDER_MARKER,
       updated_at: now,
     })
-    .select("id, order_number, status")
+    .select("id, order_number, status, payment_reference_code")
     .single();
 
   if (e1 || !o1) {
     console.error("[seed demo order 1]", e1);
     return { ok: false, error: "order_insert_failed" };
   }
-  await notifyTelegramAboutMockOrder({ orderAmount: unit, productType });
+  await notifyTelegramNewOrder({
+    orderId: o1.id,
+    customerUsername: demoCustomerUsername,
+    deliveryAddress: demoDeliveryAddress,
+    orderAmount: unit,
+    productType,
+    paymentReferenceCode: (o1.payment_reference_code as string | null) ?? null,
+    banner: "🧪 Demo purchase test — uses your current TELEGRAM_BOT_TOKEN (not a live checkout).",
+  });
 
   const { data: o2, error: e2 } = await supabase
     .from("orders")
@@ -115,14 +104,22 @@ export async function seedCustomerDemoData(customerToken: string): Promise<SeedC
       referral_code_used: DEMO_ORDER_MARKER,
       updated_at: now,
     })
-    .select("id, order_number, status")
+    .select("id, order_number, status, payment_reference_code")
     .single();
 
   if (e2 || !o2) {
     console.error("[seed demo order 2]", e2);
     return { ok: false, error: "order_insert_failed" };
   }
-  await notifyTelegramAboutMockOrder({ orderAmount: unit * 2, productType });
+  await notifyTelegramNewOrder({
+    orderId: o2.id,
+    customerUsername: demoCustomerUsername,
+    deliveryAddress: demoDeliveryAddress,
+    orderAmount: unit * 2,
+    productType,
+    paymentReferenceCode: (o2.payment_reference_code as string | null) ?? null,
+    banner: "🧪 Demo purchase test #2 — same Telegram format as production.",
+  });
 
   const ordersOut = [
     { id: o1.id, order_number: o1.order_number, status: o1.status },

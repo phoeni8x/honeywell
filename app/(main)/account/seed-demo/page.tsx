@@ -69,9 +69,16 @@ export default function SeedDemoPage() {
       <div>
         <h1 className="font-display text-3xl text-honey-text">Load demo data</h1>
         <p className="mt-2 text-sm text-honey-muted">
-          Creates two sample orders and two support tickets for <strong>this device only</strong> (same
-          customer token as My orders / Support). Safe to run again — it replaces previous{" "}
-          <code className="rounded bg-bg px-1">[HW Demo]</code> rows.
+          Creates two sample orders and two support tickets for this device only (same customer token as My orders /
+          Support). Safe to run again — it replaces previous <code className="rounded bg-bg px-1">[HW Demo]</code> rows.
+        </p>
+        <p className="mt-3 text-sm text-honey-muted">
+          Each run also sends two Telegram messages to your configured admin chat (<code className="rounded bg-bg px-1">
+            TELEGRAM_BOT_TOKEN
+          </code>{" "}
+          + <code className="rounded bg-bg px-1">TELEGRAM_ORDER_CHAT_ID</code> or{" "}
+          <code className="rounded bg-bg px-1">ADMIN_TELEGRAM_USER_ID</code>) with the same format and inline buttons as a
+          real purchase — use this to verify a new bot token after deploy.
         </p>
       </div>
 
