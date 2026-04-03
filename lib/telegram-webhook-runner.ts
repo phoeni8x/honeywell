@@ -9,6 +9,7 @@ import {
   getTelegramCustomerBotToken,
   getTelegramCustomerWebhookSecret,
 } from "@/lib/telegram-bot-tokens";
+import { buildDeadDropCustomerMessageHtml } from "@/lib/telegram-html";
 import {
   banChatMemberApi,
   getChannelMembership,
@@ -641,7 +642,7 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
         const { data: order } = await svc
           .from("orders")
           .select(
-            "customer_token, customer_username, order_number, dead_drop_id, product:products(name)",
+            "customer_token, customer_username, order_number, quantity, dead_drop_id, product:products(name)",
           )
           .eq("id", orderId)
           .maybeSingle();
@@ -650,6 +651,7 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
         const orderNumber = (order?.order_number as string | undefined) ?? orderId.slice(0, 8);
         const productName =
           (order?.product as { name?: string } | null | undefined)?.name ?? "your order";
+        const orderQty = Math.max(1, Math.floor(Number(order?.quantity ?? 1) || 1));
         const deadDropId = order?.dead_drop_id as string | undefined;
 
         // 3. Fetch the dead drop details
@@ -658,6 +660,8 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
           latitude?: number | null;
           longitude?: number | null;
           google_maps_url?: string | null;
+          location_city?: string | null;
+          location_area?: string | null;
           location_photo_url?: string | null;
           location_photo_url_2?: string | null;
           location_photo_url_3?: string | null;
@@ -669,7 +673,7 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
           const { data: dd } = await svc
             .from("dead_drops")
             .select(
-              "name, latitude, longitude, google_maps_url, location_photo_url, location_photo_url_2, location_photo_url_3, location_video_url, instructions",
+              "name, latitude, longitude, google_maps_url, location_city, location_area, location_photo_url, location_photo_url_2, location_photo_url_3, location_video_url, instructions",
             )
             .eq("id", deadDropId)
             .maybeSingle();
@@ -727,76 +731,115 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
             deadDrop.google_maps_url ??
             (lat != null && lon != null ? `https://www.google.com/maps?q=${lat},${lon}` : null);
 
-          const coordLine =
-            lat != null && lon != null ? `📍 Coordinates: ${lat}, ${lon}` : null;
-          const mapsLine = mapsUrl ? `🗺 Map: ${mapsUrl}` : null;
-          const courierNote = deadDrop.instructions?.trim()
-            ? `📝 Note from courier: ${deadDrop.instructions.trim()}`
-            : null;
+          const areaLabel =
+            (typeof deadDrop.location_area === "string" && deadDrop.location_area.trim()) ||
+            (typeof deadDrop.name === "string" && deadDrop.name.trim()) ||
+            null;
 
-          const textMessage = [
-            `🍯 Honey Well — Order ${orderNumber}`,
-            `📦 Product: ${productName}`,
-            "",
-            coordLine,
-            mapsLine,
-            courierNote,
-          ]
-            .filter((l): l is string => l !== null)
-            .join("\n")
-            .trim();
+          const htmlMessage = buildDeadDropCustomerMessageHtml({
+            orderNumber,
+            productName,
+            quantity: orderQty,
+            latitude: lat != null ? Number(lat) : null,
+            longitude: lon != null ? Number(lon) : null,
+            mapsUrl,
+            city: deadDrop.location_city,
+            areaLabel,
+            instructions: deadDrop.instructions,
+          });
 
-          type MediaItem = { type: "photo" | "video"; media: string; caption?: string };
+          type MediaItem = {
+            type: "photo" | "video";
+            media: string;
+            caption?: string;
+            parse_mode?: "HTML";
+          };
           const media: MediaItem[] = photos.map((url) => ({ type: "photo" as const, media: url }));
           if (videoUrl) {
             media.push({ type: "video" as const, media: videoUrl });
           }
 
-          // Telegram sendMediaGroup: 2–10 items, photos + videos; caption only on first item (max 1024 chars).
-          if (media.length >= 2) {
-            const capped =
-              textMessage.length > 1024 ? `${textMessage.slice(0, 1020)}…` : textMessage;
-            const withCaption = media.map((item, i) =>
-              i === 0 ? { ...item, caption: capped } : item,
-            );
-            await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendMediaGroup`, {
+          const sendHtmlFollowUp = () =>
+            fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: customerTgId, media: withCaption }),
-            }).catch((e) => console.error("[HW_GIVE_DROP] sendMediaGroup", e));
-            if (textMessage.length > 1024) {
-              await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendMessage`, {
+              body: JSON.stringify({
+                chat_id: customerTgId,
+                text: htmlMessage,
+                parse_mode: "HTML",
+              }),
+            }).catch((e) => console.error("[HW_GIVE_DROP] sendMessage", e));
+
+          // Telegram album caption max 1024 chars; send full HTML in a second message if needed.
+          if (media.length >= 2) {
+            if (htmlMessage.length <= 1024) {
+              const withCaption = media.map((item, i) =>
+                i === 0
+                  ? { ...item, caption: htmlMessage, parse_mode: "HTML" as const }
+                  : item,
+              );
+              await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendMediaGroup`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chat_id: customerTgId, text: textMessage }),
-              }).catch((e) => console.error("[HW_GIVE_DROP] sendMessage (overflow)", e));
+                body: JSON.stringify({ chat_id: customerTgId, media: withCaption }),
+              }).catch((e) => console.error("[HW_GIVE_DROP] sendMediaGroup", e));
+            } else {
+              const shortCap =
+                "🍯 <b>Honey Well</b> — Free drop\n\n<i>Full details in the next message.</i>";
+              const withCaption = media.map((item, i) =>
+                i === 0 ? { ...item, caption: shortCap, parse_mode: "HTML" as const } : item,
+              );
+              await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendMediaGroup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: customerTgId, media: withCaption }),
+              }).catch((e) => console.error("[HW_GIVE_DROP] sendMediaGroup", e));
+              void sendHtmlFollowUp();
             }
           } else if (media.length === 1) {
             const m = media[0]!;
-            if (m.type === "video") {
-              await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendVideo`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chat_id: customerTgId, video: m.media }),
-              }).catch((e) => console.error("[HW_GIVE_DROP] sendVideo", e));
+            if (htmlMessage.length <= 1024) {
+              if (m.type === "video") {
+                await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendVideo`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: customerTgId,
+                    video: m.media,
+                    caption: htmlMessage,
+                    parse_mode: "HTML",
+                  }),
+                }).catch((e) => console.error("[HW_GIVE_DROP] sendVideo", e));
+              } else {
+                await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendPhoto`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: customerTgId,
+                    photo: m.media,
+                    caption: htmlMessage,
+                    parse_mode: "HTML",
+                  }),
+                }).catch((e) => console.error("[HW_GIVE_DROP] sendPhoto", e));
+              }
             } else {
-              await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendPhoto`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chat_id: customerTgId, photo: m.media }),
-              }).catch((e) => console.error("[HW_GIVE_DROP] sendPhoto", e));
+              if (m.type === "video") {
+                await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendVideo`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ chat_id: customerTgId, video: m.media }),
+                }).catch((e) => console.error("[HW_GIVE_DROP] sendVideo", e));
+              } else {
+                await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendPhoto`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ chat_id: customerTgId, photo: m.media }),
+                }).catch((e) => console.error("[HW_GIVE_DROP] sendPhoto", e));
+              }
+              void sendHtmlFollowUp();
             }
-            await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendMessage`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: customerTgId, text: textMessage }),
-            }).catch((e) => console.error("[HW_GIVE_DROP] sendMessage", e));
           } else {
-            await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendMessage`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: customerTgId, text: textMessage }),
-            }).catch((e) => console.error("[HW_GIVE_DROP] sendMessage", e));
+            void sendHtmlFollowUp();
           }
         }
 

@@ -13,6 +13,8 @@ type DeadDropRow = {
   product_id?: string | null;
   google_maps_url?: string | null;
   apple_maps_url?: string | null;
+  location_city?: string | null;
+  location_area?: string | null;
   location_photo_url?: string | null;
   location_video_url?: string | null;
   location_photo_url_2?: string | null;
@@ -82,6 +84,8 @@ export default function AdminDeadDropsPage() {
     product_id: "",
     google_maps_url: "",
     apple_maps_url: "",
+    location_city: "",
+    location_area: "",
     instructions: "",
     location_photo_url: "",
     location_video_url: "",
@@ -95,6 +99,8 @@ export default function AdminDeadDropsPage() {
     product_id: "",
     google_maps_url: "",
     apple_maps_url: "",
+    location_city: "",
+    location_area: "",
     instructions: "",
     location_photo_url: "",
     location_video_url: "",
@@ -346,6 +352,8 @@ export default function AdminDeadDropsPage() {
     "location_video_url",
     "location_photo_url_2",
     "location_photo_url_3",
+    "location_city",
+    "location_area",
   ] as const;
 
   function deadDropErrorText(error: { message?: string; details?: string } | null): string {
@@ -394,6 +402,8 @@ export default function AdminDeadDropsPage() {
         longitude: 0,
         google_maps_url: draft.google_maps_url || null,
         apple_maps_url: draft.apple_maps_url || null,
+        location_city: draft.location_city.trim() ? draft.location_city.trim() : null,
+        location_area: draft.location_area.trim() ? draft.location_area.trim() : null,
         instructions: draft.instructions || null,
         // Photo #1 column exists in the current live schema.
         location_photo_url: draft.location_photo_url || null,
@@ -445,6 +455,8 @@ export default function AdminDeadDropsPage() {
         product_id: "",
         google_maps_url: "",
         apple_maps_url: "",
+        location_city: "",
+        location_area: "",
         instructions: "",
         location_photo_url: "",
         location_video_url: "",
@@ -589,6 +601,8 @@ export default function AdminDeadDropsPage() {
       product_id: row.product_id ?? "",
       google_maps_url: row.google_maps_url ?? "",
       apple_maps_url: row.apple_maps_url ?? "",
+      location_city: row.location_city ?? "",
+      location_area: row.location_area ?? "",
       instructions: row.instructions ?? "",
       location_photo_url: row.location_photo_url ?? "",
       location_video_url: row.location_video_url ?? "",
@@ -610,6 +624,8 @@ export default function AdminDeadDropsPage() {
         longitude: 0,
         google_maps_url: editDraft.google_maps_url || null,
         apple_maps_url: editDraft.apple_maps_url || null,
+        location_city: editDraft.location_city.trim() ? editDraft.location_city.trim() : null,
+        location_area: editDraft.location_area.trim() ? editDraft.location_area.trim() : null,
         instructions: editDraft.instructions || null,
         location_photo_url: editDraft.location_photo_url || null,
         location_video_url: editDraft.location_video_url || null,
@@ -739,6 +755,22 @@ export default function AdminDeadDropsPage() {
           value={draft.apple_maps_url}
           enterKeyHint="next"
           onChange={(e) => setDraft((d) => ({ ...d, apple_maps_url: e.target.value }))}
+          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+        />
+        <input
+          className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          placeholder="City (optional — shown in customer Telegram message)"
+          value={draft.location_city}
+          enterKeyHint="next"
+          onChange={(e) => setDraft((d) => ({ ...d, location_city: e.target.value }))}
+          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
+        />
+        <input
+          className="w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+          placeholder="Area / landmark (optional — e.g. Széll Kálmán tér)"
+          value={draft.location_area}
+          enterKeyHint="next"
+          onChange={(e) => setDraft((d) => ({ ...d, location_area: e.target.value }))}
           onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 350)}
         />
         <textarea
@@ -993,6 +1025,18 @@ export default function AdminDeadDropsPage() {
                     placeholder="Apple Maps URL"
                     value={editDraft.apple_maps_url}
                     onChange={(e) => setEditDraft((d) => ({ ...d, apple_maps_url: e.target.value }))}
+                  />
+                  <input
+                    className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
+                    placeholder="City (optional — Telegram location line)"
+                    value={editDraft.location_city}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, location_city: e.target.value }))}
+                  />
+                  <input
+                    className="rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
+                    placeholder="Area / landmark (optional)"
+                    value={editDraft.location_area}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, location_area: e.target.value }))}
                   />
                   <textarea
                     className="min-h-[64px] rounded-xl border border-honey-border bg-bg px-3 py-2 text-xs sm:col-span-2"
