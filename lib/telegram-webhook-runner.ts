@@ -28,6 +28,7 @@ type TgMessage = {
   text?: string;
   caption?: string;
   photo?: TgPhotoSize[];
+  video?: { file_id: string };
 };
 
 type TelegramCallbackQuery = {
@@ -55,7 +56,8 @@ const LISTS_COMMANDS_TEXT = `Honey Well — command list (admin)
 
 3) Broadcast to everyone who used /start and stayed opted in
    Text: /broadcast your message here
-   Photo: send an image with a caption starting with /broadcast
+   Photo: image with a caption starting with /broadcast
+   Video: video with a caption starting with /broadcast
 
 4) Stop a specific customer receiving your broadcasts
    /broadcast_block <user id or @username>
@@ -75,7 +77,8 @@ Note: "Continue as Guest" on the website only saves Guest in this browser — th
 
 /broadcast — Mass message to everyone who opted in:
 • Text: /broadcast then your message (same line or multiple lines after a space).
-• Photo: send an image with a caption starting with /broadcast (optional text after it).
+• Photo: image with a caption starting with /broadcast (optional text after it).
+• Video: video with a caption starting with /broadcast (optional text after it).
 
 /broadcast_list — See who can receive broadcasts (opted in vs out) from saved customers.
 
@@ -139,6 +142,7 @@ function isMassBroadcastIntent(msg: TgMessage): boolean {
   }
   const c = normalizeTelegramCommandText(msg.caption ?? "");
   if (msg.photo?.length && c && /^\/broadcast/i.test(c)) return true;
+  if (msg.video?.file_id && c && /^\/broadcast/i.test(c)) return true;
   return false;
 }
 
@@ -202,6 +206,7 @@ async function handleBroadcast(
   }
 
   const hasPhoto = Boolean(msg.photo?.length);
+  const hasVideo = Boolean(msg.video?.file_id);
   const captionRaw = msg.caption?.trim() ?? "";
 
   if (hasPhoto) {
@@ -213,7 +218,7 @@ async function handleBroadcast(
       );
       return;
     }
-    const outCaption = stripBroadcastPrefix(captionRaw);
+    const outCaption = stripBroadcastPrefix(normalizeTelegramCommandText(captionRaw));
     const fileId = msg.photo![msg.photo!.length - 1]!.file_id;
     let ok = 0;
     let fail = 0;
@@ -236,6 +241,43 @@ async function handleBroadcast(
       adminFeedbackToken,
       adminChatId,
       `Photo broadcast: ${ok} delivered${fail ? `, ${fail} failed (blocked bot or deleted chat).` : "."}`
+    );
+    return;
+  }
+
+  if (hasVideo) {
+    const capNorm = normalizeTelegramCommandText(captionRaw);
+    if (!/^\/broadcast(?:@\w+)?/i.test(capNorm)) {
+      await sendBotMessage(
+        adminFeedbackToken,
+        adminChatId,
+        "For videos: add a caption that starts with /broadcast (you can add text after it for the announcement)."
+      );
+      return;
+    }
+    const outCaption = stripBroadcastPrefix(capNorm);
+    const fileId = msg.video!.file_id;
+    let ok = 0;
+    let fail = 0;
+    for (const uid of ids) {
+      const res = await fetch(`https://api.telegram.org/bot${customerSendToken}/sendVideo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: uid,
+          video: fileId,
+          ...(outCaption ? { caption: outCaption } : {}),
+        }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      if (j.ok) ok++;
+      else fail++;
+      await sleep(80);
+    }
+    await sendBotMessage(
+      adminFeedbackToken,
+      adminChatId,
+      `Video broadcast: ${ok} delivered${fail ? `, ${fail} failed (blocked bot or deleted chat).` : "."}`
     );
     return;
   }
@@ -619,6 +661,7 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
           location_photo_url?: string | null;
           location_photo_url_2?: string | null;
           location_photo_url_3?: string | null;
+          location_video_url?: string | null;
           instructions?: string | null;
         } | null = null;
 
@@ -626,7 +669,7 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
           const { data: dd } = await svc
             .from("dead_drops")
             .select(
-              "name, latitude, longitude, google_maps_url, location_photo_url, location_photo_url_2, location_photo_url_3, instructions",
+              "name, latitude, longitude, google_maps_url, location_photo_url, location_photo_url_2, location_photo_url_3, location_video_url, instructions",
             )
             .eq("id", deadDropId)
             .maybeSingle();
@@ -674,6 +717,10 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
             deadDrop.location_photo_url_3,
           ].filter(Boolean) as string[];
 
+          const videoUrlRaw = deadDrop.location_video_url;
+          const videoUrl =
+            typeof videoUrlRaw === "string" && videoUrlRaw.trim().length > 0 ? videoUrlRaw.trim() : null;
+
           const lat = deadDrop.latitude;
           const lon = deadDrop.longitude;
           const mapsUrl =
@@ -699,32 +746,52 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
             .join("\n")
             .trim();
 
-          // Send photos as media group (Telegram supports 2-10 items)
-          if (photos.length >= 2) {
-            const media = photos.map((url, i) => ({
-              type: "photo" as const,
-              media: url,
-              ...(i === 0 ? { caption: textMessage } : {}),
-            }));
+          type MediaItem = { type: "photo" | "video"; media: string; caption?: string };
+          const media: MediaItem[] = photos.map((url) => ({ type: "photo" as const, media: url }));
+          if (videoUrl) {
+            media.push({ type: "video" as const, media: videoUrl });
+          }
+
+          // Telegram sendMediaGroup: 2–10 items, photos + videos; caption only on first item (max 1024 chars).
+          if (media.length >= 2) {
+            const capped =
+              textMessage.length > 1024 ? `${textMessage.slice(0, 1020)}…` : textMessage;
+            const withCaption = media.map((item, i) =>
+              i === 0 ? { ...item, caption: capped } : item,
+            );
             await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendMediaGroup`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: customerTgId, media }),
+              body: JSON.stringify({ chat_id: customerTgId, media: withCaption }),
             }).catch((e) => console.error("[HW_GIVE_DROP] sendMediaGroup", e));
-          } else if (photos.length === 1) {
-            // Single photo: sendPhoto + separate text
-            await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendPhoto`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: customerTgId, photo: photos[0] }),
-            }).catch((e) => console.error("[HW_GIVE_DROP] sendPhoto", e));
+            if (textMessage.length > 1024) {
+              await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: customerTgId, text: textMessage }),
+              }).catch((e) => console.error("[HW_GIVE_DROP] sendMessage (overflow)", e));
+            }
+          } else if (media.length === 1) {
+            const m = media[0]!;
+            if (m.type === "video") {
+              await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendVideo`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: customerTgId, video: m.media }),
+              }).catch((e) => console.error("[HW_GIVE_DROP] sendVideo", e));
+            } else {
+              await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendPhoto`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: customerTgId, photo: m.media }),
+              }).catch((e) => console.error("[HW_GIVE_DROP] sendPhoto", e));
+            }
             await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ chat_id: customerTgId, text: textMessage }),
             }).catch((e) => console.error("[HW_GIVE_DROP] sendMessage", e));
           } else {
-            // No photos — text only
             await fetch(`https://api.telegram.org/bot${customerOutreachToken}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
