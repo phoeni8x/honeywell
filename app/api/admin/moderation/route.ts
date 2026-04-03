@@ -1,4 +1,5 @@
 import { requireAdminUser } from "@/lib/admin-auth";
+import { getTelegramCustomerBotToken } from "@/lib/telegram-bot-tokens";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import {
@@ -101,9 +102,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+    const botTok = getTelegramCustomerBotToken();
     const channelId = process.env.TELEGRAM_CHANNEL_ID?.trim();
-    if (!botToken || !channelId) {
+    if (!botTok || !channelId) {
       return NextResponse.json(
         { error: "Telegram channel controls are not configured on the server." },
         { status: 400 }
@@ -117,13 +118,13 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    const userId = await getTelegramUserIdByUsername(botToken, username);
+    const userId = await getTelegramUserIdByUsername(botTok, username);
     if (!userId) {
       return NextResponse.json({ error: "Could not resolve Telegram user id." }, { status: 400 });
     }
 
     if (action === "kick_channel") {
-      const tg = await banChatMemberApi(botToken, channelId, userId);
+      const tg = await banChatMemberApi(botTok, channelId, userId);
       if (!tg.ok) {
         return NextResponse.json({ error: tg.description ?? PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
       }
@@ -140,7 +141,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "unkick_channel") {
-      const tg = await unbanChatMemberApi(botToken, channelId, userId);
+      const tg = await unbanChatMemberApi(botTok, channelId, userId);
       if (!tg.ok) {
         return NextResponse.json({ error: tg.description ?? PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
       }

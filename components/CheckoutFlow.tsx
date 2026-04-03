@@ -225,7 +225,7 @@ export function CheckoutFlow({
                   For security, exact dead-drop location details are assigned privately after your order is accepted.
                 </p>
                 <p className="mt-2 text-xs text-honey-muted">
-                  If all active dead-drop slots are allocated, checkout will show that no slot is available.
+                  Your exact drop is assigned privately after payment is approved.
                 </p>
               </div>
             </div>

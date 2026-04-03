@@ -1,3 +1,4 @@
+import { getTelegramAdminBotToken } from "@/lib/telegram-bot-tokens";
 import { sendTelegramMessage } from "@/lib/telegram";
 
 export type TelegramOrderNotifyParams = {
@@ -13,10 +14,10 @@ export type TelegramOrderNotifyParams = {
 
 /**
  * Sends the standard admin Telegram message for a new order (inline approve / decline / give drop).
- * Uses TELEGRAM_BOT_TOKEN and TELEGRAM_ORDER_CHAT_ID or ADMIN_TELEGRAM_USER_ID.
+ * Uses TELEGRAM_ADMIN_BOT_TOKEN (or TELEGRAM_BOT_TOKEN) and TELEGRAM_ORDER_CHAT_ID or ADMIN_TELEGRAM_USER_ID.
  */
 export async function notifyTelegramNewOrder(params: TelegramOrderNotifyParams): Promise<void> {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const botToken = getTelegramAdminBotToken();
   const chatId = process.env.TELEGRAM_ORDER_CHAT_ID?.trim() || process.env.ADMIN_TELEGRAM_USER_ID?.trim();
   if (!botToken || !chatId) return;
 

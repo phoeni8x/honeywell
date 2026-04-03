@@ -2,6 +2,7 @@ import { getClientIp } from "@/lib/client-ip";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { ratelimitTelegram } from "@/lib/ratelimit";
 import { createServiceClient } from "@/lib/supabase/admin";
+import { getTelegramCustomerBotToken } from "@/lib/telegram-bot-tokens";
 import { getChannelMembership } from "@/lib/telegram";
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const botToken = getTelegramCustomerBotToken();
     const channelId = process.env.TELEGRAM_CHANNEL_ID;
     const adminTelegramUserId = process.env.ADMIN_TELEGRAM_USER_ID?.trim();
 

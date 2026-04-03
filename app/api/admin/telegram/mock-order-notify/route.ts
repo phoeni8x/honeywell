@@ -1,4 +1,5 @@
 import { requireAdminUser } from "@/lib/admin-auth";
+import { getTelegramAdminBotToken } from "@/lib/telegram-bot-tokens";
 import { sendTelegramMessage } from "@/lib/telegram";
 import { NextResponse } from "next/server";
 
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     productType?: string;
   };
 
-  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const botToken = getTelegramAdminBotToken();
   const chatId = process.env.TELEGRAM_ORDER_CHAT_ID?.trim() || process.env.ADMIN_TELEGRAM_USER_ID?.trim();
   if (!botToken || !chatId) {
     return NextResponse.json({ error: "Telegram order notifications not configured" }, { status: 400 });

@@ -4,7 +4,10 @@ import { getSupportTelegramUrl } from "@/lib/support-telegram";
 import { MessageCircle } from "lucide-react";
 import { usePathname } from "next/navigation";
 
-/** Floating button → Telegram bot (e.g. Chatwoot). Hidden on maintenance / under-development. */
+/**
+ * Floating button → Telegram (Chatwoot inbox). If videos fail in Chatwoot, check: Telegram channel
+ * "Allow receiving files" in BotFather, Chatwoot attachment size limits, and that the agent inbox accepts video MIME types.
+ */
 export function SupportTelegramBubble() {
   const pathname = usePathname();
   const href = getSupportTelegramUrl();

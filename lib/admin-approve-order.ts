@@ -78,7 +78,7 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
     await svc.from("orders").update({ defer_stock_until_approval: false }).eq("id", orderId);
   }
 
-  // Dead drop (two-step checkout): confirm payment → deduct stock + claim one slot → confirmed with coordinates.
+  // Dead drop: payment approval deducts stock in DB and sets awaiting_dead_drop; slot is assigned later (Give drop).
   if (order.fulfillment_type === "dead_drop") {
     if (!order.dead_drop_id) {
       const { error: rpcErr } = await svc.rpc("confirm_dead_drop_payment_and_assign", {
@@ -96,32 +96,17 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
             code: "insufficient_stock",
           };
         }
-        if (msg.includes("dead_drop_unavailable")) {
-          return {
-            success: false,
-            error: "No free dead drop for this product. Add or free a slot, then retry.",
-            status: 400,
-            code: "dead_drop_unavailable",
-          };
-        }
-        return { success: false, error: "Could not confirm dead drop order.", status: 400 };
+        return { success: false, error: "Could not confirm payment for this order.", status: 400 };
       }
 
       const tokenEarly = order.customer_token as string | undefined;
       if (tokenEarly) {
         void notifyCustomerPush(tokenEarly, {
-          title: "Dead drop ready",
-          body: "Payment received — open your order for map link and coordinates.",
+          title: "Payment accepted",
+          body: "We'll send your dead drop location (map, photos, notes) when it's assigned.",
           url: `/account/orders/${orderId}/track`,
-          tag: `order-${orderId}-drop`,
+          tag: `order-${orderId}-paid`,
         });
-      }
-
-      // Ensure stock gets deducted after dead-drop is fully confirmed.
-      try {
-        await maybeDeductDeadDropStockIfConfirmed();
-      } catch (e) {
-        return { success: false, error: "Dead drop stock deduction failed.", status: 400 };
       }
 
       return {

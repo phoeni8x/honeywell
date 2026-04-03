@@ -9,7 +9,8 @@ export async function GET() {
     env_supabase_url: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
     env_anon_key: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     env_service_key: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-    env_telegram_token: Boolean(process.env.TELEGRAM_BOT_TOKEN),
+    env_telegram_admin_token: Boolean(process.env.TELEGRAM_ADMIN_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN),
+    env_telegram_customer_token: Boolean(process.env.TELEGRAM_CUSTOMER_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN),
     env_app_url: Boolean(process.env.NEXT_PUBLIC_APP_URL),
     timestamp: new Date().toISOString(),
   };
