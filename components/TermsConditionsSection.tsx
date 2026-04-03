@@ -2,14 +2,13 @@ export function TermsConditionsSection() {
   return (
     <section className="rounded-3xl border-2 border-amber-400/50 bg-gradient-to-br from-amber-950/30 via-violet-950/20 to-pink-950/25 px-6 py-8 md:px-8">
       <div className="mx-auto max-w-3xl">
-        <h2 className="font-display text-3xl text-honey-text">Terms &amp; conditions</h2>
+        <h2 className="font-display text-3xl text-honey-text">House rules</h2>
         <p className="mt-3 border-t border-amber-400/30 pt-3 font-mono text-xs tracking-wider text-amber-200/80">
           •••••••••••••••••••••••••••••••••••
         </p>
 
         <div className="mt-6 space-y-3 text-sm text-honey-text">
-          <h3 className="font-display text-lg text-amber-200">Project rules</h3>
-          <p>By making a purchase, you automatically accept the project rules.</p>
+          <p>By making a purchase, you automatically accept these house rules.</p>
           <p>Ignorance of the rules does not excuse you from abiding by them.</p>
           <p>For serious violations of the rules, the customer&apos;s account will be blocked.</p>
         </div>
@@ -73,6 +72,9 @@ export function TermsConditionsSection() {
           <section className="space-y-3">
             <h3 className="font-display text-base text-honey-text">4. Order processing timeframes</h3>
             <ol className="list-decimal space-y-2 pl-5 marker:text-amber-300/90">
+              <li>
+                Any order that is not approved by an admin within 15 minutes is automatically cancelled by the system.
+              </li>
               <li>The client must be ready to pay at the time of placing the order.</li>
               <li>After receiving the payment details from the operator, the client can make the payment within 15 minutes.</li>
               <li>If payment is not received on time, the order is automatically canceled.</li>
@@ -154,7 +156,6 @@ export function TermsConditionsSection() {
                 A problematic location can only be replaced if the customer has made at least 10 successful purchases at the
                 store.
               </li>
-              <li>Locations containing synthetic materials cannot be replaced.</li>
               <li>The team reserves the right to refuse a new location without explanation.</li>
             </ol>
           </section>
