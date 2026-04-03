@@ -168,13 +168,11 @@ export default function ProductPage() {
           </span>
         </div>
 
-        <p className={clsx("mt-4 text-sm", "text-honey-muted")}>
-          {preorderEnabled
-            ? "Out of stock now, but pre-order is available."
-            : out
-              ? "Out of stock"
-              : `${product.stock_quantity} available`}
-        </p>
+        {(preorderEnabled || out) && (
+          <p className={clsx("mt-4 text-sm", "text-honey-muted")}>
+            {preorderEnabled ? "Out of stock now, but pre-order is available." : "Out of stock"}
+          </p>
+        )}
 
         {(!out || preorderEnabled) && (
           <div className="mt-8 flex flex-wrap items-center gap-4">

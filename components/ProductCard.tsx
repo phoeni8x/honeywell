@@ -31,7 +31,6 @@ export function ProductCard({ product, userType, categoryLabel }: ProductCardPro
   const out = stock <= 0;
   const preorderEnabled = out && Boolean(product.allow_preorder);
   const canOrder = !out || preorderEnabled;
-  const low = stock > 0 && stock <= 5;
   const title = product.name?.trim() ? product.name : "Product";
 
   return (
@@ -71,11 +70,6 @@ export function ProductCard({ product, userType, categoryLabel }: ProductCardPro
                 Pre-order open
               </span>
             )}
-            {!out && (
-              <span className="absolute bottom-2 right-2 rounded-sm bg-primary px-2 py-0.5 text-[10px] font-semibold text-on-primary">
-                {stock} left
-              </span>
-            )}
           </div>
         </div>
       </Link>
@@ -103,9 +97,6 @@ export function ProductCard({ product, userType, categoryLabel }: ProductCardPro
             {formatPrice(unit)}
           </span>
         </div>
-        {!out && low && (
-          <p className="mt-2 text-sm font-medium text-primary">Only {stock} left — order soon!</p>
-        )}
         <Link
           href={canOrder ? `/product/${product.id}` : "#"}
           className={clsx(
