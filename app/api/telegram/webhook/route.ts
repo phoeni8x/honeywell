@@ -64,7 +64,7 @@ const ADMIN_RULES_TEXT = `Honey Well — Admin commands (your Telegram user id m
 
 Note: "Continue as Guest" on the website only saves Guest in this browser — those people are not in the database. This bot saves people who message it (with a username) to Supabase, with team channel vs guest (not in channel) when TELEGRAM_CHANNEL_ID is set.
 
-/lists — Numbered menu of admin commands (kick, unban, broadcast, block/allow per user).
+/lists or /list — Numbered menu of admin commands (kick, unban, broadcast, block/allow per user).
 /rules — This full text.
 
 /broadcast — Mass message to everyone who opted in:
@@ -90,16 +90,29 @@ async function sendBotMessage(botToken: string, chatId: number, text: string) {
   const max = 4096;
   for (let i = 0; i < text.length; i += max) {
     const chunk = text.slice(i, i + max);
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: chunk }),
-    });
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text: chunk }),
+      });
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        console.error("[telegram sendBotMessage]", res.status, errBody.slice(0, 300));
+      }
+    } catch (e) {
+      console.error("[telegram sendBotMessage] fetch failed", e);
+    }
   }
 }
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Telegram clients often send /cmd@BotUsername — strip the @bot suffix for matching. */
+function normalizeTelegramCommandText(raw: string): string {
+  return raw.trim().replace(/^(\/\w+)@[\w]+/i, "$1");
 }
 
 function isAdminTelegram(userId: number): boolean {
@@ -112,14 +125,14 @@ function isAdminTelegram(userId: number): boolean {
  * Mass broadcast only — not /broadcast_list or /broadcast_off /broadcast_on.
  */
 function isMassBroadcastIntent(msg: TgMessage): boolean {
-  const t = msg.text?.trim() ?? "";
+  const t = normalizeTelegramCommandText(msg.text ?? "");
   if (t) {
     if (/^\/broadcast_list$/i.test(t)) return false;
     if (/^\/broadcast_(on|off)$/i.test(t)) return false;
-    if (/^\/broadcast(?:@\w+)?(?:\s|$)/i.test(t)) return true;
+    if (/^\/broadcast(?:\s|$)/i.test(t)) return true;
   }
-  const c = msg.caption?.trim() ?? "";
-  if (msg.photo?.length && c && /^\/broadcast(?:@\w+)?/i.test(c)) return true;
+  const c = normalizeTelegramCommandText(msg.caption ?? "");
+  if (msg.photo?.length && c && /^\/broadcast/i.test(c)) return true;
   return false;
 }
 
@@ -723,14 +736,14 @@ export async function POST(request: Request) {
   }
 
   const chatId = msg.chat.id;
-  const text = msg.text?.trim() ?? "";
+  const text = normalizeTelegramCommandText(msg.text ?? "");
   const channelId = process.env.TELEGRAM_CHANNEL_ID;
 
   const supabase = createServiceClient();
 
   if (isAdminTelegram(from.id)) {
     const t = text.trim();
-    if (/^\/lists$/i.test(t)) {
+    if (/^\/lists?$/i.test(t)) {
       await sendBotMessage(botToken, chatId, LISTS_COMMANDS_TEXT);
       return NextResponse.json({ ok: true });
     }
@@ -774,7 +787,7 @@ export async function POST(request: Request) {
   if (
     isMassBroadcastIntent(msg) ||
     /^\/broadcast_list$/i.test(tUser) ||
-    /^\/lists$/i.test(tUser) ||
+    /^\/lists?$/i.test(tUser) ||
     /^\/rules$/i.test(tUser) ||
     /^\/kick\s/i.test(tUser) ||
     /^\/unban\s/i.test(tUser) ||
@@ -911,6 +924,15 @@ export async function POST(request: Request) {
     },
     { onConflict: "telegram_username" }
   );
+
+  // Slash commands that did not match any handler above used to get no reply (e.g. /list vs /lists).
+  if (/^\/\S+$/.test(tUser)) {
+    await sendBotMessage(
+      botToken,
+      chatId,
+      "Unknown command. Send /start to connect. Honey Well admins: try /lists (or /list) for the command menu."
+    );
+  }
 
   return NextResponse.json({ ok: true });
 }
