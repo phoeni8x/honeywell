@@ -3,6 +3,7 @@
 import { BrandHoneyWellTitle } from "@/components/BrandHoneyWellTitle";
 import { CryptoGuideContent } from "@/components/CryptoGuideContent";
 import { HoneycombBg } from "@/components/HoneycombBg";
+import { TermsConditionsSection } from "@/components/TermsConditionsSection";
 import { LS_REFERRED_BY, LS_USER_TYPE } from "@/lib/constants";
 import type { UserType } from "@/types";
 import clsx from "clsx";
@@ -118,16 +119,7 @@ export function HomePageInner() {
         </div>
       </section>
 
-      <section className="rounded-3xl border-2 border-amber-400/50 bg-gradient-to-br from-amber-950/30 via-violet-950/20 to-pink-950/25 px-6 py-8 md:px-8">
-        <h2 className="font-display text-3xl text-honey-text">Terms &amp; conditions</h2>
-        <p className="mt-2 text-sm text-honey-muted">By using Honey Well, you agree to follow these rules.</p>
-        <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-honey-text">
-          <li>No abusive, fraudulent, or mischievous behavior. Serious violations can lead to a permanent ban.</li>
-          <li>All payments are treated as instant and final once sent.</li>
-          <li>No credits, no pay-later, and no unpaid reservations.</li>
-        </ul>
-        <p className="mt-4 text-sm font-medium text-honey-text">In case of any issue, feel free to contact support anytime.</p>
-      </section>
+      <TermsConditionsSection />
     </div>
   );
 }
