@@ -552,23 +552,146 @@ export async function POST(request: Request) {
 
         answerText = "Declined ✓";
       } else if (cmd === "HW_GIVE_DROP") {
+        // 1. Assign the dead drop
         const { error: rpcErr } = await svc.rpc("assign_dead_drop_for_order", { p_order_id: orderId });
         if (rpcErr) throw rpcErr;
 
+        // 2. Fetch order + dead drop + product in one query
         const { data: order } = await svc
           .from("orders")
-          .select("customer_token, order_number")
+          .select(
+            "customer_token, customer_username, order_number, dead_drop_id, product:products(name)",
+          )
           .eq("id", orderId)
           .maybeSingle();
 
-        const customerToken = order?.customer_token as string | undefined;
+        const customerToken = (order?.customer_token as string | undefined) ?? "";
+        const orderNumber = (order?.order_number as string | undefined) ?? orderId.slice(0, 8);
+        const productName =
+          (order?.product as { name?: string } | null | undefined)?.name ?? "your order";
+        const deadDropId = order?.dead_drop_id as string | undefined;
+
+        // 3. Fetch the dead drop details
+        let deadDrop: {
+          name?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          google_maps_url?: string | null;
+          location_photo_url?: string | null;
+          location_photo_url_2?: string | null;
+          location_photo_url_3?: string | null;
+          instructions?: string | null;
+        } | null = null;
+
+        if (deadDropId) {
+          const { data: dd } = await svc
+            .from("dead_drops")
+            .select(
+              "name, latitude, longitude, google_maps_url, location_photo_url, location_photo_url_2, location_photo_url_3, instructions",
+            )
+            .eq("id", deadDropId)
+            .maybeSingle();
+          deadDrop = dd;
+        }
+
+        // 4. Resolve customer Telegram user ID
+        let customerTgId: number | null = null;
+        if (customerToken.startsWith("tg_")) {
+          const parsed = Number(customerToken.slice(3));
+          if (Number.isFinite(parsed) && parsed > 0) customerTgId = parsed;
+        }
+        if (!customerTgId) {
+          const username = (order?.customer_username as string | undefined)
+            ?.replace(/^@/, "")
+            .toLowerCase();
+          if (username) {
+            const { data: tv } = await svc
+              .from("telegram_verifications")
+              .select("telegram_user_id")
+              .eq("telegram_username", username)
+              .maybeSingle();
+            if (tv?.telegram_user_id != null) {
+              const tid = Number(tv.telegram_user_id);
+              if (Number.isFinite(tid) && tid > 0) customerTgId = tid;
+            }
+          }
+        }
+
+        // 5. Fire push notification (always)
         if (customerToken) {
           void notifyCustomerPush(customerToken, {
             title: "Dead drop ready",
-            body: "Open your order for photos, map link, and coordinates.",
+            body: "Your drop location has been assigned. Check your Telegram.",
             url: `/account/orders/${orderId}/track`,
             tag: `order-${orderId}-drop`,
           });
+        }
+
+        // 6. Send Telegram message to customer if we have their ID and a dead drop
+        if (customerTgId && deadDrop) {
+          const photos = [
+            deadDrop.location_photo_url,
+            deadDrop.location_photo_url_2,
+            deadDrop.location_photo_url_3,
+          ].filter(Boolean) as string[];
+
+          const lat = deadDrop.latitude;
+          const lon = deadDrop.longitude;
+          const mapsUrl =
+            deadDrop.google_maps_url ??
+            (lat != null && lon != null ? `https://www.google.com/maps?q=${lat},${lon}` : null);
+
+          const coordLine =
+            lat != null && lon != null ? `📍 Coordinates: ${lat}, ${lon}` : null;
+          const mapsLine = mapsUrl ? `🗺 Map: ${mapsUrl}` : null;
+          const courierNote = deadDrop.instructions?.trim()
+            ? `📝 Note from courier: ${deadDrop.instructions.trim()}`
+            : null;
+
+          const textMessage = [
+            `🍯 Honey Well — Order ${orderNumber}`,
+            `📦 Product: ${productName}`,
+            "",
+            coordLine,
+            mapsLine,
+            courierNote,
+          ]
+            .filter((l): l is string => l !== null)
+            .join("\n")
+            .trim();
+
+          // Send photos as media group (Telegram supports 2-10 items)
+          if (photos.length >= 2) {
+            const media = photos.map((url, i) => ({
+              type: "photo" as const,
+              media: url,
+              ...(i === 0 ? { caption: textMessage } : {}),
+            }));
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMediaGroup`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: customerTgId, media }),
+            }).catch((e) => console.error("[HW_GIVE_DROP] sendMediaGroup", e));
+          } else if (photos.length === 1) {
+            // Single photo: sendPhoto + separate text
+            await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: customerTgId, photo: photos[0] }),
+            }).catch((e) => console.error("[HW_GIVE_DROP] sendPhoto", e));
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: customerTgId, text: textMessage }),
+            }).catch((e) => console.error("[HW_GIVE_DROP] sendMessage", e));
+          } else {
+            // No photos — text only
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: customerTgId, text: textMessage }),
+            }).catch((e) => console.error("[HW_GIVE_DROP] sendMessage", e));
+          }
         }
 
         answerText = "Dead drop assigned ✓";
