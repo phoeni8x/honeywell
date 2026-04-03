@@ -24,6 +24,16 @@ type FulfillmentBody = {
   revolut_pay_timing?: string | null;
 };
 
+function prettyCategoryForNotify(raw: string | null | undefined): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "Product";
+  return s
+    .split(/[_-\s]+/g)
+    .filter(Boolean)
+    .map((w) => w[0]!.toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
   invalid_quantity: "Invalid quantity. Please choose at least 1 item.",
   product_not_found: "This product is unavailable right now. Please refresh the shop.",
@@ -214,6 +224,30 @@ export async function handleCreateOrder(request: Request) {
         .eq("id", orderId);
     }
 
+    /** Telegram WebApp guests use tg_<id> but may not send customer_username; resolve from verifications. */
+    let resolvedTelegramUsername: string | null = null;
+    if (token.startsWith("tg_")) {
+      const tgId = Number(token.slice(3));
+      if (Number.isFinite(tgId) && tgId > 0) {
+        const { data: tv } = await supabase
+          .from("telegram_verifications")
+          .select("telegram_username")
+          .eq("telegram_user_id", tgId)
+          .maybeSingle();
+        const rawU = typeof tv?.telegram_username === "string" ? tv.telegram_username.trim() : "";
+        const normalized = rawU.replace(/^@/, "").toLowerCase();
+        if (normalized) {
+          const safe = sanitizePlainText(normalized, 64);
+          if (safe) {
+            resolvedTelegramUsername = safe;
+            if (!customerUsername) {
+              await supabase.from("orders").update({ customer_username: safe }).eq("id", orderId);
+            }
+          }
+        }
+      }
+    }
+
     if (refCode) {
       try {
         await supabase.from("orders").update({ referral_code_used: refCode }).eq("id", orderId);
@@ -245,13 +279,44 @@ export async function handleCreateOrder(request: Request) {
       }
     }
 
-    const { data: createdOrder } = await supabase
+    const { data: createdOrder, error: createdOrderFetchErr } = await supabase
       .from("orders")
       .select(
-        "order_number, fulfillment_type, payment_method, customer_username, delivery_address, total_price, payment_reference_code, product:products(category)"
+        "order_number, fulfillment_type, payment_method, customer_username, delivery_address, total_price, payment_reference_code, products(name, category)",
       )
       .eq("id", orderId)
       .maybeSingle();
+    if (createdOrderFetchErr) {
+      console.error("[order create] load order for notify", createdOrderFetchErr);
+    }
+
+    type ProductEmbed = { name?: string | null; category?: string | null };
+    const rawEmbed = createdOrder?.products as ProductEmbed | ProductEmbed[] | null | undefined;
+    const productRow: ProductEmbed | null = Array.isArray(rawEmbed) ? (rawEmbed[0] ?? null) : (rawEmbed ?? null);
+
+    let productTypeForNotify: string | null = null;
+    if (productRow?.name?.trim()) {
+      const n = productRow.name.trim();
+      const cat = productRow.category?.trim();
+      productTypeForNotify = cat ? `${n} (${prettyCategoryForNotify(cat)})` : n;
+    } else if (productRow?.category?.trim()) {
+      productTypeForNotify = prettyCategoryForNotify(productRow.category);
+    }
+    if (!productTypeForNotify) {
+      const { data: prodFallback } = await supabase
+        .from("products")
+        .select("name, category")
+        .eq("id", product_id)
+        .maybeSingle();
+      const name = typeof prodFallback?.name === "string" ? prodFallback.name.trim() : "";
+      const cat = typeof prodFallback?.category === "string" ? prodFallback.category.trim() : "";
+      if (name) {
+        productTypeForNotify = cat ? `${name} (${prettyCategoryForNotify(cat)})` : name;
+      } else if (cat) {
+        productTypeForNotify = prettyCategoryForNotify(cat);
+      }
+    }
+
     const orderLabel =
       (createdOrder?.order_number as string | null | undefined) ?? orderId.slice(0, 8);
     const fulfill = (createdOrder?.fulfillment_type as string | null | undefined) ?? "—";
@@ -262,14 +327,17 @@ export async function handleCreateOrder(request: Request) {
       url: "/admin-080209?tab=orders",
       tag: `new-order-${orderId}`,
     });
+    const usernameForNotify =
+      (createdOrder?.customer_username as string | null | undefined) ??
+      customerUsername ??
+      resolvedTelegramUsername ??
+      null;
     void notifyTelegramNewOrder({
       orderId,
-      customerUsername: (createdOrder?.customer_username as string | null | undefined) ?? customerUsername ?? null,
+      customerUsername: usernameForNotify,
       deliveryAddress: (createdOrder?.delivery_address as string | null | undefined) ?? null,
       orderAmount: (createdOrder?.total_price as number | string | null | undefined) ?? null,
-      productType:
-        ((createdOrder?.product as { category?: string | null } | null | undefined)?.category as string | null | undefined) ??
-        null,
+      productType: productTypeForNotify,
       paymentReferenceCode: (createdOrder?.payment_reference_code as string | null | undefined) ?? null,
     });
 
