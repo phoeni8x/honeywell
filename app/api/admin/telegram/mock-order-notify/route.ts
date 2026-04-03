@@ -44,18 +44,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Telegram order notifications not configured" }, { status: 400 });
   }
 
-  const message = buildOrderTelegramMessage({
-    customerUsername: body.customerUsername,
-    deliveryAddress: body.deliveryAddress,
-    orderAmount: body.orderAmount,
-    productType: body.productType,
+  const sample = buildOrderTelegramMessage({
+    customerUsername: body.customerUsername ?? "test_customer",
+    deliveryAddress: body.deliveryAddress ?? "Test address / notes",
+    orderAmount: body.orderAmount ?? 12345,
+    productType: body.productType ?? "Test product",
   });
+
+  const message = [
+    "🧪 TEST — Honey Well order alert",
+    "If you see this, server TELEGRAM_BOT_TOKEN and TELEGRAM_ORDER_CHAT_ID (or ADMIN_TELEGRAM_USER_ID) are working.",
+    "",
+    sample,
+  ].join("\n");
 
   const tg = await sendTelegramMessage(botToken, chatId, message);
   if (!tg.ok) {
     return NextResponse.json({ error: tg.description ?? "Telegram sendMessage failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, chatId });
 }
 

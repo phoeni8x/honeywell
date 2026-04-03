@@ -1465,6 +1465,8 @@ function SettingsSection({
   const [draft, setDraft] = useState<Record<string, string>>(settings);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [savedKey, setSavedKey] = useState<string | null>(null);
+  const [testOrderTgLoading, setTestOrderTgLoading] = useState(false);
+  const [testOrderTgResult, setTestOrderTgResult] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(settings);
@@ -1490,6 +1492,29 @@ function SettingsSection({
       alert("Error: " + e);
     } finally {
       setSavingKey(null);
+    }
+  }
+
+  async function sendTestOrderTelegramAlert() {
+    setTestOrderTgLoading(true);
+    setTestOrderTgResult(null);
+    try {
+      const res = await fetch("/api/admin/telegram/mock-order-notify", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; chatId?: string };
+      if (res.ok && data.ok) {
+        setTestOrderTgResult(`Sent ✓ (chat id ${data.chatId ?? "?"})`);
+      } else {
+        setTestOrderTgResult(data.error || `Failed (${res.status})`);
+      }
+    } catch (e) {
+      setTestOrderTgResult(String(e));
+    } finally {
+      setTestOrderTgLoading(false);
     }
   }
 
@@ -1770,6 +1795,30 @@ function SettingsSection({
           </div>
           {savedKey === "fulfillment_dead_drop_enabled" && <p className="mt-1 text-xs text-green-600">Saved</p>}
         </div>
+      </div>
+      <div className="rounded-2xl border border-cyan-500/35 bg-cyan-950/20 px-4 py-4">
+        <label className="text-xs font-semibold text-honey-muted">Telegram — order alerts (server env)</label>
+        <p className="mt-2 text-xs text-honey-muted">
+          New orders call Telegram using <code className="rounded bg-honey-border/40 px-1">TELEGRAM_BOT_TOKEN</code> from{" "}
+          <code className="rounded bg-honey-border/40 px-1">Vercel</code> or{" "}
+          <code className="rounded bg-honey-border/40 px-1">.env.local</code>, not the optional fields below. Set the bot
+          token there, redeploy, then send yourself a test message.
+        </p>
+        <button
+          type="button"
+          disabled={testOrderTgLoading}
+          onClick={() => void sendTestOrderTelegramAlert()}
+          className="mt-3 rounded-full bg-cyan-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+        >
+          {testOrderTgLoading ? "Sending…" : "Send test order alert to Telegram"}
+        </button>
+        {testOrderTgResult && (
+          <p
+            className={`mt-2 text-xs ${testOrderTgResult.startsWith("Sent") ? "text-green-600" : "text-red-600"}`}
+          >
+            {testOrderTgResult}
+          </p>
+        )}
       </div>
       {keys.map(({ key, label }) => (
         <div key={key}>
