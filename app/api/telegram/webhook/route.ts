@@ -39,11 +39,33 @@ const USERNAME_REQUIRED_MESSAGE =
 const FIRST_CONTACT_COMMUNITY_MESSAGE =
   "Welcome to Honey Well. Sending /start, tapping Start, or sending /verify registers you with our community — we save your Telegram so we can verify VIP access and send updates from Honey Well.";
 
+const LISTS_COMMANDS_TEXT = `Honey Well — command list (admin)
+
+1) Kick someone from your Telegram channel
+   /kick <user id or @username>
+
+2) Bring them back (lift ban — they rejoin with the channel invite link)
+   /unban <user id or @username>
+
+3) Broadcast to everyone who used /start and stayed opted in
+   Text: /broadcast your message here
+   Photo: send an image with a caption starting with /broadcast
+
+4) Stop a specific customer receiving your broadcasts
+   /broadcast_block <user id or @username>
+
+5) Let them receive broadcasts again
+   /broadcast_allow <user id or @username>
+
+More: /broadcast_list — who is opted in vs out
+      /rules — full admin + customer help text`;
+
 const ADMIN_RULES_TEXT = `Honey Well — Admin commands (your Telegram user id must match ADMIN_TELEGRAM_USER_ID)
 
 Note: "Continue as Guest" on the website only saves Guest in this browser — those people are not in the database. This bot saves people who message it (with a username) to Supabase, with team channel vs guest (not in channel) when TELEGRAM_CHANNEL_ID is set.
 
-/rules — This list.
+/lists — Numbered menu of admin commands (kick, unban, broadcast, block/allow per user).
+/rules — This full text.
 
 /broadcast — Mass message to everyone who opted in:
 • Text: /broadcast then your message (same line or multiple lines after a space).
@@ -51,9 +73,13 @@ Note: "Continue as Guest" on the website only saves Guest in this browser — th
 
 /broadcast_list — See who can receive broadcasts (opted in vs out) from saved customers.
 
-/kick <user id or @username> — Remove that user from the team channel (ban). The bot must be an admin in the channel. Example: /kick 123456789 or /kick @name
+/kick <user id or @username> — Remove that user from the team channel (ban). The bot must be an admin in the channel.
 
 /unban <user id or @username> — Lift the ban so they can rejoin with the channel invite link.
+
+/broadcast_block <user id or @username> — Admin: stop that user receiving broadcasts (they must have /start’d the bot once).
+
+/broadcast_allow <user id or @username> — Admin: let that user receive broadcasts again.
 
 ———
 Customers (not admin-only) in this chat:
@@ -324,6 +350,84 @@ async function handleAdminUnban(
   }
 }
 
+async function handleAdminBroadcastBlock(
+  botToken: string,
+  adminChatId: number,
+  text: string,
+  supabase: ReturnType<typeof createServiceClient>
+) {
+  const m = /^\/broadcast_block\s+(.+)$/i.exec(text.trim());
+  const raw = m?.[1]?.trim() ?? "";
+  if (!raw) {
+    await sendBotMessage(botToken, adminChatId, "Usage: /broadcast_block <user id or @username>");
+    return;
+  }
+  const resolved = await resolveTargetUserId(botToken, supabase, raw);
+  if ("error" in resolved) {
+    await sendBotMessage(botToken, adminChatId, resolved.error);
+    return;
+  }
+  const { data, error } = await supabase
+    .from("telegram_verifications")
+    .update({ broadcast_opt_in: false })
+    .eq("telegram_user_id", resolved.id)
+    .select("telegram_user_id");
+  if (error) {
+    await sendBotMessage(botToken, adminChatId, PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+    return;
+  }
+  if (!data?.length) {
+    await sendBotMessage(
+      botToken,
+      adminChatId,
+      `No saved bot contact for user id ${resolved.id}. They must send /start to this bot first.`
+    );
+    return;
+  }
+  await sendBotMessage(
+    botToken,
+    adminChatId,
+    `User ${resolved.id} will not receive your broadcasts. Undo with /broadcast_allow <same id or @username>`
+  );
+}
+
+async function handleAdminBroadcastAllow(
+  botToken: string,
+  adminChatId: number,
+  text: string,
+  supabase: ReturnType<typeof createServiceClient>
+) {
+  const m = /^\/broadcast_allow\s+(.+)$/i.exec(text.trim());
+  const raw = m?.[1]?.trim() ?? "";
+  if (!raw) {
+    await sendBotMessage(botToken, adminChatId, "Usage: /broadcast_allow <user id or @username>");
+    return;
+  }
+  const resolved = await resolveTargetUserId(botToken, supabase, raw);
+  if ("error" in resolved) {
+    await sendBotMessage(botToken, adminChatId, resolved.error);
+    return;
+  }
+  const { data, error } = await supabase
+    .from("telegram_verifications")
+    .update({ broadcast_opt_in: true })
+    .eq("telegram_user_id", resolved.id)
+    .select("telegram_user_id");
+  if (error) {
+    await sendBotMessage(botToken, adminChatId, PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+    return;
+  }
+  if (!data?.length) {
+    await sendBotMessage(
+      botToken,
+      adminChatId,
+      `No saved bot contact for user id ${resolved.id}. They must send /start to this bot first.`
+    );
+    return;
+  }
+  await sendBotMessage(botToken, adminChatId, `User ${resolved.id} will receive broadcasts again.`);
+}
+
 function isPlainStartCommand(text: string): boolean {
   const t = text.trim();
   if (/^start$/i.test(t) || /^verify$/i.test(t)) return true;
@@ -503,6 +607,10 @@ export async function POST(request: Request) {
 
   if (isAdminTelegram(from.id)) {
     const t = text.trim();
+    if (/^\/lists$/i.test(t)) {
+      await sendBotMessage(botToken, chatId, LISTS_COMMANDS_TEXT);
+      return NextResponse.json({ ok: true });
+    }
     if (/^\/rules$/i.test(t)) {
       await sendBotMessage(botToken, chatId, ADMIN_RULES_TEXT);
       return NextResponse.json({ ok: true });
@@ -517,6 +625,14 @@ export async function POST(request: Request) {
     }
     if (/^\/unban\s+/i.test(t)) {
       await handleAdminUnban(botToken, chatId, channelId, t, supabase);
+      return NextResponse.json({ ok: true });
+    }
+    if (/^\/broadcast_block\s+/i.test(t)) {
+      await handleAdminBroadcastBlock(botToken, chatId, t, supabase);
+      return NextResponse.json({ ok: true });
+    }
+    if (/^\/broadcast_allow\s+/i.test(t)) {
+      await handleAdminBroadcastAllow(botToken, chatId, t, supabase);
       return NextResponse.json({ ok: true });
     }
     if (isMassBroadcastIntent(msg)) {
@@ -535,9 +651,12 @@ export async function POST(request: Request) {
   if (
     isMassBroadcastIntent(msg) ||
     /^\/broadcast_list$/i.test(tUser) ||
+    /^\/lists$/i.test(tUser) ||
     /^\/rules$/i.test(tUser) ||
     /^\/kick\s/i.test(tUser) ||
-    /^\/unban\s/i.test(tUser)
+    /^\/unban\s/i.test(tUser) ||
+    /^\/broadcast_block\s/i.test(tUser) ||
+    /^\/broadcast_allow\s/i.test(tUser)
   ) {
     await sendBotMessage(botToken, chatId, "That command is for Honey Well admins only.");
     return NextResponse.json({ ok: true });
