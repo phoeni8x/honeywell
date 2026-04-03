@@ -50,10 +50,10 @@ const FIRST_CONTACT_COMMUNITY_MESSAGE =
 const LISTS_COMMANDS_TEXT = `Honey Well — command list (admin)
 
 1) Kick someone from your Telegram channel
-   /kick <user id or @username>
+   /kick or /kickout <user id or @username>
 
 2) Bring them back (lift ban — they rejoin with the channel invite link)
-   /unban <user id or @username>
+   /unban or /bringin <user id or @username>
 
 3) Broadcast to everyone who used /start and stayed opted in
    Text: /broadcast your message here
@@ -73,7 +73,7 @@ const ADMIN_RULES_TEXT = `Honey Well — Admin commands (your Telegram user id m
 
 Note: "Continue as Guest" on the website only saves Guest in this browser — those people are not in the database. This bot saves people who message it (with a username) to Supabase, with team channel vs guest (not in channel) when TELEGRAM_CHANNEL_ID is set.
 
-/lists or /list — Numbered menu of admin commands (kick, unban, broadcast, block/allow per user).
+/lists or /list — Numbered menu of admin commands (kick/kickout, unban/bringin, broadcast, block/allow per user).
 /rules — This full text.
 
 /broadcast — Mass message to everyone who opted in:
@@ -83,9 +83,9 @@ Note: "Continue as Guest" on the website only saves Guest in this browser — th
 
 /broadcast_list — See who can receive broadcasts (opted in vs out) from saved customers.
 
-/kick <user id or @username> — Remove that user from the team channel (ban). The bot must be an admin in the channel.
+/kick or /kickout <user id or @username> — Remove that user from the team channel (ban). The bot must be an admin in the channel.
 
-/unban <user id or @username> — Lift the ban so they can rejoin with the channel invite link.
+/unban or /bringin <user id or @username> — Lift the ban so they can rejoin with the channel invite link.
 
 /broadcast_block <user id or @username> — Admin: stop that user receiving broadcasts (they must have /start’d the bot once).
 
@@ -123,6 +123,14 @@ function sleep(ms: number) {
 /** Telegram clients often send /cmd@BotUsername — strip the @bot suffix for matching. */
 function normalizeTelegramCommandText(raw: string): string {
   return raw.trim().replace(/^(\/\w+)@[\w]+/i, "$1");
+}
+
+/** Admin aliases: /kickout → /kick, /bringin → /unban (after @bot strip). */
+function normalizeAdminKickAliases(raw: string): string {
+  const s = raw.trim();
+  if (/^\/kickout(?:\s|$)/i.test(s)) return s.replace(/^\/kickout/i, "/kick");
+  if (/^\/bringin(?:\s|$)/i.test(s)) return s.replace(/^\/bringin/i, "/unban");
+  return s;
 }
 
 function isAdminTelegram(userId: number): boolean {
@@ -364,7 +372,7 @@ async function handleAdminKick(
   const m = /^\/kick\s+(.+)$/i.exec(text.trim());
   const raw = m?.[1]?.trim() ?? "";
   if (!raw) {
-    await sendBotMessage(adminReplyToken, adminChatId, "Usage: /kick <user id or @username>");
+    await sendBotMessage(adminReplyToken, adminChatId, "Usage: /kick or /kickout <user id or @username>");
     return;
   }
   const resolved = await resolveTargetUserId(channelBotToken, supabase, raw);
@@ -377,7 +385,7 @@ async function handleAdminKick(
     await sendBotMessage(
       adminReplyToken,
       adminChatId,
-      `Removed user ${resolved.id} from the channel (ban). They can be allowed back with /unban.`
+      `Removed user ${resolved.id} from the channel (ban). They can be allowed back with /unban or /bringin.`
     );
   } else {
     await sendBotMessage(adminReplyToken, adminChatId, `Telegram: ${r.description ?? "ban failed"}`);
@@ -399,7 +407,7 @@ async function handleAdminUnban(
   const m = /^\/unban\s+(.+)$/i.exec(text.trim());
   const raw = m?.[1]?.trim() ?? "";
   if (!raw) {
-    await sendBotMessage(adminReplyToken, adminChatId, "Usage: /unban <user id or @username>");
+    await sendBotMessage(adminReplyToken, adminChatId, "Usage: /unban or /bringin <user id or @username>");
     return;
   }
   const resolved = await resolveTargetUserId(channelBotToken, supabase, raw);
@@ -886,7 +894,7 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
       );
       return NextResponse.json({ ok: true });
     }
-    const t = text.trim();
+    const t = normalizeAdminKickAliases(normalizeTelegramCommandText(text)).trim();
     if (/^\/lists?$/i.test(t)) {
       await sendBotMessage(adminReplyToken, chatId, LISTS_COMMANDS_TEXT);
       return NextResponse.json({ ok: true });
@@ -928,7 +936,7 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
     return NextResponse.json({ ok: true });
   }
 
-  const tUser = text.trim();
+  const tUser = normalizeAdminKickAliases(normalizeTelegramCommandText(text)).trim();
   if (
     isMassBroadcastIntent(msg) ||
     /^\/broadcast_list$/i.test(tUser) ||
