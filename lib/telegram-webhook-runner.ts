@@ -895,6 +895,15 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
       return NextResponse.json({ ok: true });
     }
     const t = normalizeAdminKickAliases(normalizeTelegramCommandText(text)).trim();
+    /** /start had no handler — Telegram often sends it first; admins saw silence. */
+    if (/^\/start(?:@\w+)?(?:\s|$)/i.test(t)) {
+      await sendBotMessage(
+        adminReplyToken,
+        chatId,
+        "Honey Well — admin bot (you are authorized).\n\nSend /lists for all commands, or /rules for full help."
+      );
+      return NextResponse.json({ ok: true });
+    }
     if (/^\/lists?$/i.test(t)) {
       await sendBotMessage(adminReplyToken, chatId, LISTS_COMMANDS_TEXT);
       return NextResponse.json({ ok: true });
@@ -925,6 +934,14 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
     }
     if (isMassBroadcastIntent(msg)) {
       await handleBroadcast(adminReplyToken, customerOutreachToken, chatId, msg, supabase);
+      return NextResponse.json({ ok: true });
+    }
+    if (/^\/\S+/.test(t)) {
+      await sendBotMessage(
+        adminReplyToken,
+        chatId,
+        "Unknown command. Send /lists for the admin menu.\n\nIf every command is silent: webhook must be …/api/telegram/webhook/admin (not the customer URL), and ADMIN_TELEGRAM_USER_ID must match your Telegram user id."
+      );
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ ok: true });
