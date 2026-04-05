@@ -163,7 +163,11 @@ export default function ProductPage() {
               {formatPrice(Number(product.price_regular))}
             </span>
           )}
-          <span className={clsx("price text-4xl text-primary", isDiscounted && "font-semibold")}>
+          <span
+            className={clsx("price text-4xl text-primary", isDiscounted && "font-semibold")}
+            data-testid="product-display-price"
+            data-user-type={userType ?? ""}
+          >
             {formatPrice(unit)}
           </span>
         </div>
@@ -195,6 +199,7 @@ export default function ProductPage() {
             </div>
             <button
               type="button"
+              data-testid="proceed-to-checkout"
               disabled={!shopOpen}
               onClick={() => {
                 if (!shopOpen) {

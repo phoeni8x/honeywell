@@ -231,6 +231,7 @@ export function CheckoutFlow({
             </div>
             <button
               type="button"
+              data-testid="checkout-dead-drop-continue"
               disabled={deadDropOff}
               onClick={() => setStep(2)}
               className="w-full rounded-full bg-primary py-3 text-sm font-semibold text-white disabled:opacity-50"
@@ -259,6 +260,7 @@ export function CheckoutFlow({
                   {userType === "team_member" && (
                     <button
                       type="button"
+                      data-testid="checkout-pay-revolut"
                       onClick={() => setRemainderPay("revolut")}
                       className={clsx(
                         "flex-1 rounded-full border py-2 text-sm font-medium",
@@ -270,6 +272,7 @@ export function CheckoutFlow({
                   )}
                   <button
                     type="button"
+                    data-testid="checkout-pay-crypto"
                     onClick={() => setRemainderPay("crypto")}
                     className={clsx(
                       "flex-1 rounded-full border py-2 text-sm font-medium",
@@ -286,7 +289,12 @@ export function CheckoutFlow({
             {isPreorder && userType === "team_member" && remainderPay === "revolut" && (
               <p className="text-xs text-honey-muted">Pre-orders require bank transfer payment now.</p>
             )}
-            <button type="button" onClick={() => setStep(3)} className="w-full rounded-full bg-primary py-3 text-sm font-semibold text-white">
+            <button
+              type="button"
+              data-testid="checkout-review-order"
+              onClick={() => setStep(3)}
+              className="w-full rounded-full bg-primary py-3 text-sm font-semibold text-white"
+            >
               Review order
             </button>
           </div>
@@ -323,6 +331,7 @@ export function CheckoutFlow({
             )}
             <button
               type="button"
+              data-testid="checkout-place-order"
               disabled={busy}
               onClick={() => void submitOrder()}
               className="w-full rounded-full bg-primary py-3 text-sm font-semibold text-white disabled:opacity-60"

@@ -110,6 +110,7 @@ export default function SplashPage() {
         <div className="mt-12 flex w-full max-w-sm flex-col gap-4">
           <button
             type="button"
+            data-testid="open-vip-modal"
             onClick={() => {
               setModalOpen(true);
               setError(null);
@@ -122,6 +123,7 @@ export default function SplashPage() {
           </button>
           <button
             type="button"
+            data-testid="continue-as-guest"
             onClick={continueGuest}
             className="w-full rounded border-2 border-red-950 bg-red-600 py-3 font-body font-semibold text-white shadow-[3px_3px_0_#7f1d1d] transition-all duration-200 hover:-translate-x-px hover:-translate-y-px hover:bg-red-500 hover:shadow-[4px_4px_0_#7f1d1d] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#7f1d1d] dark:shadow-[0_0_20px_rgba(239,68,68,0.35)]"
           >
