@@ -1,22 +1,4 @@
--- Ensure exactly ONE public.create_order_atomic (18 args incl. booking flag).
--- If 042 ran but an older signature remained, PostgREST can return PGRST202 / "could not find function"
--- when the app sends p_booking_without_parcel_locker — bookings then fail with a generic backend error.
-
-do $drop_overloads$
-declare
-  r record;
-begin
-  for r in
-    select pg_catalog.pg_get_function_identity_arguments(p.oid) as args
-    from pg_catalog.pg_proc p
-    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public'
-      and p.proname = 'create_order_atomic'
-  loop
-    execute format('drop function if exists public.create_order_atomic(%s) cascade', r.args);
-  end loop;
-end
-$drop_overloads$;
+-- Part 2/3: create function.
 
 create or replace function public.create_order_atomic(
   p_customer_token text,
@@ -80,18 +62,15 @@ begin
   if p_user_type = 'guest' and p_fulfillment_type is not null and p_fulfillment_type in ('pickup', 'delivery') then
     raise exception 'guest_fulfillment_invalid';
   end if;
-  if p_user_type = 'guest' and p_payment_method = 'revolut' then
-    raise exception 'guest_revolut_forbidden';
-  end if;
 
   if p_user_type = 'guest' and (v_pts_use > 0 or v_bees_use > 0) then
     raise exception 'guest_no_wallet_spend';
   end if;
 
-  if p_payment_method not in ('revolut', 'crypto', 'bees', 'points', 'booking') then
+  if p_payment_method not in ('revolut', 'bees', 'points', 'booking') then
     raise exception 'invalid_payment_method';
   end if;
-  if p_user_type = 'guest' and p_payment_method not in ('crypto', 'booking') then
+  if p_user_type = 'guest' and p_payment_method not in ('revolut', 'booking', 'points', 'bees') then
     raise exception 'guest_crypto_only';
   end if;
 
@@ -183,7 +162,7 @@ begin
     end if;
   end if;
 
-  if v_total > 0.01 and p_payment_method not in ('revolut', 'crypto', 'booking') then
+  if v_total > 0.01 and p_payment_method not in ('revolut', 'booking') then
     raise exception 'remainder_payment_invalid';
   end if;
 
@@ -305,10 +284,3 @@ begin
   return v_order_id;
 end;
 $$;
-
-grant execute on function public.create_order_atomic(
-  text, uuid, int, text, text,
-  text, uuid, uuid, text, text, text, text,
-  numeric, numeric, numeric, integer,
-  text, boolean
-) to anon, authenticated, service_role;
