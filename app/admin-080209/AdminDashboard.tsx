@@ -7,7 +7,7 @@ import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
 import { parseShopOpen } from "@/lib/shop-open";
 import { parseSupportEnabled } from "@/lib/support-settings";
-import { formatPrice, ORDER_STATUS_LABELS, truncateToken } from "@/lib/helpers";
+import { adminOrderPaymentLabel, formatPrice, ORDER_STATUS_LABELS, truncateToken } from "@/lib/helpers";
 import { LOCKER_PROVIDER_OPTIONS } from "@/lib/parcel-locker";
 import { PendingApprovalQueue } from "@/components/admin/PendingApprovalQueue";
 import { useAdminPushNotifications } from "@/hooks/useAdminPushNotifications";
@@ -985,8 +985,14 @@ function OrdersSection({
 
   async function cancelOrder(order: Order & { product?: Product | null }) {
     const defer = Boolean(order.defer_stock_until_approval);
+    const preDeadDropNoStockYet =
+      order.status === "pre_ordered" &&
+      order.fulfillment_type === "dead_drop" &&
+      (order.payment_method === "booking" || defer);
     const skipRestore =
-      order.status === "awaiting_dead_drop" || (order.status === "payment_pending" && defer);
+      order.status === "awaiting_dead_drop" ||
+      (order.status === "payment_pending" && defer) ||
+      preDeadDropNoStockYet;
     const msg = skipRestore
       ? "Cancel this order? (No stock was deducted yet.)"
       : "Cancel this order and restore stock?";
@@ -1015,6 +1021,18 @@ function OrdersSection({
       onRefresh();
     } finally {
       setActionLoading(null);
+    }
+  }
+
+  async function acceptBooking(id: string) {
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: "confirmed", updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("status", "pre_ordered");
+    if (error) {
+      showToast("Could not accept booking. Refresh and try again.", false);
+      throw error;
     }
   }
 
@@ -1087,7 +1105,7 @@ function OrdersSection({
               className="text-left text-xs text-primary hover:underline disabled:opacity-50"
               onClick={() => setStatus(o.id, "confirmed")}
             >
-              Pre-order accepted
+              {o.payment_method === "booking" ? "Accept booking (confirm order)" : "Pre-order accepted"}
             </button>
             <button
               type="button"
@@ -1095,7 +1113,7 @@ function OrdersSection({
               className="text-left text-xs text-red-600 hover:underline disabled:opacity-50"
               onClick={() => setStatus(o.id, "cancelled")}
             >
-              Pre-order rejected/cancelled
+              {o.payment_method === "booking" ? "Decline booking (cancel)" : "Pre-order rejected/cancelled"}
             </button>
           </>
         )}
@@ -1204,6 +1222,19 @@ function OrdersSection({
           }
         }}
         onRejected={rejectOrderApi}
+        onBookingAccepted={async (id) => {
+          setActionLoading(id + "booking-accept");
+          try {
+            await acceptBooking(id);
+            showToast("Booking accepted — order confirmed. Arrange payment / locker when ready ✓");
+            onRefresh();
+          } catch {
+            /* toast in acceptBooking */
+          } finally {
+            setActionLoading(null);
+          }
+        }}
+        onBookingRejected={rejectOrderApi}
       />
       <div className="flex flex-wrap gap-2">
         <button
@@ -1257,6 +1288,11 @@ function OrdersSection({
                 </td>
                 <td className="p-2 text-xs">
                   {o.fulfillment_type ?? "—"}
+                  {o.payment_method === "booking" && o.status === "pre_ordered" && (
+                    <span className="mt-1 block text-[10px] font-semibold uppercase text-sky-700 dark:text-sky-300">
+                      booking · no payment
+                    </span>
+                  )}
                   {(o.fulfillment_type === "pickup" || o.fulfillment_type === "delivery") && (
                     <span className="mt-1 block text-[10px] uppercase text-amber-700 dark:text-amber-400">legacy</span>
                   )}
@@ -1295,9 +1331,7 @@ function OrdersSection({
                   </span>
                 </td>
                 <td className="p-2">{o.user_type}</td>
-                <td className="p-2">
-                  {o.payment_method === "revolut" ? "bank transfer" : (o.payment_method ?? "—")}
-                </td>
+                <td className="p-2 text-xs">{adminOrderPaymentLabel(o.payment_method)}</td>
                 <td className="p-2 text-xs">{ORDER_STATUS_LABELS[o.status] ?? o.status}</td>
               </tr>
             ))}
@@ -1860,8 +1894,9 @@ function SettingsSection({
       <div>
         <label className="text-xs font-semibold text-honey-muted">Parcel locker checkout</label>
         <p className="mt-1 text-xs text-honey-muted">
-          All new orders use parcel locker fulfillment. When disabled, customers cannot complete checkout.
-          After payment, issue location + passcode from Orders. Legacy &quot;Dead drops&quot; pool is optional for old orders only.
+          When enabled, customers pay at checkout and you issue locker location + passcode after payment.
+          When disabled, customers can submit a booking request (no payment) — accept or decline in Pending approval.
+          Legacy &quot;Dead drops&quot; pool is optional for old orders only.
         </p>
         <div className="mt-3">
           <div className="flex items-center gap-2">

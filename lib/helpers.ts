@@ -36,6 +36,17 @@ export function truncateToken(token: string, head = 6, tail = 4): string {
   return `${token.slice(0, head)}…${token.slice(-tail)}`;
 }
 
+/** Admin + tables: human-readable payment method. */
+export function adminOrderPaymentLabel(method: string | null | undefined): string {
+  const m = String(method ?? "").trim().toLowerCase();
+  if (m === "revolut") return "Bank transfer";
+  if (m === "crypto") return "Crypto";
+  if (m === "bees") return "Bees";
+  if (m === "points") return "Points";
+  if (m === "booking") return "Booking (no payment yet)";
+  return method?.trim() || "—";
+}
+
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   payment_pending: "Awaiting Payment",
   awaiting_dead_drop: "Payment OK — assign drop",

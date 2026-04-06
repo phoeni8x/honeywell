@@ -26,7 +26,9 @@ export async function POST(request: Request) {
     const svc = createServiceClient();
     const { data: order, error: fetchErr } = await svc
       .from("orders")
-      .select("id, status, customer_token, order_number, product_id, quantity, defer_stock_until_approval")
+      .select(
+        "id, status, customer_token, order_number, product_id, quantity, defer_stock_until_approval, payment_method"
+      )
       .eq("id", orderId)
       .maybeSingle();
 
@@ -35,14 +37,21 @@ export async function POST(request: Request) {
     }
 
     const st = String(order.status);
-    if (st !== "payment_pending" && st !== "awaiting_dead_drop") {
+    const isBookingReject = st === "pre_ordered" && String(order.payment_method ?? "") === "booking";
+    if (st !== "payment_pending" && st !== "awaiting_dead_drop" && !isBookingReject) {
       return NextResponse.json({ error: "Order is not pending approval.", code: "not_pending" }, { status: 400 });
     }
 
     const awaitingDrop = st === "awaiting_dead_drop";
     // Dead-drop flow: stock was never deducted from `products` (inventory is on drops). Do not restore here.
+    // Booking / pre_ordered (no payment): no stock was deducted at checkout.
 
     const now = new Date().toISOString();
+    const statusFilter = awaitingDrop
+      ? ["awaiting_dead_drop"]
+      : isBookingReject
+        ? ["pre_ordered"]
+        : ["payment_pending"];
     const { error: upErr } = await svc
       .from("orders")
       .update({
@@ -51,7 +60,7 @@ export async function POST(request: Request) {
         rejection_reason: reason || null,
       })
       .eq("id", orderId)
-      .in("status", awaitingDrop ? ["awaiting_dead_drop"] : ["payment_pending"]);
+      .in("status", statusFilter);
 
     if (upErr) {
       console.error("[admin reject order]", upErr);
