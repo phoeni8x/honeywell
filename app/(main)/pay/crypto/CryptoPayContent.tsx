@@ -217,6 +217,7 @@ export function CryptoPayContent() {
 
       <button
         type="button"
+        data-testid="crypto-ive-sent-payment"
         onClick={sent}
         className="mt-10 w-full rounded-full bg-primary py-3.5 text-sm font-semibold text-white transition hover:bg-primary-light"
       >

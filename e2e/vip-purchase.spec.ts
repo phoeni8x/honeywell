@@ -1,21 +1,21 @@
 import { test, expect } from "@playwright/test";
 import {
   assertOrderNoLongerPending,
+  assertOrderExistsForCustomer,
   confirmCryptoPaymentForE2E,
+  cryptoSentPaymentBtn,
+  discoverFirstProductId,
+  isTeamrubyProductionBase,
   orderIdFromPayUrl,
   runVipCheckoutUi,
 } from "./helpers";
 
 test.describe("VIP purchase (rehllic / team_member)", () => {
-  test("VIP sees team-only payment option and completes crypto checkout + E2E approve", async ({ page, context, request }) => {
-    const productId = process.env.E2E_PRODUCT_ID?.trim();
+  test("VIP sees team-only pay option, crypto checkout, payment handler (rehllic handle)", async ({ page, context, request }) => {
+    const remote = isTeamrubyProductionBase();
     const secret = process.env.E2E_PAYMENT_APPROVE_SECRET?.trim();
     const vipUsername = (process.env.E2E_VIP_TELEGRAM_USERNAME || "rehllic").trim().toLowerCase();
 
-    test.skip(!productId, "Set E2E_PRODUCT_ID (see .env.local.example).");
-    test.skip(!secret || secret.length < 16, "Set E2E_PAYMENT_APPROVE_SECRET (min 16 chars).");
-
-    // Simulates a browser that already passed Telegram VIP verify (no password in this app — tier is team_member + handle).
     await context.addInitScript(
       ([utKey, utVal, tgKey, tgVal]) => {
         localStorage.setItem(utKey, utVal);
@@ -24,12 +24,69 @@ test.describe("VIP purchase (rehllic / team_member)", () => {
       ["honeywell_user_type", "team_member", "honeywell_telegram_username", vipUsername] as const
     );
 
+    let productId = process.env.E2E_PRODUCT_ID?.trim();
+    if (!productId) {
+      test.skip(!remote, "Set E2E_PRODUCT_ID for local runs, or use PLAYWRIGHT_BASE_URL=https://teamruby.net.");
+      productId = await discoverFirstProductId(page);
+    }
+
+    // App has no Supabase password for VIP — tier is Telegram-verified team_member; E2E seeds post-verify state.
     await runVipCheckoutUi(page, productId!);
     const orderId = orderIdFromPayUrl(page.url());
     const token = await page.evaluate(() => localStorage.getItem("honeywell_customer_token"));
     expect(token && token.length >= 8).toBeTruthy();
 
-    await confirmCryptoPaymentForE2E(request, orderId, secret!);
-    await assertOrderNoLongerPending(request, orderId, token!);
+    if (remote) {
+      await cryptoSentPaymentBtn(page).click({ timeout: 60_000 });
+      await page.waitForURL(/\/order-history/, { timeout: 60_000 });
+      const st = await assertOrderExistsForCustomer(request, orderId, token!);
+      expect(st).toBe("payment_pending");
+    } else {
+      test.skip(!secret || secret.length < 16, "Local/preview: set E2E_PAYMENT_APPROVE_SECRET for full approve.");
+      await confirmCryptoPaymentForE2E(request, orderId, secret!);
+      await assertOrderNoLongerPending(request, orderId, token!);
+    }
+  });
+
+  test("VIP display price uses team tier when prices differ (teamruby.net)", async ({ browser }) => {
+    test.skip(!isTeamrubyProductionBase(), "Runs only against teamruby.net.");
+    const base = process.env.PLAYWRIGHT_BASE_URL!.replace(/\/$/, "");
+
+    const ctxDiscover = await browser.newContext();
+    const discoverPage = await ctxDiscover.newPage();
+    const productId =
+      process.env.E2E_PRODUCT_ID?.trim() || (await discoverFirstProductId(discoverPage));
+    await ctxDiscover.close();
+
+    const ctxVip = await browser.newContext();
+    await ctxVip.addInitScript(
+      ([utKey, utVal, tgKey, tgVal]) => {
+        localStorage.setItem(utKey, utVal);
+        localStorage.setItem(tgKey, tgVal);
+      },
+      ["honeywell_user_type", "team_member", "honeywell_telegram_username", "rehllic"] as const
+    );
+    const vipPage = await ctxVip.newPage();
+    await vipPage.goto(`${base}/product/${productId}`);
+    const vipPrice = (await vipPage.getByTestId("product-display-price").or(vipPage.locator(".price")).first().innerText()).trim();
+    await ctxVip.close();
+
+    const ctxGuest = await browser.newContext();
+    const guestPage = await ctxGuest.newPage();
+    await guestPage.goto(`${base}/`);
+    await guestPage.getByTestId("continue-as-guest").or(guestPage.getByRole("button", { name: /Continue as Guest/i })).click();
+    await guestPage.waitForURL(/\/home/);
+    await guestPage.goto(`${base}/product/${productId}`);
+    const guestPrice = (
+      await guestPage.getByTestId("product-display-price").or(guestPage.locator(".price")).first().innerText()
+    ).trim();
+    await ctxGuest.close();
+
+    expect(vipPrice.length).toBeGreaterThan(0);
+    expect(guestPrice.length).toBeGreaterThan(0);
+    if (vipPrice !== guestPrice) {
+      const parseHuf = (s: string) => parseInt(s.replace(/\D/g, ""), 10) || 0;
+      expect(parseHuf(vipPrice)).toBeLessThanOrEqual(parseHuf(guestPrice));
+    }
   });
 });
