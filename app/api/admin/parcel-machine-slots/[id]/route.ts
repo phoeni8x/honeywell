@@ -1,9 +1,11 @@
+import { jsonAdminSupabaseFailure, jsonAdminUnexpectedError } from "@/lib/admin-api-error-response";
 import { requireAdmin } from "@/lib/admin-auth";
-import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse, type NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+const TAG = "parcel-machine-slots";
 
 const MAX = 2000;
 
@@ -48,53 +50,71 @@ function normalizePatch(raw: Record<string, unknown> | null): {
 }
 
 export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const authError = await requireAdmin(request);
-  if (authError) return authError;
+  try {
+    const authError = await requireAdmin(request);
+    if (authError) return authError;
 
-  const { id } = await ctx.params;
-  if (!id?.trim()) {
-    return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  }
-
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  const n = normalizePatch(body);
-  if ("error" in n) {
-    return NextResponse.json({ error: n.error }, { status: 400 });
-  }
-
-  const supabase = createServiceClient();
-  const { data, error } = await supabase.from("parcel_machine_slots").update(n).eq("id", id).select("*").maybeSingle();
-
-  if (error) {
-    const msg = String(error.message ?? "").toLowerCase();
-    if (msg.includes("unique") || msg.includes("duplicate")) {
-      return NextResponse.json({ error: "Duplicate machine name + slot label." }, { status: 409 });
+    const { id } = await ctx.params;
+    if (!id?.trim()) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
-    console.error("[parcel-machine-slots PATCH]", error);
-    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
-  }
-  if (!data) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
 
-  return NextResponse.json({ slot: data });
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const n = normalizePatch(body);
+    if ("error" in n) {
+      return NextResponse.json({ error: n.error }, { status: 400 });
+    }
+
+    let supabase;
+    try {
+      supabase = createServiceClient();
+    } catch (e) {
+      return jsonAdminUnexpectedError(`${TAG} PATCH createServiceClient`, e);
+    }
+
+    const { data, error } = await supabase.from("parcel_machine_slots").update(n).eq("id", id).select("*").maybeSingle();
+
+    if (error) {
+      const msg = String(error.message ?? "").toLowerCase();
+      if (msg.includes("unique") || msg.includes("duplicate")) {
+        return NextResponse.json({ error: "Duplicate machine name + slot label." }, { status: 409 });
+      }
+      return jsonAdminSupabaseFailure(`${TAG} PATCH`, error);
+    }
+    if (!data) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ slot: data });
+  } catch (e) {
+    return jsonAdminUnexpectedError(`${TAG} PATCH`, e);
+  }
 }
 
 export async function DELETE(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const authError = await requireAdmin(request);
-  if (authError) return authError;
+  try {
+    const authError = await requireAdmin(request);
+    if (authError) return authError;
 
-  const { id } = await ctx.params;
-  if (!id?.trim()) {
-    return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    const { id } = await ctx.params;
+    if (!id?.trim()) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    let supabase;
+    try {
+      supabase = createServiceClient();
+    } catch (e) {
+      return jsonAdminUnexpectedError(`${TAG} DELETE createServiceClient`, e);
+    }
+
+    const { error } = await supabase.from("parcel_machine_slots").delete().eq("id", id);
+    if (error) {
+      return jsonAdminSupabaseFailure(`${TAG} DELETE`, error);
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return jsonAdminUnexpectedError(`${TAG} DELETE`, e);
   }
-
-  const supabase = createServiceClient();
-  const { error } = await supabase.from("parcel_machine_slots").delete().eq("id", id);
-  if (error) {
-    console.error("[parcel-machine-slots DELETE]", error);
-    return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true });
 }
