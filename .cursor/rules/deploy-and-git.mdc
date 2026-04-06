@@ -13,6 +13,12 @@ Whenever you finish a meaningful change in this repo (not tiny one-line experime
    - Run `npx vercel deploy --prod --yes` from the repo root when production must match the latest commit (see **vercel-cli** rule).
    - After deploy, state that **Vercel production is updated**: include **READY**, inspector URL, production deployment URL, and **www.teamruby.net** when the CLI reports that alias.
 
+4. **Final message — Vercel line (required)**  
+   Always end the task with an explicit one-line summary for the user, so they never have to guess:
+   - If the CLI shows a successful production deploy: **`Vercel deployment: successful`** (then add READY, production URL, and inspector URL as already required above).
+   - If Git push triggers Vercel Git integration but the CLI cannot verify: **`Vercel deployment: not verified from this environment`** — say that push to `main` should trigger a build and they should confirm in the Vercel dashboard; do **not** claim success without evidence.
+   - If deploy failed or errored: **`Vercel deployment: failed or blocked`** — paste the error and the next step.
+
 Do **not** end the task with only “you can push” — run `git` and deployment checks yourself unless the user explicitly asked for instructions only.
 
 If the repo is dirty, prefer **one logical commit per task** (or what the user asked for), not unrelated bundled changes.
