@@ -101,6 +101,10 @@ export default function ProductPage() {
       return `${path}?${sp.toString()}`;
     };
     setCheckoutOpen(false);
+    if (paymentMethod === "booking") {
+      router.push(withToken("/order-history", { orderId }));
+      return;
+    }
     if (remainderHuf <= 0.01) {
       router.push(withToken("/order-history", { orderId }));
       return;

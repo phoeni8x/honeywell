@@ -8,6 +8,8 @@ export type TelegramOrderNotifyParams = {
   orderAmount: number | string | null;
   productType: string | null;
   paymentReferenceCode: string | null;
+  /** Parcel locker off — no inline payment approve; manage in admin as pre-order / booking. */
+  bookingWithoutPayment?: boolean;
   /** Optional first line (e.g. demo seed disclaimer). */
   banner?: string;
 };
@@ -28,27 +30,38 @@ export async function notifyTelegramNewOrder(params: TelegramOrderNotifyParams):
   const product = params.productType?.trim() || "N/A";
   const payRef = params.paymentReferenceCode?.trim() || "N/A";
 
-  const body = [
-    "New customer order",
-    `1) Customer username: ${username}`,
-    `2) Location / notes: ${address}`,
-    `3) Customer amount (total): ${amount}`,
-    `4) Product type: ${product}`,
-    `5) Payment reference (bank transfer / crypto memo): ${payRef}`,
-  ].join("\n");
+  const body = params.bookingWithoutPayment
+    ? [
+        "New booking request (parcel locker checkout is off)",
+        `1) Customer username: ${username}`,
+        `2) Location / notes: ${address}`,
+        `3) Quoted total (pay later if accepted): ${amount}`,
+        `4) Product: ${product}`,
+        `5) Payment: none yet — use Admin → Orders (pre-order) to accept or cancel.`,
+      ].join("\n")
+    : [
+        "New customer order",
+        `1) Customer username: ${username}`,
+        `2) Location / notes: ${address}`,
+        `3) Customer amount (total): ${amount}`,
+        `4) Product type: ${product}`,
+        `5) Payment reference (bank transfer / crypto memo): ${payRef}`,
+      ].join("\n");
 
   const message = params.banner ? `${params.banner}\n\n${body}` : body;
 
-  const keyboard = {
-    inline_keyboard: [
-      [
-        { text: "✅ Accept payment", callback_data: `HW_APPROVE:${params.orderId}` },
-        { text: "❌ Decline", callback_data: `HW_DECLINE:${params.orderId}` },
-      ],
-    ],
-  };
+  const keyboard = params.bookingWithoutPayment
+    ? undefined
+    : {
+        inline_keyboard: [
+          [
+            { text: "✅ Accept payment", callback_data: `HW_APPROVE:${params.orderId}` },
+            { text: "❌ Decline", callback_data: `HW_DECLINE:${params.orderId}` },
+          ],
+        ],
+      };
 
-  const tg = await sendTelegramMessage(botToken, chatId, message, { replyMarkup: keyboard });
+  const tg = await sendTelegramMessage(botToken, chatId, message, keyboard ? { replyMarkup: keyboard } : undefined);
   if (!tg.ok) {
     console.error("[telegram order notify]", tg.description ?? "sendMessage failed");
   }

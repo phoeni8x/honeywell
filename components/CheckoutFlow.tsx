@@ -80,7 +80,10 @@ export function CheckoutFlow({
     );
   }
 
+  const bookingMode = !fulfillmentOptions.deadDrop;
+
   function paymentMethodForSubmit(): string {
+    if (bookingMode) return "booking";
     if (remainderHuf <= 0.01) return "crypto";
     return remainderPay;
   }
@@ -97,12 +100,12 @@ export function CheckoutFlow({
       setError("Could not save your session. Refresh the page or allow storage for this site.");
       return;
     }
-    if (!fulfillmentOptions.deadDrop) {
-      setError("Dead drop is not available right now. Please contact support.");
+    const pm = paymentMethodForSubmit();
+    if (bookingMode && pm !== "booking") {
+      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
-    const pm = paymentMethodForSubmit();
-    if (userType === "guest" && pm === "revolut") {
+    if (userType === "guest" && pm === "revolut" && !bookingMode) {
       setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
@@ -121,6 +124,7 @@ export function CheckoutFlow({
         points_used: 0,
         ...(referred_by ? { referred_by } : {}),
         ...(customer_username ? { customer_username } : {}),
+        ...(bookingMode ? { booking_without_parcel_locker: true } : {}),
       };
       if (pm === "revolut") {
         body.revolut_pay_timing = "pay_now";
@@ -137,6 +141,12 @@ export function CheckoutFlow({
           setError(data.error);
         } else if (typeof data.error === "string" && data.error !== PUBLIC_ERROR_TRY_AGAIN_OR_GUEST) {
           setError(data.error);
+        } else if (res.status === 409) {
+          setError(
+            typeof data.error === "string"
+              ? data.error
+              : "Parcel pickup is paused. Use the booking flow when locker checkout is off."
+          );
         } else {
           setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
         }
@@ -164,8 +174,6 @@ export function CheckoutFlow({
   }
 
   const busy = loading || externalLoading;
-
-  const deadDropOff = !fulfillmentOptions.deadDrop;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
@@ -199,44 +207,60 @@ export function CheckoutFlow({
 
         {step === 1 && (
           <div className="space-y-4">
-            <h2 className="font-display text-xl text-honey-text">Parcel locker</h2>
-            {userType === "guest" && (
+            <h2 className="font-display text-xl text-honey-text">
+              {bookingMode ? "Booking request" : "Parcel locker"}
+            </h2>
+            {!bookingMode && userType === "guest" && (
               <p className="text-sm text-honey-muted">
                 Pickup is at a <span className="font-medium text-honey-text">parcel machine</span>.
                 After your payment is accepted, the team sends the exact machine location and a{" "}
                 <span className="font-medium text-honey-text">locker passcode</span> to open your compartment.
               </p>
             )}
-            {userType === "team_member" && (
+            {!bookingMode && userType === "team_member" && (
               <p className="text-sm text-honey-muted">
                 Pickup uses a <span className="font-medium text-honey-text">parcel locker</span>. After payment is
                 approved, you&apos;ll get the machine location and <span className="font-medium text-honey-text">passcode</span>{" "}
                 in your order.
               </p>
             )}
-            {deadDropOff && (
-              <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
-                Parcel locker pickup is temporarily unavailable. Please contact support.
+            {bookingMode && (
+              <div className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-900 dark:text-sky-100">
+                Parcel locker checkout is paused. You can still{" "}
+                <span className="font-semibold text-honey-text">request this item</span> — no payment now. The team will
+                review your booking and follow up when pickup is available again.
               </div>
             )}
             <div className="flex items-start gap-3 rounded-xl border border-honey-border p-4">
               <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
               <div>
                 <p className="font-semibold text-honey-text">How it works</p>
-                <p className="mt-1 text-sm text-honey-muted">
-                  For security, the team assigns the parcel machine and passcode only after your payment is approved.
-                </p>
-                <p className="mt-2 text-xs text-honey-muted">
-                  You&apos;ll see carrier, location, and locker code on your order page.
-                </p>
+                {bookingMode ? (
+                  <>
+                    <p className="mt-1 text-sm text-honey-muted">
+                      Submit your request on the next steps. Your order stays as a booking until an admin accepts it.
+                    </p>
+                    <p className="mt-2 text-xs text-honey-muted">
+                      Payment and pickup details are arranged after the team confirms.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-1 text-sm text-honey-muted">
+                      For security, the team assigns the parcel machine and passcode only after your payment is approved.
+                    </p>
+                    <p className="mt-2 text-xs text-honey-muted">
+                      You&apos;ll see carrier, location, and locker code on your order page.
+                    </p>
+                  </>
+                )}
               </div>
             </div>
             <button
               type="button"
               data-testid="checkout-dead-drop-continue"
-              disabled={deadDropOff}
               onClick={() => setStep(2)}
-              className="w-full rounded-full bg-primary py-3 text-sm font-semibold text-white disabled:opacity-50"
+              className="w-full rounded-full bg-primary py-3 text-sm font-semibold text-white"
             >
               Continue
             </button>
@@ -245,17 +269,25 @@ export function CheckoutFlow({
 
         {step === 2 && (
           <div className="space-y-4">
-            <h3 className="font-display text-lg text-honey-text">Payment</h3>
-            {isPreorder && (
+            <h3 className="font-display text-lg text-honey-text">{bookingMode ? "Booking" : "Payment"}</h3>
+            {bookingMode && (
+              <p className="text-sm text-honey-muted">
+                Order total <span className="font-medium text-honey-text">{formatPrice(baseTotal)}</span> — no payment is
+                taken for this booking. If the team accepts, they will guide you on payment and pickup.
+              </p>
+            )}
+            {!bookingMode && isPreorder && (
               <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
                 Pre-order requires payment now.
               </div>
             )}
-            <p className="text-sm text-honey-muted">
-              Order total {formatPrice(baseTotal)}. Choose how you want to pay:
-              {userType === "team_member" ? " bank transfer or cryptocurrency." : " cryptocurrency."}
-            </p>
-            {remainderHuf > 0.01 && (
+            {!bookingMode && (
+              <p className="text-sm text-honey-muted">
+                Order total {formatPrice(baseTotal)}. Choose how you want to pay:
+                {userType === "team_member" ? " bank transfer or cryptocurrency." : " cryptocurrency."}
+              </p>
+            )}
+            {!bookingMode && remainderHuf > 0.01 && (
               <div>
                 <p className="mb-2 text-xs font-semibold text-honey-muted">Pay remaining {formatPrice(remainderHuf)} with</p>
                 <div className="flex gap-2">
@@ -288,7 +320,7 @@ export function CheckoutFlow({
                 </div>
               </div>
             )}
-            {isPreorder && userType === "team_member" && remainderPay === "revolut" && (
+            {!bookingMode && isPreorder && userType === "team_member" && remainderPay === "revolut" && (
               <p className="text-xs text-honey-muted">Pre-orders require bank transfer payment now.</p>
             )}
             <button
@@ -297,14 +329,14 @@ export function CheckoutFlow({
               onClick={() => setStep(3)}
               className="w-full rounded-full bg-primary py-3 text-sm font-semibold text-white"
             >
-              Review order
+              {bookingMode ? "Review booking" : "Review order"}
             </button>
           </div>
         )}
 
         {step === 3 && (
           <div className="space-y-4">
-            <h3 className="font-display text-lg text-honey-text">Confirm</h3>
+            <h3 className="font-display text-lg text-honey-text">{bookingMode ? "Confirm booking" : "Confirm"}</h3>
             <ul className="space-y-2 text-sm text-honey-muted">
               <li className="flex justify-between">
                 <span>Product</span>
@@ -314,11 +346,11 @@ export function CheckoutFlow({
               </li>
               <li className="flex justify-between">
                 <span>Fulfillment</span>
-                <span className="text-honey-text">parcel locker</span>
+                <span className="text-honey-text">{bookingMode ? "booking (locker paused)" : "parcel locker"}</span>
               </li>
               <li className="flex justify-between">
                 <span>Payment</span>
-                <span className="text-honey-text">{paymentMethodForSubmit()}</span>
+                <span className="text-honey-text">{bookingMode ? "none now (booking)" : paymentMethodForSubmit()}</span>
               </li>
               <li className="flex justify-between border-t border-honey-border pt-2 font-semibold text-honey-text">
                 <span>Total</span>
@@ -338,7 +370,7 @@ export function CheckoutFlow({
               onClick={() => void submitOrder()}
               className="w-full rounded-full bg-primary py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {busy ? "Placing order…" : "Place order"}
+              {busy ? (bookingMode ? "Sending…" : "Placing order…") : bookingMode ? "Submit booking" : "Place order"}
             </button>
           </div>
         )}

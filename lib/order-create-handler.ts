@@ -50,6 +50,9 @@ const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
   invalid_revolut_pay_timing: "Invalid payment timing. Please retry checkout.",
   pay_on_delivery_disabled: "Pay-on-delivery is no longer available. Choose dead drop and pay now.",
   fulfillment_pickup_delivery_disabled: "Pickup and delivery are no longer available. All orders use dead drop.",
+  parcel_locker_disabled_use_booking:
+    "Parcel pickup is paused. Submit a booking request instead — no payment until the team confirms.",
+  booking_not_when_locker_on: "Booking requests are only available when parcel locker checkout is turned off.",
   preorder_pay_now_required: "Pre-order requires pay-now. Pay-on-delivery is not available.",
   points_min_order_total: "Points can be used only on orders of at least 50,000 HUF.",
   points_insufficient: "You don't have enough points for this order.",
@@ -81,6 +84,7 @@ export async function handleCreateOrder(request: Request) {
       points_used,
       revolut_pay_timing,
       customer_username,
+      booking_without_parcel_locker,
     }: {
       customer_token?: string;
       product_id?: string;
@@ -89,6 +93,7 @@ export async function handleCreateOrder(request: Request) {
       payment_method?: PaymentMethod | string;
       referred_by?: string | null;
       customer_username?: string | null;
+      booking_without_parcel_locker?: boolean;
     } & FulfillmentBody = body;
 
     const token = typeof customer_token === "string" ? customer_token.trim() : "";
@@ -106,7 +111,8 @@ export async function handleCreateOrder(request: Request) {
     }
 
     const pm = payment_method as string;
-    const allowedPm = ["revolut", "crypto", "bees", "points"];
+    const bookingWithoutParcelLocker = booking_without_parcel_locker === true;
+    const allowedPm = ["revolut", "crypto", "bees", "points", "booking"];
     if (!allowedPm.includes(pm)) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
@@ -115,7 +121,7 @@ export async function handleCreateOrder(request: Request) {
       console.warn("[order] guest attempted revolut", { customer_token: token.slice(0, 8) });
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
-    if (user_type === "guest" && !["crypto", "points", "bees"].includes(pm)) {
+    if (user_type === "guest" && !["crypto", "points", "bees", "booking"].includes(pm)) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
 
@@ -165,8 +171,24 @@ export async function handleCreateOrder(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
 
-    if (!isFulfillmentDeadDropCheckoutEnabled(settingsMap.fulfillment_dead_drop_enabled)) {
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
+    const lockerCheckoutEnabled = isFulfillmentDeadDropCheckoutEnabled(settingsMap.fulfillment_dead_drop_enabled);
+    if (bookingWithoutParcelLocker && lockerCheckoutEnabled) {
+      return NextResponse.json(
+        { error: ORDER_ERROR_MESSAGE_MAP.booking_not_when_locker_on, code: "booking_not_when_locker_on" },
+        { status: 400 }
+      );
+    }
+    if (!lockerCheckoutEnabled && !bookingWithoutParcelLocker) {
+      return NextResponse.json(
+        { error: ORDER_ERROR_MESSAGE_MAP.parcel_locker_disabled_use_booking, code: "parcel_locker_disabled_use_booking" },
+        { status: 409 }
+      );
+    }
+    if (bookingWithoutParcelLocker && pm !== "booking") {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
+    }
+    if (!bookingWithoutParcelLocker && pm === "booking") {
+      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
     const { data, error } = await supabase.rpc("create_order_atomic", {
@@ -187,6 +209,7 @@ export async function handleCreateOrder(request: Request) {
       p_bees_used: bUsed,
       p_points_used: pUsed,
       p_revolut_pay_timing: revolutTimingParam,
+      p_booking_without_parcel_locker: bookingWithoutParcelLocker,
     });
 
     if (error) {
@@ -322,7 +345,7 @@ export async function handleCreateOrder(request: Request) {
     const fulfill = (createdOrder?.fulfillment_type as string | null | undefined) ?? "—";
     const pay = (createdOrder?.payment_method as string | null | undefined) ?? "—";
     void notifyAdminPush({
-      title: "New order placed",
+      title: bookingWithoutParcelLocker ? "New booking request" : "New order placed",
       body: `${orderLabel} · ${fulfill} · ${pay}`,
       url: "/admin-080209?tab=orders",
       tag: `new-order-${orderId}`,
@@ -339,6 +362,7 @@ export async function handleCreateOrder(request: Request) {
       orderAmount: (createdOrder?.total_price as number | string | null | undefined) ?? null,
       productType: productTypeForNotify,
       paymentReferenceCode: (createdOrder?.payment_reference_code as string | null | undefined) ?? null,
+      bookingWithoutPayment: bookingWithoutParcelLocker,
     });
 
     const res = NextResponse.json({

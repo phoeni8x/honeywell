@@ -21,7 +21,7 @@ export type OrderStatus =
   | "picked_up"
   | "cancelled";
 
-export type PaymentMethod = "revolut" | "crypto" | "bees" | "points";
+export type PaymentMethod = "revolut" | "crypto" | "bees" | "points" | "booking";
 
 export interface Product {
   id: string;

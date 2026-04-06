@@ -269,7 +269,9 @@ export function OrderCard({
             </div>
             {order.status === "pre_ordered" && (
               <p className="mt-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
-                Pre-order awaiting admin decision. You will see updates here once accepted or rejected.
+                {order.payment_method === "booking"
+                  ? "Booking request — no payment yet. The team will review and contact you or update this order when pickup is available."
+                  : "Pre-order awaiting admin decision. You will see updates here once accepted or rejected."}
               </p>
             )}
             {order.status === "awaiting_dead_drop" && (
@@ -278,6 +280,7 @@ export function OrderCard({
               </p>
             )}
             {order.payment_reference_code &&
+              order.payment_method !== "booking" &&
               (order.status === "payment_pending" || order.status === "awaiting_dead_drop") && (
                 <div className="mt-3 rounded-2xl border-2 border-primary/35 bg-primary/5 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-honey-muted">Payment reference</p>
