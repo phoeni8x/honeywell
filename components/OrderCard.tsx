@@ -4,6 +4,13 @@ import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
 import { ORDER_STATUS_LABELS } from "@/lib/helpers";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
+import {
+  extractFirstHttpUrl,
+  isDeadDropFulfillmentLocationIssued,
+  lockerProviderDisplayLabel,
+  mapsSearchUrlApple,
+  mapsSearchUrlGoogle,
+} from "@/lib/parcel-locker";
 import { getOrderIssueTelegramUrl } from "@/lib/support-telegram";
 import type { OrderWithProduct } from "@/types";
 import clsx from "clsx";
@@ -25,8 +32,7 @@ interface OrderCardProps {
 }
 
 function canCustomerCancelOrder(order: OrderWithProduct): boolean {
-  // Dead-drop location is a "locked" assignment; once assigned we don't allow customer cancellation.
-  if (order.fulfillment_type === "dead_drop" && order.status === "confirmed" && order.dead_drop_id) return false;
+  if (isDeadDropFulfillmentLocationIssued(order)) return false;
 
   const payAfterDelivery =
     (order as { pay_after_delivery?: boolean }).pay_after_delivery === true ||
@@ -54,6 +60,7 @@ export function OrderCard({
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [revolutLinkError, setRevolutLinkError] = useState<string | null>(null);
   const [refCopied, setRefCopied] = useState(false);
+  const [lockerCodeCopied, setLockerCodeCopied] = useState(false);
   const product = order.product;
   const statusLabel = ORDER_STATUS_LABELS[order.status] ?? order.status;
   const isFinalStatus = ["delivered", "picked_up", "cancelled", "payment_expired"].includes(order.status);
@@ -69,14 +76,42 @@ export function OrderCard({
 
   const isLegacyPickup = order.fulfillment_type === "pickup";
 
-  const { displayAddress, googleUrl, appleUrl, deadDropPhotos, deadDropVideoUrl, deadDropFindInstructions } =
-    useMemo(() => {
+  const {
+    parcelLocker,
+    displayAddress,
+    googleUrl,
+    appleUrl,
+    deadDropPhotos,
+    deadDropVideoUrl,
+    deadDropFindInstructions,
+  } = useMemo(() => {
+    const locText = order.locker_location_text?.trim() ?? "";
+    const pass = order.locker_passcode?.trim() ?? "";
+    if (order.fulfillment_type === "dead_drop" && locText && pass && !order.dead_drop_id) {
+      const direct = extractFirstHttpUrl(locText);
+      const g = direct ?? mapsSearchUrlGoogle(locText);
+      const a = direct ?? mapsSearchUrlApple(locText);
+      return {
+        parcelLocker: {
+          providerLabel: lockerProviderDisplayLabel(order.locker_provider),
+          location: locText,
+          passcode: pass,
+        },
+        displayAddress: locText,
+        googleUrl: g,
+        appleUrl: a,
+        deadDropPhotos: [] as string[],
+        deadDropVideoUrl: null,
+        deadDropFindInstructions: null,
+      };
+    }
     if (order.fulfillment_type === "dead_drop" && order.dead_drop) {
       const dd = order.dead_drop;
       const photos = [dd.location_photo_url, dd.location_photo_url_2, dd.location_photo_url_3].filter(
         (p): p is string => Boolean(p)
       );
       return {
+        parcelLocker: null,
         displayAddress: dd.name,
         googleUrl: dd.google_maps_url ?? mapsUrl,
         appleUrl: dd.apple_maps_url ?? appleMapsUrl,
@@ -87,6 +122,7 @@ export function OrderCard({
     }
     if (order.fulfillment_type === "pickup" && order.pickup_location) {
       return {
+        parcelLocker: null,
         displayAddress: order.pickup_location.name + (order.pickup_location.admin_message ? ` — ${order.pickup_location.admin_message}` : ""),
         googleUrl: order.pickup_location.google_maps_url ?? mapsUrl,
         appleUrl: order.pickup_location.apple_maps_url ?? appleMapsUrl,
@@ -96,6 +132,7 @@ export function OrderCard({
       };
     }
     return {
+      parcelLocker: null,
       displayAddress: shopAddress,
       googleUrl: mapsUrl,
       appleUrl: appleMapsUrl,
@@ -237,7 +274,7 @@ export function OrderCard({
             )}
             {order.status === "awaiting_dead_drop" && (
               <p className="mt-2 rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs text-sky-900 dark:text-sky-100">
-                Payment received. Your dead-drop location (photos and coordinates) will appear here as soon as the team assigns it.
+                Payment received. Your parcel locker details (machine location and passcode) will show here once the team issues them.
               </p>
             )}
             {order.payment_reference_code &&
@@ -383,10 +420,42 @@ export function OrderCard({
 
         {showLocationSection && (
           <div className="border-t border-honey-border bg-bg/50 px-4 py-4 dark:bg-black/20">
-            <p className="mb-3 flex items-start gap-2 text-sm text-honey-text">
-              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <span>{displayAddress}</span>
-            </p>
+            {parcelLocker && (
+              <div className="mb-4 rounded-xl border-2 border-primary/35 bg-primary/5 px-4 py-3 dark:bg-primary/10">
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">Parcel locker</p>
+                <p className="mt-1 text-sm text-honey-text">
+                  <span className="text-honey-muted">Network:</span> {parcelLocker.providerLabel}
+                </p>
+                <p className="mt-2 text-sm text-honey-text">
+                  <span className="text-honey-muted">Location:</span> {parcelLocker.location}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-honey-muted">Locker code</span>
+                  <span className="rounded-lg border border-honey-border bg-bg px-3 py-1.5 font-mono text-base font-bold tracking-wide text-honey-text">
+                    {parcelLocker.passcode}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(parcelLocker.passcode).then(() => {
+                        setLockerCodeCopied(true);
+                        window.setTimeout(() => setLockerCodeCopied(false), 2000);
+                      });
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full border border-honey-border bg-bg px-3 py-1 text-xs font-semibold text-honey-text hover:bg-honey-border/30"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    {lockerCodeCopied ? "Copied" : "Copy code"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {!parcelLocker && (
+              <p className="mb-3 flex items-start gap-2 text-sm text-honey-text">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span>{displayAddress}</span>
+              </p>
+            )}
             {order.fulfillment_type === "dead_drop" && deadDropFindInstructions && (
               <p className="mb-3 rounded-xl border border-green-500/40 bg-green-500/10 px-3 py-2 text-xs text-green-900 dark:text-green-100">
                 <span className="mr-1 font-semibold">Find:</span>

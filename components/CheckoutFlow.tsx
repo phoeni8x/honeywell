@@ -199,22 +199,24 @@ export function CheckoutFlow({
 
         {step === 1 && (
           <div className="space-y-4">
-            <h2 className="font-display text-xl text-honey-text">Dead drop</h2>
+            <h2 className="font-display text-xl text-honey-text">Parcel locker</h2>
             {userType === "guest" && (
               <p className="text-sm text-honey-muted">
-                Orders are fulfilled via <span className="font-medium text-honey-text">dead drop</span>. Exact location
-                details are shared privately after your order is accepted.
+                Pickup is at a <span className="font-medium text-honey-text">parcel machine</span> (e.g. GLS, Packeta).
+                After your payment is accepted, the team sends the exact machine location and a{" "}
+                <span className="font-medium text-honey-text">locker passcode</span> to open your compartment.
               </p>
             )}
             {userType === "team_member" && (
               <p className="text-sm text-honey-muted">
-                All orders use <span className="font-medium text-honey-text">dead drop</span>. Exact location details are
-                assigned privately after payment.
+                Pickup uses a <span className="font-medium text-honey-text">parcel locker</span>. After payment is
+                approved, you&apos;ll get the machine location and <span className="font-medium text-honey-text">passcode</span>{" "}
+                in your order.
               </p>
             )}
             {deadDropOff && (
               <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
-                Dead drop is temporarily unavailable. Please contact support.
+                Parcel locker pickup is temporarily unavailable. Please contact support.
               </div>
             )}
             <div className="flex items-start gap-3 rounded-xl border border-honey-border p-4">
@@ -222,10 +224,10 @@ export function CheckoutFlow({
               <div>
                 <p className="font-semibold text-honey-text">How it works</p>
                 <p className="mt-1 text-sm text-honey-muted">
-                  For security, exact dead-drop location details are assigned privately after your order is accepted.
+                  For security, the team assigns the parcel machine and passcode only after your payment is approved.
                 </p>
                 <p className="mt-2 text-xs text-honey-muted">
-                  Your exact drop is assigned privately after payment is approved.
+                  You&apos;ll see network (e.g. GLS / Packeta), location, and locker code on your order page.
                 </p>
               </div>
             </div>
@@ -312,7 +314,7 @@ export function CheckoutFlow({
               </li>
               <li className="flex justify-between">
                 <span>Fulfillment</span>
-                <span className="text-honey-text">dead drop</span>
+                <span className="text-honey-text">parcel locker</span>
               </li>
               <li className="flex justify-between">
                 <span>Payment</span>

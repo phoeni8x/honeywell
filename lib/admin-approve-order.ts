@@ -78,7 +78,7 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
     await svc.from("orders").update({ defer_stock_until_approval: false }).eq("id", orderId);
   }
 
-  // Dead drop: payment approval deducts stock in DB and sets awaiting_dead_drop; slot is assigned later (Give drop).
+  // Dead drop: payment approval deducts stock in DB and sets awaiting_dead_drop; admin issues parcel locker in dashboard.
   if (order.fulfillment_type === "dead_drop") {
     if (!order.dead_drop_id) {
       const { error: rpcErr } = await svc.rpc("confirm_dead_drop_payment_and_assign", {
@@ -103,7 +103,7 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
       if (tokenEarly) {
         void notifyCustomerPush(tokenEarly, {
           title: "Payment accepted",
-          body: "We'll send your dead drop location (map, photos, notes) when it's assigned.",
+          body: "We'll send your parcel locker details (location + code) when the team issues them.",
           url: `/account/orders/${orderId}/track`,
           tag: `order-${orderId}-paid`,
         });

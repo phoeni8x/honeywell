@@ -8,6 +8,7 @@ import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
 import { parseShopOpen } from "@/lib/shop-open";
 import { parseSupportEnabled } from "@/lib/support-settings";
 import { formatPrice, ORDER_STATUS_LABELS, truncateToken } from "@/lib/helpers";
+import { LOCKER_PROVIDER_OPTIONS } from "@/lib/parcel-locker";
 import { PendingApprovalQueue } from "@/components/admin/PendingApprovalQueue";
 import { useAdminPushNotifications } from "@/hooks/useAdminPushNotifications";
 import { createClient } from "@/lib/supabase/client";
@@ -861,6 +862,10 @@ function OrdersSection({
   const [filter, setFilter] = useState<string>("all");
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [lockerModalOrderId, setLockerModalOrderId] = useState<string | null>(null);
+  const [lockerProvider, setLockerProvider] = useState<string>("packeta");
+  const [lockerLocation, setLockerLocation] = useState("");
+  const [lockerPasscode, setLockerPasscode] = useState("");
 
   function showToast(msg: string, ok = true) {
     setToast({ msg, ok });
@@ -905,20 +910,41 @@ function OrdersSection({
     }
   }
 
-  async function assignDeadDrop(id: string) {
-    setActionLoading(id + "assign-dd");
+  function openIssueLockerModal(orderId: string) {
+    setLockerModalOrderId(orderId);
+    setLockerProvider("packeta");
+    setLockerLocation("");
+    setLockerPasscode("");
+  }
+
+  async function submitIssueLocker() {
+    if (!lockerModalOrderId) return;
+    const loc = lockerLocation.trim();
+    const code = lockerPasscode.trim();
+    if (loc.length < 3 || code.length < 2) {
+      showToast("Enter locker location (details) and passcode.", false);
+      return;
+    }
+    setActionLoading(lockerModalOrderId + "issue-locker");
     try {
-      const res = await fetch("/api/admin/orders/assign-dead-drop", {
+      const res = await fetch("/api/admin/orders/issue-locker", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ order_id: id }),
+        body: JSON.stringify({
+          order_id: lockerModalOrderId,
+          locker_provider: lockerProvider.trim() || null,
+          locker_location_text: loc,
+          locker_passcode: code,
+        }),
       });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        showToast("Could not assign dead drop. Check pool or try again.", false);
+        showToast(data.error || "Could not issue locker. Check order state.", false);
         return;
       }
-      showToast("Dead drop assigned — customer notified ✓");
+      setLockerModalOrderId(null);
+      showToast("Parcel locker issued — customer notified ✓");
       onRefresh();
     } finally {
       setActionLoading(null);
@@ -1047,9 +1073,9 @@ function OrdersSection({
             type="button"
             disabled={actionLoading !== null}
             className="text-left text-xs font-semibold text-primary hover:underline disabled:opacity-50"
-            onClick={() => void assignDeadDrop(o.id)}
+            onClick={() => openIssueLockerModal(o.id)}
           >
-            Assign dead drop
+            Issue parcel locker
           </button>
         )}
 
@@ -1278,6 +1304,69 @@ function OrdersSection({
           </tbody>
         </table>
       </div>
+
+      {lockerModalOrderId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            onClick={() => (actionLoading === null ? setLockerModalOrderId(null) : undefined)}
+            aria-label="Close"
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-honey-border bg-surface p-6 shadow-2xl dark:bg-surface-dark">
+            <h2 className="font-display text-lg tracking-wide text-honey-text">Issue parcel locker</h2>
+            <p className="mt-2 text-xs text-honey-muted">
+              Enter the parcel machine network, where to go (address, machine ID, or map link), and the locker passcode the customer uses to open the compartment.
+            </p>
+            <label className="mt-4 block text-xs font-semibold text-honey-muted">Network</label>
+            <select
+              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              value={lockerProvider}
+              onChange={(e) => setLockerProvider(e.target.value)}
+            >
+              {LOCKER_PROVIDER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <label className="mt-3 block text-xs font-semibold text-honey-muted">Location / machine details</label>
+            <textarea
+              className="mt-1 min-h-[88px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              placeholder="e.g. Packeta Z-Box @ … or paste map link"
+              value={lockerLocation}
+              onChange={(e) => setLockerLocation(e.target.value)}
+            />
+            <label className="mt-3 block text-xs font-semibold text-honey-muted">Locker passcode</label>
+            <input
+              type="text"
+              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm font-mono"
+              placeholder="Code shown to customer"
+              value={lockerPasscode}
+              onChange={(e) => setLockerPasscode(e.target.value)}
+              autoComplete="off"
+            />
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={actionLoading !== null}
+                className="rounded-xl border border-honey-border px-4 py-2 text-sm font-semibold text-honey-text hover:bg-honey-border/30 disabled:opacity-50"
+                onClick={() => setLockerModalOrderId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading !== null}
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-light disabled:opacity-50"
+                onClick={() => void submitIssueLocker()}
+              >
+                {actionLoading?.endsWith("issue-locker") ? "Issuing…" : "Issue & notify customer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1769,10 +1858,10 @@ function SettingsSection({
         </div>
       </div>
       <div>
-        <label className="text-xs font-semibold text-honey-muted">Dead drop checkout</label>
+        <label className="text-xs font-semibold text-honey-muted">Parcel locker checkout</label>
         <p className="mt-1 text-xs text-honey-muted">
-          All new orders use dead drop. When disabled, customers cannot complete checkout. Manage slots under Fulfillment
-          → Dead drops.
+          All new orders use parcel locker fulfillment (GLS, Packeta, etc.). When disabled, customers cannot complete checkout.
+          After payment, issue location + passcode from Orders. Legacy &quot;Dead drops&quot; pool is optional for old orders only.
         </p>
         <div className="mt-3">
           <div className="flex items-center gap-2">

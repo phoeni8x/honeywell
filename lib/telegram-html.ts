@@ -53,3 +53,29 @@ export function buildDeadDropCustomerMessageHtml(opts: {
   lines.push(note ? esc(note) : "—");
   return lines.join("\n");
 }
+
+export function buildLockerCustomerMessageHtml(opts: {
+  orderNumber: string;
+  productName: string;
+  quantity: number;
+  providerLabel: string;
+  locationText: string;
+  passcode: string;
+}): string {
+  const esc = escapeTelegramHtml;
+  const q = Math.max(1, Math.floor(Number(opts.quantity) || 1));
+  const qtySuffix = q > 1 ? ` • ×${q}` : "";
+  const lines: string[] = [];
+  lines.push(`🍯 <b>Honey Well</b> — Parcel locker`);
+  lines.push("");
+  lines.push(`🆔 <b>ID:</b> ${esc(opts.orderNumber)}`);
+  lines.push(`<b>${esc(opts.productName)}</b>${qtySuffix}`);
+  lines.push("");
+  lines.push(`📦 <b>Network:</b> ${esc(opts.providerLabel)}`);
+  lines.push("");
+  lines.push(`📍 <b>Locker / machine:</b>`);
+  lines.push(esc(opts.locationText));
+  lines.push("");
+  lines.push(`🔐 <b>Locker code:</b> <code>${esc(opts.passcode)}</code>`);
+  return lines.join("\n");
+}

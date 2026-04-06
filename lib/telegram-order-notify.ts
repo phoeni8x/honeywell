@@ -13,7 +13,7 @@ export type TelegramOrderNotifyParams = {
 };
 
 /**
- * Sends the standard admin Telegram message for a new order (inline approve / decline / give drop).
+ * Sends the standard admin Telegram message for a new order (inline approve / decline).
  * Uses TELEGRAM_ADMIN_BOT_TOKEN (or TELEGRAM_BOT_TOKEN) and TELEGRAM_ORDER_CHAT_ID or ADMIN_TELEGRAM_USER_ID.
  */
 export async function notifyTelegramNewOrder(params: TelegramOrderNotifyParams): Promise<void> {
@@ -45,7 +45,6 @@ export async function notifyTelegramNewOrder(params: TelegramOrderNotifyParams):
         { text: "✅ Accept payment", callback_data: `HW_APPROVE:${params.orderId}` },
         { text: "❌ Decline", callback_data: `HW_DECLINE:${params.orderId}` },
       ],
-      [{ text: "📦 Give drop", callback_data: `HW_GIVE_DROP:${params.orderId}` }],
     ],
   };
 

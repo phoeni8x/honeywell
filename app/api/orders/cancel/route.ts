@@ -1,4 +1,5 @@
 import { getCustomerTokenFromRequest } from "@/lib/customer-request";
+import { isDeadDropFulfillmentLocationIssued } from "@/lib/parcel-locker";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -31,11 +32,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 404 });
     }
 
-    // Dead-drop: once the location is assigned (confirmed + dead_drop_id set), block customer cancellation.
-    // This prevents stock/slot mismatches after fulfillment handoff.
-    if (order.fulfillment_type === "dead_drop" && order.status === "confirmed" && order.dead_drop_id) {
+    // Dead-drop / parcel locker: once location or locker details are issued, block customer cancellation.
+    if (isDeadDropFulfillmentLocationIssued(order)) {
       return NextResponse.json(
-        { error: "This dead-drop order cannot be cancelled after the location is assigned." },
+        { error: "This order cannot be cancelled after pickup location or locker details are issued." },
         { status: 403 }
       );
     }
