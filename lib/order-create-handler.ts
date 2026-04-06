@@ -1,3 +1,7 @@
+import {
+  isCreateOrderAtomicRpcLikelyMissing,
+  tryInsertBookingOrderWhenRpcMissing,
+} from "@/lib/booking-order-insert-fallback";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { isCustomerBanned } from "@/lib/customer-moderation";
 import { notifyAdminPush } from "@/lib/push-notify";
@@ -259,37 +263,66 @@ export async function handleCreateOrder(request: Request) {
       p_booking_without_parcel_locker: bookingWithoutParcelLocker,
     });
 
+    let orderId: string;
+
     if (error) {
       const err = error as { message?: string; code?: string; details?: string; hint?: string };
       const { userMessage, normalized } = mapCreateOrderRpcError(err);
-      console.error("[create_order_atomic]", {
-        message: String(err.message ?? "").trim(),
-        code: err.code,
-        details: err.details,
-        hint: err.hint,
-        mapped: normalized,
-        ...(normalized === "order_backend_misconfigured"
-          ? {
-              fix:
-                "Apply supabase/migrations/042 and 043 on the Supabase project, then Dashboard → Settings → API → Reload schema (or wait for cache refresh).",
-            }
-          : {}),
-      });
-      return NextResponse.json(
-        { error: userMessage, code: normalized || err.code || "rpc_error" },
-        { status: 400 }
-      );
-    }
 
-    const orderId =
-      typeof data === "string"
-        ? data
-        : data != null
-          ? String(data)
-          : "";
-    if (!orderId) {
-      console.error("[create_order_atomic] empty return data", data);
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, code: "empty_order_id" }, { status: 500 });
+      const tryBookingFallback =
+        bookingWithoutParcelLocker &&
+        pm === "booking" &&
+        bUsed === 0 &&
+        pUsed === 0 &&
+        (normalized === "order_backend_misconfigured" || isCreateOrderAtomicRpcLikelyMissing(err));
+
+      if (tryBookingFallback) {
+        console.warn("[create_order_atomic] RPC failed; using booking insert fallback (run migrations 043/044 when possible)", {
+          message: String(err.message ?? "").trim(),
+          code: err.code,
+        });
+        const fb = await tryInsertBookingOrderWhenRpcMissing(supabase, {
+          customerToken: token,
+          productId: product_id,
+          quantity,
+          userType: user_type as "guest" | "team_member",
+        });
+        if (fb.ok) {
+          orderId = fb.orderId;
+        } else {
+          const msg = ORDER_ERROR_MESSAGE_MAP[fb.code] ?? userMessage;
+          return NextResponse.json({ error: msg, code: fb.code }, { status: 400 });
+        }
+      } else {
+        console.error("[create_order_atomic]", {
+          message: String(err.message ?? "").trim(),
+          code: err.code,
+          details: err.details,
+          hint: err.hint,
+          mapped: normalized,
+          ...(normalized === "order_backend_misconfigured"
+            ? {
+                fix:
+                  "Apply supabase/migrations/043 and 044 on the Supabase project, then Dashboard → Settings → API → Reload schema (or wait for cache refresh).",
+              }
+            : {}),
+        });
+        return NextResponse.json(
+          { error: userMessage, code: normalized || err.code || "rpc_error" },
+          { status: 400 }
+        );
+      }
+    } else {
+      orderId =
+        typeof data === "string"
+          ? data
+          : data != null
+            ? String(data)
+            : "";
+      if (!orderId) {
+        console.error("[create_order_atomic] empty return data", data);
+        return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, code: "empty_order_id" }, { status: 500 });
+      }
     }
 
     if (customerUsername) {
