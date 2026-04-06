@@ -107,7 +107,7 @@ export default function SplashPage() {
         <div className="mt-10 flex w-full max-w-sm flex-col gap-4">
           <button
             type="button"
-            data-testid="open-vip-modal"
+            data-testid="open-login-modal"
             onClick={() => {
               setModalOpen(true);
               setError(null);
@@ -116,7 +116,7 @@ export default function SplashPage() {
             }}
             className="w-full rounded border-2 border-blue-900 bg-blue-500 py-3 font-body font-semibold text-white shadow-[3px_3px_0_#1e3a8a] transition-all duration-200 hover:-translate-x-px hover:-translate-y-px hover:bg-blue-400 hover:shadow-[4px_4px_0_#1e3a8a] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#1e3a8a] dark:shadow-[0_0_24px_rgba(59,130,246,0.4)]"
           >
-            I&apos;m a VIP
+            Login
           </button>
         </div>
       </div>
