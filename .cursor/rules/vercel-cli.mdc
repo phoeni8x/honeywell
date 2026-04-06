@@ -12,6 +12,11 @@ To fix “could not retrieve Project Settings”, log in as the account that own
 When production needs to reflect code changes or the user asks for deploy verification:
 
 1. **Use the Vercel CLI** from the repo root: `npx vercel deploy --prod --yes` (or `vercel deploy --prod --yes` if installed globally). Prefer **production** deploys for changes that should go live.
-2. **Confirm** the deployment: capture **READY** state, **inspector** URL, and production URL from the command output. This project’s production alias includes **https://www.teamruby.net** when the deploy reports it.
-3. **Do not** only tell the user to “open Vercel and deploy” if CLI deploy succeeds from this environment.
-4. If CLI is not authenticated or the command fails, report the error and the minimal manual step (e.g. link project, set token), then retry if the user fixes access.
+2. **Monitor until successful (required)** — do **not** stop after push or deploy alone. From the repo root, run and wait for exit code **0**:
+   - `bash scripts/wait-vercel-production.sh`  
+   or equivalently: `vercel inspect https://www.teamruby.net --wait --timeout 15m`  
+   This blocks until the deployment behind the production alias is **● Ready** or the timeout is hit. If the command fails or times out, report **`Vercel deployment: failed or blocked`** with the CLI output; do **not** claim success.
+   - After a **manual** `vercel deploy --prod`, you may instead pass the **new deployment URL** from the deploy output: `vercel inspect <deployment-url> --wait --timeout 15m`.
+3. **Confirm** in your summary: **READY**, deployment URL, aliases (**https://www.teamruby.net**), and inspector link if `vercel inspect` printed them.
+4. **Do not** only tell the user to “open Vercel and deploy” if the CLI works from this environment.
+5. If CLI is not authenticated or the command fails, report the error and the minimal manual step (e.g. link project, set token), then retry if the user fixes access.

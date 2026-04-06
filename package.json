@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "wait-vercel": "bash scripts/wait-vercel-production.sh",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

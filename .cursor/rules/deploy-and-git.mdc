@@ -9,15 +9,16 @@ Whenever you finish a meaningful change in this repo (not tiny one-line experime
 
 1. **Commit** with a clear message describing what changed and why.
 2. **Push** to **`main`** on GitHub (`origin/main`).
-3. **Deploy / verify Vercel**
-   - Run `npx vercel deploy --prod --yes` from the repo root when production must match the latest commit (see **vercel-cli** rule).
-   - After deploy, state that **Vercel production is updated**: include **READY**, inspector URL, production deployment URL, and **www.teamruby.net** when the CLI reports that alias.
+3. **Deploy / verify Vercel — monitor until Ready**
+   - When you need production to match the latest commit, prefer `npx vercel deploy --prod --yes` **or** rely on Git integration after `git push`.
+   - **Always** run **`bash scripts/wait-vercel-production.sh`** (or `vercel inspect https://www.teamruby.net --wait --timeout 15m`) from the repo root and **wait for it to finish**. Treat the ship as incomplete until this exits **0** and shows **● Ready**. If it errors or times out, keep investigating (logs: `vercel inspect <url> --logs`) until you can report a definitive outcome or hit a reasonable limit, then state failure clearly.
+   - See **vercel-cli** rule for alias URL and linking.
 
 4. **Final message — Vercel line (required)**  
    Always end the task with an explicit one-line summary for the user, so they never have to guess:
-   - If the CLI shows a successful production deploy: **`Vercel deployment: successful`** (then add READY, production URL, and inspector URL as already required above).
-   - If Git push triggers Vercel Git integration but the CLI cannot verify: **`Vercel deployment: not verified from this environment`** — say that push to `main` should trigger a build and they should confirm in the Vercel dashboard; do **not** claim success without evidence.
-   - If deploy failed or errored: **`Vercel deployment: failed or blocked`** — paste the error and the next step.
+   - After **`wait-vercel-production` / `inspect --wait` exits 0**: **`Vercel deployment: successful`** — include READY, production URL, **www.teamruby.net**, and any inspector URL from the output.
+   - If the wait script / inspect cannot run (no auth, wrong link): **`Vercel deployment: not verified from this environment`** — explain what blocked monitoring; do **not** claim success.
+   - If wait times out or inspect reports Error / Canceled: **`Vercel deployment: failed or blocked`** — paste the error and the next step (e.g. Vercel build logs).
 
 Do **not** end the task with only “you can push” — run `git` and deployment checks yourself unless the user explicitly asked for instructions only.
 
