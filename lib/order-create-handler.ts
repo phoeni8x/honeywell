@@ -41,6 +41,7 @@ const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
   guest_no_wallet_spend: "Guests cannot use this wallet option.",
   guest_fulfillment_invalid: "Guests can only use dead drop fulfillment.",
   guest_revolut_forbidden: "Guests cannot pay with bank transfer (VIPs only).",
+  guest_crypto_only: "This checkout option is not available for your account. Refresh and try again.",
   dead_drop_unavailable: "No dead drop available right now. Please try again later.",
   pickup_team_only: "Pickup is available for VIPs only.",
   pickup_location_required: "Please choose a pickup point.",
@@ -56,10 +57,60 @@ const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
   preorder_pay_now_required: "Pre-order requires pay-now. Pay-on-delivery is not available.",
   points_min_order_total: "Points can be used only on orders of at least 50,000 HUF.",
   points_insufficient: "You don't have enough points for this order.",
+  points_wallet_missing: "Your wallet is not ready yet. Refresh and try again.",
+  bees_wallet_missing: "Your wallet is not ready yet. Refresh and try again.",
+  insufficient_bees: "You don't have enough Bees for this order.",
   bees_insufficient: "You don't have enough Bees for this order.",
+  remainder_payment_invalid: "This payment combination is not valid for this order. Refresh and try again.",
   wallet_required: "Your wallet is not ready yet. Refresh and try again.",
   invalid_payment_method: "Selected payment method is invalid for this order.",
+  /** DB not migrated / RPC signature mismatch — safe wording for customers */
+  order_backend_misconfigured:
+    "Checkout could not complete. The shop may need a quick backend update — please try again later or message support.",
 };
+
+const ORDER_RPC_ERROR_CODES = Object.keys(ORDER_ERROR_MESSAGE_MAP) as (keyof typeof ORDER_ERROR_MESSAGE_MAP)[];
+
+function mapCreateOrderRpcError(err: {
+  message?: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}): { userMessage: string; normalized: string } {
+  const blob = [err.message, err.details, err.hint].filter(Boolean).join(" ").toLowerCase();
+
+  if (
+    /could not find (the )?function public\.create_order_atomic/i.test(blob) ||
+    /could not find a function.*create_order_atomic/i.test(blob) ||
+    (/function public\.create_order_atomic/i.test(blob) && /does not exist/i.test(blob)) ||
+    (err.code === "42883" && blob.includes("create_order_atomic")) ||
+    (String(err.code ?? "").toUpperCase() === "PGRST202" && blob.includes("create_order_atomic"))
+  ) {
+    return {
+      userMessage: ORDER_ERROR_MESSAGE_MAP.order_backend_misconfigured,
+      normalized: "order_backend_misconfigured",
+    };
+  }
+
+  if (blob.trim()) {
+    for (const code of ORDER_RPC_ERROR_CODES) {
+      const underscored = code as string;
+      if (underscored === "order_backend_misconfigured") continue;
+      const spaced = underscored.replace(/_/g, " ");
+      if (blob.includes(underscored) || blob.includes(spaced)) {
+        return { userMessage: ORDER_ERROR_MESSAGE_MAP[underscored], normalized: underscored };
+      }
+    }
+  }
+
+  const raw = String(err.message ?? "").trim();
+  const normalized = raw.toLowerCase().replace(/\s+/g, "_");
+  if (ORDER_ERROR_MESSAGE_MAP[normalized]) {
+    return { userMessage: ORDER_ERROR_MESSAGE_MAP[normalized], normalized };
+  }
+
+  return { userMessage: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, normalized: normalized || err.code || "rpc_error" };
+}
 
 export async function handleCreateOrder(request: Request) {
   try {
@@ -214,17 +265,16 @@ export async function handleCreateOrder(request: Request) {
 
     if (error) {
       const err = error as { message?: string; code?: string; details?: string; hint?: string };
-      const raw = String(err.message ?? "").trim();
-      const normalized = raw.toLowerCase().replace(/\s+/g, "_");
-      const safeError = ORDER_ERROR_MESSAGE_MAP[normalized] ?? PUBLIC_ERROR_TRY_AGAIN_OR_GUEST;
+      const { userMessage, normalized } = mapCreateOrderRpcError(err);
       console.error("[create_order_atomic]", {
-        message: raw,
+        message: String(err.message ?? "").trim(),
         code: err.code,
         details: err.details,
         hint: err.hint,
+        mapped: normalized,
       });
       return NextResponse.json(
-        { error: safeError, code: normalized || err.code || "rpc_error" },
+        { error: userMessage, code: normalized || err.code || "rpc_error" },
         { status: 400 }
       );
     }
