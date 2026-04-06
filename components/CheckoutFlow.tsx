@@ -202,7 +202,7 @@ export function CheckoutFlow({
             <h2 className="font-display text-xl text-honey-text">Parcel locker</h2>
             {userType === "guest" && (
               <p className="text-sm text-honey-muted">
-                Pickup is at a <span className="font-medium text-honey-text">parcel machine</span> (e.g. GLS, Packeta).
+                Pickup is at a <span className="font-medium text-honey-text">parcel machine</span>.
                 After your payment is accepted, the team sends the exact machine location and a{" "}
                 <span className="font-medium text-honey-text">locker passcode</span> to open your compartment.
               </p>
@@ -227,7 +227,7 @@ export function CheckoutFlow({
                   For security, the team assigns the parcel machine and passcode only after your payment is approved.
                 </p>
                 <p className="mt-2 text-xs text-honey-muted">
-                  You&apos;ll see network (e.g. GLS / Packeta), location, and locker code on your order page.
+                  You&apos;ll see carrier, location, and locker code on your order page.
                 </p>
               </div>
             </div>

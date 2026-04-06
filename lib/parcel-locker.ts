@@ -1,7 +1,7 @@
 export const LOCKER_PROVIDER_OPTIONS = [
-  { value: "gls", label: "GLS parcel locker" },
-  { value: "packeta", label: "Packeta / Z-Box" },
-  { value: "foxpost", label: "Foxpost" },
+  { value: "primary", label: "Primary carrier" },
+  { value: "secondary", label: "Secondary carrier" },
+  { value: "tertiary", label: "Other carrier" },
   { value: "other", label: "Other" },
 ] as const;
 
@@ -9,7 +9,10 @@ export function lockerProviderDisplayLabel(provider: string | null | undefined):
   if (!provider?.trim()) return "Parcel locker";
   const v = provider.trim().toLowerCase();
   const m = LOCKER_PROVIDER_OPTIONS.find((o) => o.value === v);
-  return m?.label ?? provider.trim();
+  if (m) return m.label;
+  // Legacy slugs from older admin builds — show generic label in customer UI.
+  if (["gls", "packeta", "foxpost"].includes(v)) return "Parcel network";
+  return provider.trim();
 }
 
 /** First https URL in freeform location text, if any. */

@@ -642,7 +642,7 @@ export async function runTelegramWebhook(request: Request, role: TelegramWebhook
         answerText = "Declined ✓";
       } else if (cmd === "HW_GIVE_DROP") {
         answerText =
-          "Use the admin dashboard → Orders: open Issue parcel locker and enter GLS/Packeta (or other) location + passcode. Telegram quick-assign is disabled.";
+          "Use the admin dashboard → Orders: open Issue parcel locker and enter location + passcode. Telegram quick-assign is disabled.";
       } else {
         answerText = "Unknown action.";
       }

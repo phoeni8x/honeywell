@@ -71,7 +71,7 @@ export function buildLockerCustomerMessageHtml(opts: {
   lines.push(`🆔 <b>ID:</b> ${esc(opts.orderNumber)}`);
   lines.push(`<b>${esc(opts.productName)}</b>${qtySuffix}`);
   lines.push("");
-  lines.push(`📦 <b>Network:</b> ${esc(opts.providerLabel)}`);
+  lines.push(`📦 <b>Carrier:</b> ${esc(opts.providerLabel)}`);
   lines.push("");
   lines.push(`📍 <b>Locker / machine:</b>`);
   lines.push(esc(opts.locationText));

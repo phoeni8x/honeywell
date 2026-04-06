@@ -72,7 +72,7 @@ export interface Order {
   defer_stock_until_approval?: boolean | null;
   rejection_reason?: string | null;
   points_earned?: number | null;
-  /** Parcel locker path (GLS, Packeta, …) — issued by admin when status leaves awaiting_dead_drop. */
+  /** Parcel locker path — issued by admin when status leaves awaiting_dead_drop. */
   locker_provider?: string | null;
   locker_location_text?: string | null;
   locker_passcode?: string | null;

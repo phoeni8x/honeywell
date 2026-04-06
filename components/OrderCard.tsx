@@ -424,7 +424,7 @@ export function OrderCard({
               <div className="mb-4 rounded-xl border-2 border-primary/35 bg-primary/5 px-4 py-3 dark:bg-primary/10">
                 <p className="text-xs font-semibold uppercase tracking-wide text-primary">Parcel locker</p>
                 <p className="mt-1 text-sm text-honey-text">
-                  <span className="text-honey-muted">Network:</span> {parcelLocker.providerLabel}
+                  <span className="text-honey-muted">Carrier:</span> {parcelLocker.providerLabel}
                 </p>
                 <p className="mt-2 text-sm text-honey-text">
                   <span className="text-honey-muted">Location:</span> {parcelLocker.location}

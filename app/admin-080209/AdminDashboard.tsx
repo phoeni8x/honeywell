@@ -863,7 +863,7 @@ function OrdersSection({
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [lockerModalOrderId, setLockerModalOrderId] = useState<string | null>(null);
-  const [lockerProvider, setLockerProvider] = useState<string>("packeta");
+  const [lockerProvider, setLockerProvider] = useState<string>("primary");
   const [lockerLocation, setLockerLocation] = useState("");
   const [lockerPasscode, setLockerPasscode] = useState("");
 
@@ -912,7 +912,7 @@ function OrdersSection({
 
   function openIssueLockerModal(orderId: string) {
     setLockerModalOrderId(orderId);
-    setLockerProvider("packeta");
+    setLockerProvider("primary");
     setLockerLocation("");
     setLockerPasscode("");
   }
@@ -1333,7 +1333,7 @@ function OrdersSection({
             <label className="mt-3 block text-xs font-semibold text-honey-muted">Location / machine details</label>
             <textarea
               className="mt-1 min-h-[88px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
-              placeholder="e.g. Packeta Z-Box @ … or paste map link"
+              placeholder="Machine name, address, or map link"
               value={lockerLocation}
               onChange={(e) => setLockerLocation(e.target.value)}
             />
@@ -1860,7 +1860,7 @@ function SettingsSection({
       <div>
         <label className="text-xs font-semibold text-honey-muted">Parcel locker checkout</label>
         <p className="mt-1 text-xs text-honey-muted">
-          All new orders use parcel locker fulfillment (GLS, Packeta, etc.). When disabled, customers cannot complete checkout.
+          All new orders use parcel locker fulfillment. When disabled, customers cannot complete checkout.
           After payment, issue location + passcode from Orders. Legacy &quot;Dead drops&quot; pool is optional for old orders only.
         </p>
         <div className="mt-3">

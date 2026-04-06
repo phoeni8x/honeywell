@@ -1,4 +1,5 @@
 import { getMaintenanceModeViaRest } from "@/lib/maintenance-mode";
+import { isFulfillmentDeadDropCheckoutEnabled } from "@/lib/fulfillment-settings";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -130,7 +131,7 @@ export async function GET() {
         crypto_exchange_url: map.crypto_exchange_url ?? "",
         shop_currency: map.shop_currency ?? "HUF",
         shop_open: map.shop_open ?? "1",
-        fulfillment_dead_drop_enabled: map.fulfillment_dead_drop_enabled ?? "1",
+        fulfillment_dead_drop_enabled: isFulfillmentDeadDropCheckoutEnabled(map.fulfillment_dead_drop_enabled) ? "1" : "0",
         fulfillment_pickup_enabled: map.fulfillment_pickup_enabled ?? "0",
         fulfillment_delivery_enabled: map.fulfillment_delivery_enabled ?? "0",
         maintenance_mode: map.maintenance_mode ?? "0",

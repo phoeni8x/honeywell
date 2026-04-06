@@ -2,7 +2,7 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { isCustomerBanned } from "@/lib/customer-moderation";
 import { notifyAdminPush } from "@/lib/push-notify";
 import { sanitizePlainText } from "@/lib/sanitize";
-import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
+import { isFulfillmentDeadDropCheckoutEnabled } from "@/lib/fulfillment-settings";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { parseShopOpen } from "@/lib/shop-open";
 import { notifyTelegramNewOrder } from "@/lib/telegram-order-notify";
@@ -165,7 +165,7 @@ export async function handleCreateOrder(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
 
-    if (!parseFulfillmentOptionEnabled(settingsMap.fulfillment_dead_drop_enabled)) {
+    if (!isFulfillmentDeadDropCheckoutEnabled(settingsMap.fulfillment_dead_drop_enabled)) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
 
