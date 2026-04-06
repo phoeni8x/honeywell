@@ -109,10 +109,6 @@ export default function ProductPage() {
       router.push(withToken("/order-history", { orderId }));
       return;
     }
-    if (paymentMethod === "crypto") {
-      router.push(withToken("/pay/crypto", { orderId }));
-      return;
-    }
     if (paymentMethod === "revolut" && revolutPayTiming === "pay_now") {
       router.push(withToken("/order-history", { revolut: "1", orderId }));
       return;

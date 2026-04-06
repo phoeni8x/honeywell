@@ -36,8 +36,8 @@ export function TermsConditionsSection() {
             <h3 className="font-display text-base text-honey-text">2. Placing orders</h3>
             <ol className="list-decimal space-y-2 pl-5 marker:text-amber-300/90">
               <li>
-                Any order or question is processed in a single, clear and structured message: city / material / weight /
-                cryptocurrency.
+                Any order or question is processed in a single, clear and structured message: product, quantity, and
+                delivery preference where relevant.
               </li>
               <li>After sending the message, the customer calmly awaits the operator&apos;s response.</li>
               <li>Spam, flooding, multiple duplicates, and harassing messages are prohibited.</li>
@@ -54,8 +54,8 @@ export function TermsConditionsSection() {
             <h3 className="font-display text-base text-honey-text">3. Payment for orders</h3>
             <ol className="list-decimal space-y-2 pl-5 marker:text-amber-300/90">
               <li>
-                Payment is accepted only in cryptocurrency (USDT, ETH, SOL, TON, TRX, LTC). For convenient payments, we
-                recommend using the Sentz App.
+                Payment for web orders is by bank transfer using the reference and instructions shown after checkout. Other
+                payment channels may be offered by the operator when agreed in writing.
               </li>
               <li>Payment is possible only using the details provided by the operator at the time of the transaction.</li>
               <li>Independent transfers to old or third-party details are not accepted.</li>

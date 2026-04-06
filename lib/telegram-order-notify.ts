@@ -50,7 +50,7 @@ export async function notifyTelegramNewOrder(params: TelegramOrderNotifyParams):
         `2) Location / notes: ${address}`,
         `3) Customer amount (total): ${amount}`,
         `4) Product type: ${product}`,
-        `5) Payment reference (bank transfer / crypto memo): ${payRef}`,
+        `5) Payment reference (bank transfer memo): ${payRef}`,
       ].join("\n");
 
   const message = params.banner ? `${params.banner}\n\n${body}` : body;

@@ -3,7 +3,6 @@ import {
   assertOrderNoLongerPending,
   assertOrderExistsForCustomer,
   confirmCryptoPaymentForE2E,
-  cryptoSentPaymentBtn,
   discoverFirstProductId,
   isTeamrubyProductionBase,
   orderIdFromPayUrl,
@@ -11,7 +10,7 @@ import {
 } from "./helpers";
 
 test.describe("VIP purchase (rehllic / team_member)", () => {
-  test("VIP sees team-only pay option, crypto checkout, payment handler (rehllic handle)", async ({ page, context, request }) => {
+  test("VIP checkout bank transfer → order history (rehllic handle)", async ({ page, context, request }) => {
     const remote = isTeamrubyProductionBase();
     const secret = process.env.E2E_PAYMENT_APPROVE_SECRET?.trim();
     const vipUsername = (process.env.E2E_VIP_TELEGRAM_USERNAME || "rehllic").trim().toLowerCase();
@@ -37,7 +36,6 @@ test.describe("VIP purchase (rehllic / team_member)", () => {
     expect(token && token.length >= 8).toBeTruthy();
 
     if (remote) {
-      await cryptoSentPaymentBtn(page).click({ timeout: 60_000 });
       await page.waitForURL(/\/order-history/, { timeout: 60_000 });
       const st = await assertOrderExistsForCustomer(request, orderId, token!);
       expect(st).toBe("payment_pending");

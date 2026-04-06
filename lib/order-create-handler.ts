@@ -41,7 +41,7 @@ const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
   guest_no_wallet_spend: "Guests cannot use this wallet option.",
   guest_fulfillment_invalid: "Guests can only use parcel locker pickup for this shop.",
   guest_revolut_forbidden: "Guests cannot pay with bank transfer (VIPs only).",
-  guest_crypto_only: "This checkout option is not available for your account. Refresh and try again.",
+  guest_crypto_only: "This payment option is not available for your account. Refresh and try again.",
   dead_drop_unavailable: "Pickup is not available right now. Please try again later.",
   pickup_team_only: "Pickup is available for VIPs only.",
   pickup_location_required: "Please choose a pickup point.",
@@ -163,16 +163,12 @@ export async function handleCreateOrder(request: Request) {
 
     const pm = payment_method as string;
     const bookingWithoutParcelLocker = booking_without_parcel_locker === true;
-    const allowedPm = ["revolut", "crypto", "bees", "points", "booking"];
+    const allowedPm = ["revolut", "bees", "points", "booking"];
     if (!allowedPm.includes(pm)) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
-    if (user_type === "guest" && pm === "revolut") {
-      console.warn("[order] guest attempted revolut", { customer_token: token.slice(0, 8) });
-      return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
-    }
-    if (user_type === "guest" && !["crypto", "points", "bees", "booking"].includes(pm)) {
+    if (user_type === "guest" && !["revolut", "points", "bees", "booking"].includes(pm)) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 403 });
     }
 

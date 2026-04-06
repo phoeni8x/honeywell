@@ -1,7 +1,6 @@
 "use client";
 
 import { BrandHoneyWellTitle } from "@/components/BrandHoneyWellTitle";
-import { CryptoGuideContent } from "@/components/CryptoGuideContent";
 import { HoneycombBg } from "@/components/HoneycombBg";
 import { TermsConditionsSection } from "@/components/TermsConditionsSection";
 import { LS_REFERRED_BY, LS_USER_TYPE } from "@/lib/constants";
@@ -43,7 +42,7 @@ export function HomePageInner() {
     },
     {
       title: "3. Pay",
-      body: "VIPs can pay the remainder with bank transfer or cryptocurrency — your choice at checkout. Guests pay with cryptocurrency.",
+      body: "VIPs and guests pay with bank transfer at checkout (unique reference per order). Booking is available when parcel pickup is paused.",
     },
     {
       title: "4. Collect",
@@ -79,7 +78,7 @@ export function HomePageInner() {
       {userType === "team_member" && (
         <div className="rounded-2xl border-2 border-fuchsia-500/50 bg-gradient-to-r from-fuchsia-950/40 via-violet-950/35 to-cyan-950/40 px-6 py-5 text-center shadow-[0_0_32px_rgba(236,72,153,0.2)]">
           <p className="font-display text-lg text-white">
-            Welcome back, VIP! You have access to exclusive discounts and can pay with bank transfer or crypto.
+            Welcome back, VIP! You have access to exclusive discounts and pay with bank transfer at checkout.
           </p>
         </div>
       )}
@@ -88,7 +87,12 @@ export function HomePageInner() {
         id="crypto-guide"
         className="scroll-mt-24 rounded-3xl border-2 border-cyan-500/30 bg-surface/80 px-6 py-10 shadow-[0_0_24px_rgba(34,211,238,0.12)] dark:bg-surface-dark/80 md:px-10"
       >
-        <CryptoGuideContent />
+        <h2 className="font-display text-3xl text-honey-text">How to pay</h2>
+        <p className="mt-3 text-sm text-honey-muted">
+          Checkout uses <strong className="text-honey-text">bank transfer</strong> with a unique payment reference for each
+          order. After you place an order, use <strong className="text-honey-text">My Orders</strong> to copy your reference
+          and follow the team&apos;s payment link when shown. Cryptocurrency checkout is paused for now.
+        </p>
       </section>
 
       <section>

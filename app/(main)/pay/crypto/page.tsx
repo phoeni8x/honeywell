@@ -1,10 +1,6 @@
-import { Suspense } from "react";
-import { CryptoPayContent } from "./CryptoPayContent";
+import { redirect } from "next/navigation";
 
-export default function CryptoPayPage() {
-  return (
-    <Suspense fallback={<div className="py-12 text-center text-honey-muted">Loading…</div>}>
-      <CryptoPayContent />
-    </Suspense>
-  );
+/** Crypto payment checkout is disabled — send customers to orders. */
+export default function CryptoPayDisabledPage() {
+  redirect("/order-history");
 }

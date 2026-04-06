@@ -1,6 +1,5 @@
 "use client";
 
-import { getOrCreateCustomerToken } from "@/lib/customer-token";
 import { Hexagon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -13,7 +12,6 @@ const PACKAGES = [
 
 export default function BuyBeesPage() {
   const [custom, setCustom] = useState("");
-  const [method, setMethod] = useState<"revolut" | "crypto">("revolut");
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null);
   const [revolutUrl, setRevolutUrl] = useState("");
   const [toast, setToast] = useState<string | null>(null);
@@ -45,18 +43,12 @@ export default function BuyBeesPage() {
       showToast("Please select a package or enter a custom amount.");
       return;
     }
-    if (method === "revolut") {
-      if (!revolutUrl) {
-        showToast("Bank transfer link not configured yet — contact admin.");
-        return;
-      }
-      window.open(revolutUrl, "_blank", "noopener,noreferrer");
-      showToast("Opening payment link — send payment then notify admin to credit your Bees.");
-    } else {
-      const token = getOrCreateCustomerToken();
-      const params = new URLSearchParams({ beesAmount: String(amountBees), hufAmount: String(amountHuf) });
-      window.location.href = `/pay/crypto?${params.toString()}&ct=${encodeURIComponent(token)}`;
+    if (!revolutUrl) {
+      showToast("Bank transfer link not configured yet — contact admin.");
+      return;
     }
+    window.open(revolutUrl, "_blank", "noopener,noreferrer");
+    showToast("Opening payment link — send payment then notify admin to credit your Bees.");
   }
 
   return (
@@ -119,27 +111,6 @@ export default function BuyBeesPage() {
         )}
       </div>
 
-      <div className="flex justify-center gap-3">
-        <button
-          type="button"
-          onClick={() => setMethod("revolut")}
-          className={`rounded-full px-6 py-2 text-sm font-semibold transition ${
-            method === "revolut" ? "bg-primary text-white" : "border border-honey-border text-honey-muted hover:border-primary/40"
-          }`}
-        >
-          Bank transfer
-        </button>
-        <button
-          type="button"
-          onClick={() => setMethod("crypto")}
-          className={`rounded-full px-6 py-2 text-sm font-semibold transition ${
-            method === "crypto" ? "bg-primary text-white" : "border border-honey-border text-honey-muted hover:border-primary/40"
-          }`}
-        >
-          Crypto (LTC)
-        </button>
-      </div>
-
       {amountHuf > 0 && (
         <p className="text-center text-sm font-medium text-honey-text">
           Selected amount: <span className="text-primary">{amountHuf.toLocaleString("hu-HU")} HUF ({amountBees.toFixed(4)} Bees)</span>
@@ -155,7 +126,7 @@ export default function BuyBeesPage() {
         disabled={!amountHuf || amountHuf <= 0}
         className="w-full rounded-full bg-primary py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {method === "revolut" ? "Buy with bank transfer" : "Buy with Crypto (LTC)"}
+        Buy with bank transfer
       </button>
 
       <p className="text-center text-sm text-honey-muted">

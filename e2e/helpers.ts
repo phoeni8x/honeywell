@@ -101,23 +101,21 @@ export async function runGuestCheckoutUi(page: Page, productId: string) {
   await checkoutDeadDropContinue(page).click({ timeout: 45_000 });
   await checkoutReviewOrder(page).click();
   await checkoutPlaceOrder(page).click();
-  await page.waitForURL(/\/pay\/crypto/, { timeout: 90_000 });
+  await page.waitForURL(/\/order-history/, { timeout: 90_000 });
 }
 
-/** VIP path: browser already has team_member + Telegram username (simulates post–Telegram verify). Crypto pay matches guest E2E approve flow. */
+/** VIP path: browser already has team_member + Telegram username (simulates post–Telegram verify). */
 export async function runVipCheckoutUi(page: Page, productId: string) {
   await page.goto(`/product/${productId}`);
   const priceEl = page.getByTestId("product-display-price").or(page.locator(".price"));
   await expect(priceEl.first()).toBeVisible({ timeout: 30_000 });
   await proceedCheckoutBtn(page).click();
   await checkoutDeadDropContinue(page).click({ timeout: 45_000 });
-  const revolut = page.getByTestId("checkout-pay-revolut").or(page.getByRole("button", { name: /Bank transfer/i }));
+  const revolut = page.getByTestId("checkout-pay-revolut");
   await expect(revolut.first()).toBeVisible();
-  const crypto = page.getByTestId("checkout-pay-crypto").or(page.getByRole("button", { name: /^Crypto$/i }));
-  await crypto.first().click();
   await checkoutReviewOrder(page).click();
   await checkoutPlaceOrder(page).click();
-  await page.waitForURL(/\/pay\/crypto/, { timeout: 90_000 });
+  await page.waitForURL(/\/order-history/, { timeout: 90_000 });
 }
 
 export function orderIdFromPayUrl(pageUrl: string): string {

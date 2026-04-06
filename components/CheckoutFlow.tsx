@@ -6,7 +6,6 @@ import { LS_REFERRED_BY, LS_TELEGRAM_USERNAME } from "@/lib/constants";
 import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { getPriceForUser } from "@/lib/helpers";
 import type { Product, UserType } from "@/types";
-import clsx from "clsx";
 import { AlertCircle, ChevronLeft, MapPin } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -40,7 +39,6 @@ export function CheckoutFlow({
   const { formatPrice, shopOpen, fulfillmentOptions } = useShopCurrency();
   const [step, setStep] = useState<Step>(1);
 
-  const [remainderPay, setRemainderPay] = useState<"revolut" | "crypto">("crypto");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,11 +53,6 @@ export function CheckoutFlow({
     setStep(1);
     setError(null);
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (userType === "guest") setRemainderPay("crypto");
-  }, [open, userType]);
 
   if (!open) return null;
 
@@ -84,8 +77,7 @@ export function CheckoutFlow({
 
   function paymentMethodForSubmit(): string {
     if (bookingMode) return "booking";
-    if (remainderHuf <= 0.01) return "crypto";
-    return remainderPay;
+    return "revolut";
   }
 
   async function submitOrder() {
@@ -102,10 +94,6 @@ export function CheckoutFlow({
     }
     const pm = paymentMethodForSubmit();
     if (bookingMode && pm !== "booking") {
-      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
-      return;
-    }
-    if (userType === "guest" && pm === "revolut" && !bookingMode) {
       setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       return;
     }
@@ -283,44 +271,20 @@ export function CheckoutFlow({
             )}
             {!bookingMode && (
               <p className="text-sm text-honey-muted">
-                Order total {formatPrice(baseTotal)}. Choose how you want to pay:
-                {userType === "team_member" ? " bank transfer or cryptocurrency." : " cryptocurrency."}
+                Order total {formatPrice(baseTotal)}. Pay with <strong className="text-honey-text">bank transfer</strong>{" "}
+                (you will get a unique payment reference on the next step).
               </p>
             )}
             {!bookingMode && remainderHuf > 0.01 && (
-              <div>
-                <p className="mb-2 text-xs font-semibold text-honey-muted">Pay remaining {formatPrice(remainderHuf)} with</p>
-                <div className="flex gap-2">
-                  {userType === "team_member" && (
-                    <button
-                      type="button"
-                      data-testid="checkout-pay-revolut"
-                      onClick={() => setRemainderPay("revolut")}
-                      className={clsx(
-                        "flex-1 rounded-full border py-2 text-sm font-medium",
-                        remainderPay === "revolut" ? "border-primary bg-primary/10 text-primary" : "border-honey-border"
-                      )}
-                    >
-                      Bank transfer
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    data-testid="checkout-pay-crypto"
-                    onClick={() => setRemainderPay("crypto")}
-                    className={clsx(
-                      "flex-1 rounded-full border py-2 text-sm font-medium",
-                      userType === "guest" || remainderPay === "crypto"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-honey-border"
-                    )}
-                  >
-                    Crypto
-                  </button>
-                </div>
+              <div
+                className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-center"
+                data-testid="checkout-pay-revolut"
+              >
+                <p className="text-sm font-semibold text-honey-text">Bank transfer</p>
+                <p className="mt-1 text-xs text-honey-muted">Crypto checkout is paused — use the team&apos;s bank link and your order reference.</p>
               </div>
             )}
-            {!bookingMode && isPreorder && userType === "team_member" && remainderPay === "revolut" && (
+            {!bookingMode && isPreorder && userType === "team_member" && (
               <p className="text-xs text-honey-muted">Pre-orders require bank transfer payment now.</p>
             )}
             <button
@@ -350,7 +314,7 @@ export function CheckoutFlow({
               </li>
               <li className="flex justify-between">
                 <span>Payment</span>
-                <span className="text-honey-text">{bookingMode ? "none now (booking)" : paymentMethodForSubmit()}</span>
+                <span className="text-honey-text">{bookingMode ? "none now (booking)" : "Bank transfer"}</span>
               </li>
               <li className="flex justify-between border-t border-honey-border pt-2 font-semibold text-honey-text">
                 <span>Total</span>

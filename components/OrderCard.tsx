@@ -286,7 +286,7 @@ export function OrderCard({
                   <p className="text-xs font-semibold uppercase tracking-wide text-honey-muted">Payment reference</p>
                   <p className="mt-1 text-xs text-honey-muted">
                     Put this in the <strong className="text-honey-text">memo / reference</strong> field when you pay (bank
-                    transfer or crypto). Each order has its own code — do not reuse an old one.
+                    transfer). Each order has its own code — do not reuse an old one.
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="font-mono text-lg font-bold tracking-wider text-primary">

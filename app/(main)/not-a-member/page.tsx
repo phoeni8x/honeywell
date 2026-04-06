@@ -17,7 +17,7 @@ export default function NotAMemberPage() {
       <ul className="mt-8 space-y-3 rounded-2xl border border-honey-border bg-surface px-6 py-6 text-left text-sm text-honey-muted dark:bg-surface-dark">
         <li>
           <strong className="text-honey-text">VIPs</strong> get discounted prices and can pay with bank transfer or
-          cryptocurrency.
+          bank transfer at checkout.
         </li>
         <li>
           Open our bot, use <code className="rounded bg-honey-border/50 px-1 font-mono text-honey-text">/start</code>,
