@@ -1,4 +1,4 @@
-import { executeAdminApproveOrder } from "@/lib/admin-approve-order";
+import { executeAdminApproveOrder, type AdminApproveIssueLockerPayload } from "@/lib/admin-approve-order";
 import { requireAdminUser } from "@/lib/admin-auth";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { NextResponse } from "next/server";
@@ -18,7 +18,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
     }
 
-    const result = await executeAdminApproveOrder(orderId);
+    const rawIssue = body.issue_locker as Record<string, unknown> | undefined;
+    let issueLocker: AdminApproveIssueLockerPayload | undefined;
+    if (rawIssue && typeof rawIssue === "object") {
+      issueLocker = {
+        locker_provider:
+          typeof rawIssue.locker_provider === "string" || rawIssue.locker_provider === null
+            ? (rawIssue.locker_provider as string | null)
+            : undefined,
+        locker_location_text: String(rawIssue.locker_location_text ?? ""),
+        locker_passcode: String(rawIssue.locker_passcode ?? ""),
+      };
+    }
+
+    const result = await executeAdminApproveOrder(orderId, issueLocker ? { issueLocker } : undefined);
     if (!result.success) {
       return NextResponse.json(
         { error: result.error, code: result.code },

@@ -1,13 +1,21 @@
 "use client";
 
+import { composeSlotCustomerLocation } from "@/components/admin/ParcelMachinesSection";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { adminOrderPaymentLabel, formatPrice } from "@/lib/helpers";
-import type { Order, Product } from "@/types";
+import { LOCKER_PROVIDER_OPTIONS } from "@/lib/parcel-locker";
+import type { Order, ParcelMachineSlot, Product } from "@/types";
 import type { ShopCurrency } from "@/lib/currency";
 import clsx from "clsx";
 import { RainbowHeading } from "@/components/BrandHoneyWellTitle";
 import Image from "next/image";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+export type ApproveIssueLockerBody = {
+  locker_provider?: string | null;
+  locker_location_text: string;
+  locker_passcode: string;
+};
 
 type OrderRow = Order & { product?: Product | null };
 
@@ -25,7 +33,7 @@ export function PendingApprovalQueue({
 }: {
   orders: OrderRow[];
   shopCurrency: ShopCurrency;
-  onApproved: (id: string) => Promise<void>;
+  onApproved: (id: string, issueLocker?: ApproveIssueLockerBody) => Promise<void>;
   onRejected: (id: string, reason: string) => Promise<void>;
   onBookingAccepted: (id: string) => Promise<void>;
   onBookingRejected: (id: string, reason: string) => Promise<void>;
@@ -37,6 +45,13 @@ export function PendingApprovalQueue({
   const [bookingRejectId, setBookingRejectId] = useState<string | null>(null);
   const [bookingRejectReason, setBookingRejectReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [lockerProvider, setLockerProvider] = useState("primary");
+  const [lockerLocation, setLockerLocation] = useState("");
+  const [lockerPasscode, setLockerPasscode] = useState("");
+  const [parcelSlots, setParcelSlots] = useState<ParcelMachineSlot[]>([]);
+  const [parcelSlotsLoading, setParcelSlotsLoading] = useState(false);
+  const [selectedSlotId, setSelectedSlotId] = useState<string>("");
+  const [approveParcelError, setApproveParcelError] = useState<string | null>(null);
 
   const pending = orders
     .filter((o) => o.status === "payment_pending")
@@ -49,18 +64,74 @@ export function PendingApprovalQueue({
   const confirmBooking = bookings.find((o) => o.id === bookingConfirmId);
   const rejectBooking = bookings.find((o) => o.id === bookingRejectId);
 
+  const needsParcelLockerOnApprove =
+    Boolean(confirmOrder) &&
+    confirmOrder!.fulfillment_type === "dead_drop" &&
+    !confirmOrder!.dead_drop_id;
+
+  useEffect(() => {
+    if (!confirmId || !confirmOrder) return;
+    if (confirmOrder.fulfillment_type !== "dead_drop" || confirmOrder.dead_drop_id) {
+      setParcelSlots([]);
+      setSelectedSlotId("");
+      setLockerProvider("primary");
+      setLockerLocation("");
+      setLockerPasscode("");
+      setApproveParcelError(null);
+      return;
+    }
+    setLockerProvider("primary");
+    setLockerLocation("");
+    setLockerPasscode("");
+    setSelectedSlotId("");
+    setApproveParcelError(null);
+    setParcelSlotsLoading(true);
+    void fetch("/api/admin/parcel-machine-slots", { credentials: "include" })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { slots?: ParcelMachineSlot[] };
+        if (res.ok) setParcelSlots(data.slots ?? []);
+        else setParcelSlots([]);
+      })
+      .catch(() => setParcelSlots([]))
+      .finally(() => setParcelSlotsLoading(false));
+  }, [confirmId, confirmOrder]);
+
   const handleApprove = useCallback(async () => {
     if (!confirmId) return;
+    setApproveParcelError(null);
+    if (needsParcelLockerOnApprove) {
+      const loc = lockerLocation.trim();
+      const code = lockerPasscode.trim();
+      if (loc.length < 3 || code.length < 2) {
+        setApproveParcelError("Enter location details and locker passcode (pick a saved slot or type a custom location).");
+        return;
+      }
+    }
     setBusy(true);
     try {
-      await onApproved(confirmId);
+      if (needsParcelLockerOnApprove) {
+        await onApproved(confirmId, {
+          locker_provider: lockerProvider.trim() || null,
+          locker_location_text: lockerLocation.trim(),
+          locker_passcode: lockerPasscode.trim(),
+        });
+      } else {
+        await onApproved(confirmId);
+      }
       setConfirmId(null);
     } catch {
       alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
     } finally {
       setBusy(false);
     }
-  }, [confirmId, onApproved]);
+  }, [
+    confirmId,
+    needsParcelLockerOnApprove,
+    lockerLocation,
+    lockerPasscode,
+    lockerProvider,
+    onApproved,
+  ]);
 
   const handleReject = useCallback(async () => {
     if (!rejectId) return;
@@ -241,8 +312,69 @@ export function PendingApprovalQueue({
               <span className="font-semibold text-honey-text">
                 {confirmOrder.quantity}× {confirmOrder.product?.name ?? "item"}
               </span>{" "}
-              from stock and move the order forward.
+              from stock
+              {needsParcelLockerOnApprove ? (
+                <> and assign the parcel machine below (customer gets location + code immediately).</>
+              ) : (
+                <> and move the order forward.</>
+              )}
             </p>
+            {needsParcelLockerOnApprove && (
+              <div className="mt-4 space-y-3 rounded-xl border border-honey-border bg-bg/50 p-3">
+                <p className="text-xs font-semibold text-honey-text">Parcel machine &amp; code</p>
+                <label className="block text-xs font-semibold text-honey-muted">Saved slot (optional)</label>
+                <select
+                  className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                  value={selectedSlotId}
+                  disabled={parcelSlotsLoading}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedSlotId(v);
+                    if (!v) return;
+                    const slot = parcelSlots.find((s) => s.id === v);
+                    if (slot) setLockerLocation(composeSlotCustomerLocation(slot));
+                  }}
+                >
+                  <option value="">{parcelSlotsLoading ? "Loading slots…" : "— Custom location only —"}</option>
+                  {parcelSlots.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.machine_name} · {s.slot_label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-honey-muted">
+                  Manage saved slots under <strong className="text-honey-text">Parcel machines</strong> in the sidebar.
+                </p>
+                <label className="block text-xs font-semibold text-honey-muted">Network</label>
+                <select
+                  className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                  value={lockerProvider}
+                  onChange={(e) => setLockerProvider(e.target.value)}
+                >
+                  {LOCKER_PROVIDER_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <label className="block text-xs font-semibold text-honey-muted">Location / machine details</label>
+                <textarea
+                  className="mt-1 min-h-[88px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                  placeholder="Machine name, address, map link…"
+                  value={lockerLocation}
+                  onChange={(e) => setLockerLocation(e.target.value)}
+                />
+                <label className="block text-xs font-semibold text-honey-muted">Locker passcode</label>
+                <input
+                  type="text"
+                  className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm font-mono"
+                  autoComplete="off"
+                  value={lockerPasscode}
+                  onChange={(e) => setLockerPasscode(e.target.value)}
+                />
+                {approveParcelError ? <p className="text-xs font-medium text-red-600">{approveParcelError}</p> : null}
+              </div>
+            )}
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"

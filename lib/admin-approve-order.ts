@@ -1,6 +1,14 @@
+import { issueLockerForDeadDropOrderAndNotify, validateIssueLockerInput } from "@/lib/admin-issue-locker";
 import { LEVEL_META } from "@/lib/levels";
 import { notifyCustomerPush } from "@/lib/push-notify";
 import { createServiceClient } from "@/lib/supabase/admin";
+
+/** When set, parcel-locker payment approval also issues machine location + code in one step. */
+export type AdminApproveIssueLockerPayload = {
+  locker_provider?: string | null;
+  locker_location_text: string;
+  locker_passcode: string;
+};
 
 export type AdminApproveSuccess = {
   success: true;
@@ -23,7 +31,10 @@ export type AdminApproveFailure = {
  * Admin approves `payment_pending`: non–parcel-locker paths deduct product stock here; parcel-locker path (`dead_drop`)
  * deducts stock and advances status via `confirm_dead_drop_payment_and_assign` (DB RPC name).
  */
-export async function executeAdminApproveOrder(orderId: string): Promise<AdminApproveSuccess | AdminApproveFailure> {
+export async function executeAdminApproveOrder(
+  orderId: string,
+  options?: { issueLocker?: AdminApproveIssueLockerPayload | null }
+): Promise<AdminApproveSuccess | AdminApproveFailure> {
   const svc = createServiceClient();
   const { data: order, error: fetchErr } = await svc.from("orders").select("*").eq("id", orderId).maybeSingle();
 
@@ -81,6 +92,20 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
   // Parcel locker checkout: payment approval deducts stock and sets awaiting_dead_drop; admin issues machine details in dashboard.
   if (order.fulfillment_type === "dead_drop") {
     if (!order.dead_drop_id) {
+      const issue = options?.issueLocker;
+      if (issue) {
+        const prov = typeof issue.locker_provider === "string" ? issue.locker_provider : "";
+        const pre = validateIssueLockerInput({
+          orderId,
+          lockerProvider: prov,
+          lockerLocationText: issue.locker_location_text,
+          lockerPasscode: issue.locker_passcode,
+        });
+        if (!pre.ok) {
+          return { success: false, error: pre.error, status: 400, code: pre.code };
+        }
+      }
+
       const { error: rpcErr } = await svc.rpc("confirm_dead_drop_payment_and_assign", {
         p_order_id: orderId,
       });
@@ -99,14 +124,31 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
         return { success: false, error: "Could not confirm payment for this order.", status: 400 };
       }
 
-      const tokenEarly = order.customer_token as string | undefined;
-      if (tokenEarly) {
-        void notifyCustomerPush(tokenEarly, {
-          title: "Payment accepted",
-          body: "We'll send your parcel locker details (location + code) when the team issues them.",
-          url: `/account/orders/${orderId}/track`,
-          tag: `order-${orderId}-paid`,
+      if (issue) {
+        const issued = await issueLockerForDeadDropOrderAndNotify(svc, {
+          orderId,
+          lockerProvider: typeof issue.locker_provider === "string" ? issue.locker_provider : "",
+          lockerLocationText: issue.locker_location_text.trim(),
+          lockerPasscode: issue.locker_passcode.trim(),
         });
+        if (!issued.ok) {
+          return {
+            success: false,
+            error: issued.error,
+            status: issued.status,
+            code: issued.code,
+          };
+        }
+      } else {
+        const tokenEarly = order.customer_token as string | undefined;
+        if (tokenEarly) {
+          void notifyCustomerPush(tokenEarly, {
+            title: "Payment accepted",
+            body: "We'll send your parcel locker details (location + code) when the team issues them.",
+            url: `/account/orders/${orderId}/track`,
+            tag: `order-${orderId}-paid`,
+          });
+        }
       }
 
       return {

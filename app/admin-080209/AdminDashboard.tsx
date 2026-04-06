@@ -9,10 +9,14 @@ import { parseShopOpen } from "@/lib/shop-open";
 import { parseSupportEnabled } from "@/lib/support-settings";
 import { adminOrderPaymentLabel, formatPrice, fulfillmentTypeDisplay, ORDER_STATUS_LABELS, truncateToken } from "@/lib/helpers";
 import { LOCKER_PROVIDER_OPTIONS } from "@/lib/parcel-locker";
+import {
+  ParcelMachinesSection,
+  composeSlotCustomerLocation,
+} from "@/components/admin/ParcelMachinesSection";
 import { PendingApprovalQueue } from "@/components/admin/PendingApprovalQueue";
 import { useAdminPushNotifications } from "@/hooks/useAdminPushNotifications";
 import { createClient } from "@/lib/supabase/client";
-import type { Announcement, Order, Product } from "@/types";
+import type { Announcement, Order, ParcelMachineSlot, Product } from "@/types";
 import { RainbowHeading } from "@/components/BrandHoneyWellTitle";
 import clsx from "clsx";
 import { LogOut } from "lucide-react";
@@ -267,6 +271,8 @@ export default function AdminDashboard() {
       {tab === "orders" && !loading && (
         <OrdersSection orders={orders} onRefresh={loadAll} supabase={supabase} shopCurrency={shopCurrency} />
       )}
+
+      {tab === "parcel-machines" && !loading && <ParcelMachinesSection />}
 
       {tab === "announcements" && !loading && (
         <AnnouncementsSection items={announcements} onRefresh={loadAll} supabase={supabase} />
@@ -866,6 +872,18 @@ function OrdersSection({
   const [lockerProvider, setLockerProvider] = useState<string>("primary");
   const [lockerLocation, setLockerLocation] = useState("");
   const [lockerPasscode, setLockerPasscode] = useState("");
+  const [lockerSelectedSlotId, setLockerSelectedSlotId] = useState("");
+  const [lockerSlots, setLockerSlots] = useState<ParcelMachineSlot[]>([]);
+  const [lockerSlotsLoading, setLockerSlotsLoading] = useState(false);
+
+  const [approveParcelModalId, setApproveParcelModalId] = useState<string | null>(null);
+  const [apLockerProvider, setApLockerProvider] = useState("primary");
+  const [apLockerLocation, setApLockerLocation] = useState("");
+  const [apLockerPasscode, setApLockerPasscode] = useState("");
+  const [apSelectedSlotId, setApSelectedSlotId] = useState("");
+  const [apSlots, setApSlots] = useState<ParcelMachineSlot[]>([]);
+  const [apSlotsLoading, setApSlotsLoading] = useState(false);
+  const [apError, setApError] = useState<string | null>(null);
 
   function showToast(msg: string, ok = true) {
     setToast({ msg, ok });
@@ -915,7 +933,45 @@ function OrdersSection({
     setLockerProvider("primary");
     setLockerLocation("");
     setLockerPasscode("");
+    setLockerSelectedSlotId("");
   }
+
+  useEffect(() => {
+    if (!lockerModalOrderId) {
+      setLockerSlots([]);
+      return;
+    }
+    setLockerSlotsLoading(true);
+    void fetch("/api/admin/parcel-machine-slots", { credentials: "include" })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { slots?: ParcelMachineSlot[] };
+        if (res.ok) setLockerSlots(data.slots ?? []);
+        else setLockerSlots([]);
+      })
+      .catch(() => setLockerSlots([]))
+      .finally(() => setLockerSlotsLoading(false));
+  }, [lockerModalOrderId]);
+
+  useEffect(() => {
+    if (!approveParcelModalId) {
+      setApSlots([]);
+      return;
+    }
+    setApLockerProvider("primary");
+    setApLockerLocation("");
+    setApLockerPasscode("");
+    setApSelectedSlotId("");
+    setApError(null);
+    setApSlotsLoading(true);
+    void fetch("/api/admin/parcel-machine-slots", { credentials: "include" })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { slots?: ParcelMachineSlot[] };
+        if (res.ok) setApSlots(data.slots ?? []);
+        else setApSlots([]);
+      })
+      .catch(() => setApSlots([]))
+      .finally(() => setApSlotsLoading(false));
+  }, [approveParcelModalId]);
 
   async function submitIssueLocker() {
     if (!lockerModalOrderId) return;
@@ -951,25 +1007,32 @@ function OrdersSection({
     }
   }
 
-  async function confirmOrder(id: string) {
+  async function confirmOrder(
+    id: string,
+    issueLocker?: { locker_provider?: string | null; locker_location_text: string; locker_passcode: string }
+  ): Promise<boolean> {
     setActionLoading(id + "confirm");
     try {
       const res = await fetch("/api/admin/orders/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ order_id: id }),
+        body: JSON.stringify({
+          order_id: id,
+          ...(issueLocker ? { issue_locker: issueLocker } : {}),
+        }),
       });
-      if (!res.ok) {
-        showToast("Could not confirm order. Try again.", false);
-        return;
-      }
       const data = (await res.json().catch(() => ({}))) as {
         points_earned?: number;
         leveled_up?: boolean;
         level_name?: string;
+        error?: string;
       };
-      let msg = "Order confirmed ✓";
+      if (!res.ok) {
+        showToast(data.error ?? "Could not confirm order. Try again.", false);
+        return false;
+      }
+      let msg = issueLocker ? "Payment approved — locker details sent ✓" : "Order confirmed ✓";
       if (typeof data.points_earned === "number" && data.points_earned > 0) {
         msg += ` +${data.points_earned} pts awarded.`;
       }
@@ -978,9 +1041,27 @@ function OrdersSection({
       }
       showToast(msg);
       onRefresh();
+      return true;
     } finally {
       setActionLoading(null);
     }
+  }
+
+  async function submitApproveParcelModal() {
+    if (!approveParcelModalId) return;
+    const loc = apLockerLocation.trim();
+    const code = apLockerPasscode.trim();
+    if (loc.length < 3 || code.length < 2) {
+      setApError("Enter location details and locker passcode.");
+      return;
+    }
+    setApError(null);
+    const ok = await confirmOrder(approveParcelModalId, {
+      locker_provider: apLockerProvider.trim() || null,
+      locker_location_text: loc,
+      locker_passcode: code,
+    });
+    if (ok) setApproveParcelModalId(null);
   }
 
   async function cancelOrder(order: Order & { product?: Product | null }) {
@@ -1076,10 +1157,16 @@ function OrdersSection({
             type="button"
             disabled={actionLoading !== null}
             className="text-left text-xs text-primary hover:underline disabled:opacity-50"
-            onClick={() => confirmOrder(o.id)}
+            onClick={() => {
+              if (o.fulfillment_type === "dead_drop" && !o.dead_drop_id) {
+                setApproveParcelModalId(o.id);
+              } else {
+                void confirmOrder(o.id);
+              }
+            }}
           >
             {o.fulfillment_type === "dead_drop"
-              ? "Confirm payment received"
+              ? "Confirm payment & assign locker"
               : o.payment_method === "revolut"
                 ? "Approve bank transfer payment"
                 : "Confirm"}
@@ -1190,25 +1277,29 @@ function OrdersSection({
       <PendingApprovalQueue
         orders={orders}
         shopCurrency={shopCurrency}
-        onApproved={async (id) => {
+        onApproved={async (id, issueLocker) => {
           setActionLoading(id + "confirm");
           try {
             const res = await fetch("/api/admin/orders/confirm", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               credentials: "include",
-              body: JSON.stringify({ order_id: id }),
+              body: JSON.stringify({
+                order_id: id,
+                ...(issueLocker ? { issue_locker: issueLocker } : {}),
+              }),
             });
             const data = (await res.json().catch(() => ({}))) as {
               points_earned?: number;
               leveled_up?: boolean;
               level_name?: string;
+              error?: string;
             };
             if (!res.ok) {
-              showToast(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, false);
+              showToast(data.error ?? PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, false);
               return;
             }
-            let msg = "Order approved.";
+            let msg = issueLocker ? "Payment approved and parcel locker sent to customer ✓" : "Order approved.";
             if (typeof data.points_earned === "number" && data.points_earned > 0) {
               msg += ` +${data.points_earned} pts awarded to customer.`;
             }
@@ -1364,6 +1455,26 @@ function OrdersSection({
                 </option>
               ))}
             </select>
+            <label className="mt-3 block text-xs font-semibold text-honey-muted">Saved slot (optional)</label>
+            <select
+              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              value={lockerSelectedSlotId}
+              disabled={lockerSlotsLoading}
+              onChange={(e) => {
+                const v = e.target.value;
+                setLockerSelectedSlotId(v);
+                if (!v) return;
+                const slot = lockerSlots.find((s) => s.id === v);
+                if (slot) setLockerLocation(composeSlotCustomerLocation(slot));
+              }}
+            >
+              <option value="">{lockerSlotsLoading ? "Loading slots…" : "— Custom location only —"}</option>
+              {lockerSlots.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.machine_name} · {s.slot_label}
+                </option>
+              ))}
+            </select>
             <label className="mt-3 block text-xs font-semibold text-honey-muted">Location / machine details</label>
             <textarea
               className="mt-1 min-h-[88px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
@@ -1396,6 +1507,89 @@ function OrdersSection({
                 onClick={() => void submitIssueLocker()}
               >
                 {actionLoading?.endsWith("issue-locker") ? "Issuing…" : "Issue & notify customer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {approveParcelModalId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            onClick={() => (actionLoading === null ? setApproveParcelModalId(null) : undefined)}
+            aria-label="Close"
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-honey-border bg-surface p-6 shadow-2xl dark:bg-surface-dark">
+            <h2 className="font-display text-lg tracking-wide text-honey-text">Approve payment &amp; assign locker</h2>
+            <p className="mt-2 text-xs text-honey-muted">
+              Stock is deducted now. The customer receives machine location and passcode immediately.
+            </p>
+            <label className="mt-4 block text-xs font-semibold text-honey-muted">Saved slot (optional)</label>
+            <select
+              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              value={apSelectedSlotId}
+              disabled={apSlotsLoading}
+              onChange={(e) => {
+                const v = e.target.value;
+                setApSelectedSlotId(v);
+                if (!v) return;
+                const slot = apSlots.find((s) => s.id === v);
+                if (slot) setApLockerLocation(composeSlotCustomerLocation(slot));
+              }}
+            >
+              <option value="">{apSlotsLoading ? "Loading slots…" : "— Custom location only —"}</option>
+              {apSlots.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.machine_name} · {s.slot_label}
+                </option>
+              ))}
+            </select>
+            <label className="mt-3 block text-xs font-semibold text-honey-muted">Network</label>
+            <select
+              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              value={apLockerProvider}
+              onChange={(e) => setApLockerProvider(e.target.value)}
+            >
+              {LOCKER_PROVIDER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <label className="mt-3 block text-xs font-semibold text-honey-muted">Location / machine details</label>
+            <textarea
+              className="mt-1 min-h-[88px] w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              placeholder="Machine name, address, or map link"
+              value={apLockerLocation}
+              onChange={(e) => setApLockerLocation(e.target.value)}
+            />
+            <label className="mt-3 block text-xs font-semibold text-honey-muted">Locker passcode</label>
+            <input
+              type="text"
+              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm font-mono"
+              autoComplete="off"
+              value={apLockerPasscode}
+              onChange={(e) => setApLockerPasscode(e.target.value)}
+            />
+            {apError ? <p className="mt-2 text-xs font-medium text-red-600">{apError}</p> : null}
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={actionLoading !== null}
+                className="rounded-xl border border-honey-border px-4 py-2 text-sm font-semibold text-honey-text hover:bg-honey-border/30 disabled:opacity-50"
+                onClick={() => setApproveParcelModalId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading !== null}
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-light disabled:opacity-50"
+                onClick={() => void submitApproveParcelModal()}
+              >
+                {actionLoading?.endsWith("confirm") ? "Working…" : "Approve & notify customer"}
               </button>
             </div>
           </div>

@@ -87,6 +87,17 @@ export interface Announcement {
   created_at: string;
 }
 
+/** Admin-managed parcel machine compartment; used when approving orders or issuing lockers. */
+export interface ParcelMachineSlot {
+  id: string;
+  machine_name: string;
+  slot_label: string;
+  location_text: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface DeadDropRow {
   id: string;
   name: string;

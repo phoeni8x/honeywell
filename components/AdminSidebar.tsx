@@ -13,6 +13,7 @@ import {
   ShoppingCart,
   Ticket,
   Users,
+  Warehouse,
 } from "lucide-react";
 import { ADMIN_BASE_PATH } from "@/lib/constants";
 import Link from "next/link";
@@ -24,6 +25,12 @@ const tabs = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, href: `${ADMIN_BASE_PATH}?tab=overview` },
   { id: "products", label: "Products", icon: Package, href: `${ADMIN_BASE_PATH}?tab=products` },
   { id: "orders", label: "Orders", icon: ShoppingCart, href: `${ADMIN_BASE_PATH}?tab=orders` },
+  {
+    id: "parcel-machines",
+    label: "Parcel machines",
+    icon: Warehouse,
+    href: `${ADMIN_BASE_PATH}?tab=parcel-machines`,
+  },
   { id: "locations", label: "Locations", icon: MapPin, href: `${ADMIN_BASE_PATH}?tab=locations` },
   { id: "tickets", label: "Location stock", icon: Ticket, href: `${ADMIN_BASE_PATH}?tab=tickets` },
   { id: "customers", label: "Customers", icon: Users, href: `${ADMIN_BASE_PATH}/customers` },
