@@ -1326,6 +1326,7 @@ function OrdersSection({
           }
         }}
         onBookingRejected={rejectOrderApi}
+        onRefresh={onRefresh}
       />
       <div className="flex flex-wrap gap-2">
         <button

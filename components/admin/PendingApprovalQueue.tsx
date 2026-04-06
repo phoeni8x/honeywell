@@ -19,6 +19,8 @@ export type ApproveIssueLockerBody = {
 
 type OrderRow = Order & { product?: Product | null };
 
+type BulkClearQueueKind = "payment_pending" | "booking";
+
 function isBookingRequest(o: OrderRow): boolean {
   return o.status === "pre_ordered" && o.payment_method === "booking";
 }
@@ -30,6 +32,7 @@ export function PendingApprovalQueue({
   onRejected,
   onBookingAccepted,
   onBookingRejected,
+  onRefresh,
 }: {
   orders: OrderRow[];
   shopCurrency: ShopCurrency;
@@ -37,6 +40,7 @@ export function PendingApprovalQueue({
   onRejected: (id: string, reason: string) => Promise<void>;
   onBookingAccepted: (id: string) => Promise<void>;
   onBookingRejected: (id: string, reason: string) => Promise<void>;
+  onRefresh?: () => void;
 }) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
@@ -52,6 +56,9 @@ export function PendingApprovalQueue({
   const [parcelSlotsLoading, setParcelSlotsLoading] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState<string>("");
   const [approveParcelError, setApproveParcelError] = useState<string | null>(null);
+  const [bulkClearKind, setBulkClearKind] = useState<BulkClearQueueKind | null>(null);
+  const [bulkClearReason, setBulkClearReason] = useState("");
+  const [bulkToast, setBulkToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   const pending = orders
     .filter((o) => o.status === "payment_pending")
@@ -174,6 +181,39 @@ export function PendingApprovalQueue({
     }
   }, [bookingRejectId, bookingRejectReason, onBookingRejected]);
 
+  const submitBulkClear = useCallback(async () => {
+    if (!bulkClearKind) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/orders/clear-queue", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: bulkClearKind, reason: bulkClearReason.trim() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; cleared?: number };
+      if (!res.ok) {
+        setBulkToast({ msg: data.error ?? PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, ok: false });
+        window.setTimeout(() => setBulkToast(null), 4000);
+        return;
+      }
+      const n = typeof data.cleared === "number" ? data.cleared : 0;
+      setBulkToast({
+        msg: n === 0 ? "No orders in that queue anymore." : `Cancelled ${n} order(s) — customers notified ✓`,
+        ok: true,
+      });
+      window.setTimeout(() => setBulkToast(null), 4000);
+      setBulkClearKind(null);
+      setBulkClearReason("");
+      onRefresh?.();
+    } catch {
+      setBulkToast({ msg: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, ok: false });
+      window.setTimeout(() => setBulkToast(null), 4000);
+    } finally {
+      setBusy(false);
+    }
+  }, [bulkClearKind, bulkClearReason, onRefresh]);
+
   if (pending.length === 0 && bookings.length === 0) return null;
 
   function orderCard(o: OrderRow, variant: "payment" | "booking") {
@@ -256,6 +296,16 @@ export function PendingApprovalQueue({
 
   return (
     <>
+      {bulkToast && (
+        <div
+          className={clsx(
+            "fixed right-4 top-4 z-[60] rounded-xl px-5 py-3 text-sm font-semibold shadow-xl",
+            bulkToast.ok ? "bg-green-600 text-white" : "bg-red-600 text-white"
+          )}
+        >
+          {bulkToast.msg}
+        </div>
+      )}
       {pending.length > 0 && (
         <div className="mb-8 rounded-2xl border-2 border-amber-500/60 bg-amber-500/5 p-4 dark:border-amber-400/50">
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -264,6 +314,17 @@ export function PendingApprovalQueue({
             </span>
             <h2 className="font-display text-lg font-semibold text-amber-800 dark:text-amber-300">Pending payment</h2>
             <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-bold text-white">{pending.length}</span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setBulkClearKind("payment_pending");
+                setBulkClearReason("");
+              }}
+              className="ml-auto rounded-lg border border-red-600/80 bg-red-600/10 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-600/20 disabled:opacity-50 dark:text-red-300"
+            >
+              Cancel all ({pending.length})
+            </button>
             <p className="w-full text-xs text-honey-muted">
               Approve after you verify payment. Stock is deducted when you confirm. Oldest first.
             </p>
@@ -280,12 +341,79 @@ export function PendingApprovalQueue({
             </span>
             <h2 className="font-display text-lg font-semibold text-sky-900 dark:text-sky-200">Booking requests</h2>
             <span className="rounded-full bg-sky-600 px-2.5 py-0.5 text-xs font-bold text-white">{bookings.length}</span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setBulkClearKind("booking");
+                setBulkClearReason("");
+              }}
+              className="ml-auto rounded-lg border border-red-600/80 bg-red-600/10 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-600/20 disabled:opacity-50 dark:text-red-300"
+            >
+              Decline all ({bookings.length})
+            </button>
             <p className="w-full text-xs text-honey-muted">
               Customers submitted these while parcel locker checkout was off — no payment yet. Accept to confirm the order
               (then arrange payment / pickup), or reject with an optional reason.
             </p>
           </div>
           <ul className="space-y-3">{bookings.map((o) => orderCard(o, "booking"))}</ul>
+        </div>
+      )}
+
+      {bulkClearKind && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog">
+          <div className="w-full max-w-md rounded-2xl border border-honey-border bg-surface p-6 shadow-xl dark:bg-surface-dark">
+            <RainbowHeading
+              as="h3"
+              text={bulkClearKind === "payment_pending" ? "CANCEL ALL PENDING PAYMENTS?" : "DECLINE ALL BOOKINGS?"}
+              className="text-lg font-display tracking-[0.12em]"
+            />
+            <p className="mt-2 text-sm text-honey-muted">
+              {bulkClearKind === "payment_pending" ? (
+                <>
+                  This will cancel <strong className="text-honey-text">{pending.length}</strong> order(s) with status{" "}
+                  <strong className="text-honey-text">payment pending</strong>. Customers get a push notification. Where
+                  checkout already reduced stock (non-deferred orders), inventory is restored — same rules as cancelling those
+                  rows from the order table.
+                </>
+              ) : (
+                <>
+                  This will decline <strong className="text-honey-text">{bookings.length}</strong> booking request(s). No
+                  stock was held for these. Customers get a push notification.
+                </>
+              )}
+            </p>
+            <label className="mt-4 block text-xs font-semibold text-honey-muted">Reason (optional, sent to customers)</label>
+            <textarea
+              className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+              rows={3}
+              value={bulkClearReason}
+              onChange={(e) => setBulkClearReason(e.target.value)}
+              placeholder="Optional message shown in the notification."
+            />
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-honey-border px-4 py-2 text-sm"
+                disabled={busy}
+                onClick={() => {
+                  setBulkClearKind(null);
+                  setBulkClearReason("");
+                }}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                disabled={busy}
+                onClick={() => void submitBulkClear()}
+              >
+                {busy ? "…" : bulkClearKind === "payment_pending" ? "Cancel all" : "Decline all"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
