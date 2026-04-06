@@ -19,12 +19,6 @@ export default function SplashPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [botUrl, setBotUrl] = useState<string | null>(null);
 
-  function continueGuest() {
-    localStorage.setItem(LS_USER_TYPE, "guest");
-    localStorage.removeItem(LS_TELEGRAM_USERNAME);
-    router.push("/home");
-  }
-
   async function verifyTeam() {
     setError(null);
     setInfo(null);
@@ -106,8 +100,11 @@ export default function SplashPage() {
         <p className="mt-5 max-w-md text-balance bg-gradient-to-r from-pink-300 via-amber-200 to-cyan-300 bg-clip-text font-body text-lg italic text-transparent md:text-xl">
           Welcome to our magical well
         </p>
+        <p className="mt-4 max-w-sm text-center text-sm text-honey-muted">
+          Telegram verification is required to enter the shop. Guest checkout is paused for now.
+        </p>
 
-        <div className="mt-12 flex w-full max-w-sm flex-col gap-4">
+        <div className="mt-10 flex w-full max-w-sm flex-col gap-4">
           <button
             type="button"
             data-testid="open-vip-modal"
@@ -120,14 +117,6 @@ export default function SplashPage() {
             className="w-full rounded border-2 border-blue-900 bg-blue-500 py-3 font-body font-semibold text-white shadow-[3px_3px_0_#1e3a8a] transition-all duration-200 hover:-translate-x-px hover:-translate-y-px hover:bg-blue-400 hover:shadow-[4px_4px_0_#1e3a8a] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#1e3a8a] dark:shadow-[0_0_24px_rgba(59,130,246,0.4)]"
           >
             I&apos;m a VIP
-          </button>
-          <button
-            type="button"
-            data-testid="continue-as-guest"
-            onClick={continueGuest}
-            className="w-full rounded border-2 border-red-950 bg-red-600 py-3 font-body font-semibold text-white shadow-[3px_3px_0_#7f1d1d] transition-all duration-200 hover:-translate-x-px hover:-translate-y-px hover:bg-red-500 hover:shadow-[4px_4px_0_#7f1d1d] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#7f1d1d] dark:shadow-[0_0_20px_rgba(239,68,68,0.35)]"
-          >
-            Continue as Guest
           </button>
         </div>
       </div>
@@ -206,12 +195,9 @@ export default function SplashPage() {
               </button>
             </div>
             <p className="mt-4 text-center text-sm text-honey-muted">
-              Not verified?{" "}
-              <Link
-                href="/not-a-member"
-                className="font-semibold text-red-500 underline-offset-2 hover:text-red-400 hover:underline"
-              >
-                Continue as guest
+              Not in the channel yet?{" "}
+              <Link href="/not-a-member" className="font-semibold text-primary underline-offset-2 hover:underline">
+                See options
               </Link>
             </p>
           </div>

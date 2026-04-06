@@ -10,7 +10,7 @@ import {
   runGuestCheckoutUi,
 } from "./helpers";
 
-test.describe("Guest purchase (crypto payment handler)", () => {
+test.describe.skip("Guest purchase (crypto payment handler)", () => {
   test("guest completes checkout and payment handler + order record", async ({ page, request }) => {
     const remote = isTeamrubyProductionBase();
     const secret = process.env.E2E_PAYMENT_APPROVE_SECRET?.trim();

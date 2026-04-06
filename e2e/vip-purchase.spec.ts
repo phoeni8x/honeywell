@@ -72,10 +72,11 @@ test.describe("VIP purchase (rehllic / team_member)", () => {
     await ctxVip.close();
 
     const ctxGuest = await browser.newContext();
+    await ctxGuest.addInitScript(([utKey, utVal]) => localStorage.setItem(utKey, utVal), [
+      "honeywell_user_type",
+      "guest",
+    ] as const);
     const guestPage = await ctxGuest.newPage();
-    await guestPage.goto(`${base}/`);
-    await guestPage.getByTestId("continue-as-guest").or(guestPage.getByRole("button", { name: /Continue as Guest/i })).click();
-    await guestPage.waitForURL(/\/home/);
     await guestPage.goto(`${base}/product/${productId}`);
     const guestPrice = (
       await guestPage.getByTestId("product-display-price").or(guestPage.locator(".price")).first().innerText()

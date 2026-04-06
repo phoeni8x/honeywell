@@ -17,10 +17,6 @@ export async function discoverFirstProductId(page: Page): Promise<string> {
   return m[1];
 }
 
-function continueAsGuestBtn(page: Page) {
-  return page.getByTestId("continue-as-guest").or(page.getByRole("button", { name: /Continue as Guest/i }));
-}
-
 function proceedCheckoutBtn(page: Page) {
   return page.getByTestId("proceed-to-checkout").or(page.getByRole("button", { name: /Proceed to checkout/i }));
 }
@@ -93,11 +89,13 @@ export async function assertOrderNoLongerPending(
   expect(progressed).toContain(st);
 }
 
-/** Guest path: splash → Continue as Guest → product checkout. */
+/** Guest path: seed guest tier (splash no longer offers guest — same as browser-only guest state). */
 export async function runGuestCheckoutUi(page: Page, productId: string) {
   await page.goto("/");
-  await continueAsGuestBtn(page).click();
-  await page.waitForURL(/\/home/);
+  await page.evaluate(() => {
+    localStorage.setItem("honeywell_user_type", "guest");
+    localStorage.removeItem("honeywell_telegram_username");
+  });
   await page.goto(`/product/${productId}`);
   await proceedCheckoutBtn(page).click();
   await checkoutDeadDropContinue(page).click({ timeout: 45_000 });
