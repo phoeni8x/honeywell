@@ -28,12 +28,12 @@ export async function POST(request: Request) {
       const msg = String(rpcErr.message ?? "").toLowerCase();
       if (msg.includes("dead_drop_unavailable")) {
         return NextResponse.json(
-          { error: "No dead drop slot available right now. Add drops or retry.", code: "dead_drop_unavailable" },
+          { error: "No pickup slot available in the legacy pool. Use parcel locker from Orders instead.", code: "dead_drop_unavailable" },
           { status: 400 }
         );
       }
       if (msg.includes("not_awaiting_dead_drop") || msg.includes("not_dead_drop")) {
-        return NextResponse.json({ error: "Order is not ready for dead-drop assignment.", code: "invalid_state" }, { status: 400 });
+        return NextResponse.json({ error: "Order is not ready for legacy slot assignment.", code: "invalid_state" }, { status: 400 });
       }
       console.error("[assign_dead_drop_for_order]", rpcErr);
       return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 400 });
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
         const stock = Number(product?.stock_quantity ?? 0);
         if (stock < qty) {
           return NextResponse.json(
-            { error: "Insufficient stock to confirm dead drop.", code: "insufficient_stock" },
+            { error: "Insufficient stock to confirm this order.", code: "insufficient_stock" },
             { status: 400 }
           );
         }
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     const customerToken = order?.customer_token as string | undefined;
     if (customerToken) {
       void notifyCustomerPush(customerToken, {
-        title: "Dead drop ready",
+        title: "Pickup location ready",
         body: "Open your order for photos, map link, and coordinates.",
         url: `/account/orders/${orderId}/track`,
         tag: `order-${orderId}-drop`,

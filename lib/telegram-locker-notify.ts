@@ -28,7 +28,7 @@ export async function resolveCustomerTelegramChatId(
   return null;
 }
 
-/** Best-effort Telegram DM when a parcel locker is issued (same bot as legacy dead-drop DMs). */
+/** Best-effort Telegram DM when a parcel locker is issued. */
 export async function notifyCustomerLockerViaTelegram(opts: {
   svc: SupabaseClient;
   orderNumber: string;

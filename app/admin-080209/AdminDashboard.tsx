@@ -7,7 +7,7 @@ import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { parseFulfillmentOptionEnabled } from "@/lib/fulfillment-settings";
 import { parseShopOpen } from "@/lib/shop-open";
 import { parseSupportEnabled } from "@/lib/support-settings";
-import { adminOrderPaymentLabel, formatPrice, ORDER_STATUS_LABELS, truncateToken } from "@/lib/helpers";
+import { adminOrderPaymentLabel, formatPrice, fulfillmentTypeDisplay, ORDER_STATUS_LABELS, truncateToken } from "@/lib/helpers";
 import { LOCKER_PROVIDER_OPTIONS } from "@/lib/parcel-locker";
 import { PendingApprovalQueue } from "@/components/admin/PendingApprovalQueue";
 import { useAdminPushNotifications } from "@/hooks/useAdminPushNotifications";
@@ -1063,11 +1063,11 @@ function OrdersSection({
   function fulfillmentActions(o: Order & { product?: Product | null }) {
     const ft = o.fulfillment_type;
     const isDelivery = ft === "delivery";
-    const isDeadDrop = ft === "dead_drop";
+    const isParcelLocker = ft === "dead_drop";
     const isPickup = ft === "pickup";
     const legacyNoFt = ft == null || ft === "";
-    /** Collection proof (photo) — dead drop and legacy orders without pickup/delivery type only */
-    const canCollectProofFlow = (isDeadDrop || legacyNoFt) && !isPickup && !isDelivery;
+    /** Collection proof (photo) — parcel locker orders and legacy rows without pickup/delivery */
+    const canCollectProofFlow = (isParcelLocker || legacyNoFt) && !isPickup && !isDelivery;
 
     return (
       <>
@@ -1118,14 +1118,14 @@ function OrdersSection({
           </>
         )}
 
-        {isDeadDrop && o.status === "confirmed" && (
+        {isParcelLocker && o.status === "confirmed" && (
           <button
             type="button"
             disabled={actionLoading !== null}
             className="text-left text-xs text-primary hover:underline disabled:opacity-50"
             onClick={() => setStatus(o.id, "ready_at_drop")}
           >
-            Ready at drop
+            Ready at locker
           </button>
         )}
 
@@ -1287,7 +1287,7 @@ function OrdersSection({
                   {o.customer_username ? `@${o.customer_username}` : "—"}
                 </td>
                 <td className="p-2 text-xs">
-                  {o.fulfillment_type ?? "—"}
+                  {fulfillmentTypeDisplay(o.fulfillment_type)}
                   {o.payment_method === "booking" && o.status === "pre_ordered" && (
                     <span className="mt-1 block text-[10px] font-semibold uppercase text-sky-700 dark:text-sky-300">
                       booking · no payment
@@ -1894,9 +1894,8 @@ function SettingsSection({
       <div>
         <label className="text-xs font-semibold text-honey-muted">Parcel locker checkout</label>
         <p className="mt-1 text-xs text-honey-muted">
-          When enabled, customers pay at checkout and you issue locker location + passcode after payment.
+          When enabled, customers pay at checkout and you issue parcel machine location + passcode after payment.
           When disabled, customers can submit a booking request (no payment) — accept or decline in Pending approval.
-          Legacy &quot;Dead drops&quot; pool is optional for old orders only.
         </p>
         <div className="mt-3">
           <div className="flex items-center gap-2">

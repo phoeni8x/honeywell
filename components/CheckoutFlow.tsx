@@ -80,7 +80,7 @@ export function CheckoutFlow({
     );
   }
 
-  const bookingMode = !fulfillmentOptions.deadDrop;
+  const bookingMode = !fulfillmentOptions.parcelLockerCheckout;
 
   function paymentMethodForSubmit(): string {
     if (bookingMode) return "booking";
@@ -258,7 +258,7 @@ export function CheckoutFlow({
             </div>
             <button
               type="button"
-              data-testid="checkout-dead-drop-continue"
+              data-testid="checkout-parcel-locker-continue"
               onClick={() => setStep(2)}
               className="w-full rounded-full bg-primary py-3 text-sm font-semibold text-white"
             >

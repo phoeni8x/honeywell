@@ -2,6 +2,7 @@ export type UserType = "team_member" | "guest";
 
 export type ProductCategory = string;
 
+/** DB value `dead_drop` = parcel locker checkout path (historical name). */
 export type FulfillmentType = "dead_drop" | "pickup" | "delivery";
 
 export type OrderStatus =
@@ -72,7 +73,7 @@ export interface Order {
   defer_stock_until_approval?: boolean | null;
   rejection_reason?: string | null;
   points_earned?: number | null;
-  /** Parcel locker path — issued by admin when status leaves awaiting_dead_drop. */
+  /** Parcel machine details — issued by admin after payment (status flow uses `awaiting_dead_drop`). */
   locker_provider?: string | null;
   locker_location_text?: string | null;
   locker_passcode?: string | null;

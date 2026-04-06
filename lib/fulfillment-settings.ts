@@ -8,7 +8,7 @@ export function parseFulfillmentOptionEnabled(raw: string | undefined | null): b
 }
 
 /**
- * Parcel locker / dead-drop checkout toggle from `settings.fulfillment_dead_drop_enabled`.
+ * Parcel locker checkout toggle from `settings.fulfillment_dead_drop_enabled` (historical key name).
  * Set `FORCE_FULFILLMENT_DEAD_DROP_ENABLED=true` on the server to allow checkout even when the DB flag is off (testing / emergency).
  */
 export function isFulfillmentDeadDropCheckoutEnabled(raw: string | undefined | null): boolean {

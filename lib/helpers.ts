@@ -47,14 +47,23 @@ export function adminOrderPaymentLabel(method: string | null | undefined): strin
   return method?.trim() || "—";
 }
 
+/** Customer + admin tables: human-readable fulfillment (DB may still use `dead_drop`). */
+export function fulfillmentTypeDisplay(ft: string | null | undefined): string {
+  const f = String(ft ?? "").trim();
+  if (f === "dead_drop") return "Parcel locker";
+  if (f === "pickup") return "Pickup (legacy)";
+  if (f === "delivery") return "Delivery (legacy)";
+  return f ? f.replace(/_/g, " ") : "—";
+}
+
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   payment_pending: "Awaiting Payment",
-  awaiting_dead_drop: "Payment OK — assign drop",
+  awaiting_dead_drop: "Payment OK — issue locker",
   pre_ordered: "Pre-Ordered",
   payment_expired: "Payment Expired",
   waiting: "Waiting",
   confirmed: "Order Confirmed",
-  ready_at_drop: "Ready at Drop Point",
+  ready_at_drop: "Ready at parcel machine",
   ready_for_pickup: "Ready for Pickup",
   out_for_delivery: "Out for Delivery",
   customer_arrived: "Arrived at Location",

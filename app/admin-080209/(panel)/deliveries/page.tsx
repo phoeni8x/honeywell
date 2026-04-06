@@ -1,6 +1,7 @@
+import { ADMIN_BASE_PATH } from "@/lib/constants";
 import { redirect } from "next/navigation";
 
-/** Delivery queue removed — all orders use dead drop. */
+/** Legacy route — use Orders. */
 export default function AdminDeliveriesRedirectPage() {
-  redirect("/admin-080209/dead-drops");
+  redirect(`${ADMIN_BASE_PATH}?tab=orders`);
 }

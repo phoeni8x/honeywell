@@ -7,7 +7,7 @@ type OrderRow = Record<string, unknown> & {
 };
 
 /**
- * Load orders + product / dead_drop / pickup_location without PostgREST embeds
+ * Load orders + product / legacy pickup row / pickup_location without PostgREST embeds
  * (avoids ambiguous FK hints and works across schema tweaks).
  */
 export async function enrichOrdersForCustomer(

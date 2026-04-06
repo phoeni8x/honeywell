@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       }
       if (msg.includes("dead_drop_already_assigned")) {
         return NextResponse.json(
-          { error: "This order already has a legacy dead-drop slot assigned.", code: "already_assigned" },
+          { error: "This order already has a pickup location assigned in the system.", code: "already_assigned" },
           { status: 400 }
         );
       }

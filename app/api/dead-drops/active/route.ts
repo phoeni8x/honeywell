@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-/** Public: dead-drop availability only (no location details). */
+/** Public: legacy pickup pool availability only (no location details). Parcel lockers use admin-issued details on orders. */
 export async function GET() {
   try {
     const supabase = createServiceClient();

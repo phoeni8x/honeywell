@@ -29,8 +29,11 @@ export function mapsSearchUrlApple(query: string): string {
   return `https://maps.apple.com/?q=${encodeURIComponent(query.trim())}`;
 }
 
-/** Confirmed dead-drop order with either legacy pool slot or new parcel locker details. */
-export function isDeadDropFulfillmentLocationIssued(order: {
+/**
+ * Confirmed parcel-locker order where pickup details are already fixed (admin-issued locker or legacy DB slot).
+ * Used to block customer cancel once a location is committed.
+ */
+export function isParcelLockerPickupIssued(order: {
   fulfillment_type?: string | null;
   status?: string;
   dead_drop_id?: string | null;

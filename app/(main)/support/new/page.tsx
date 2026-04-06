@@ -163,7 +163,7 @@ function SupportNewForm() {
         >
           <option value="order">Order</option>
           <option value="payment">Payment</option>
-          <option value="fulfillment">Fulfillment / dead drop</option>
+          <option value="fulfillment">Fulfillment / parcel locker</option>
           <option value="product">Product</option>
           <option value="other">Other</option>
         </select>

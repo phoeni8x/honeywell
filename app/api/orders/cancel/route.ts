@@ -1,5 +1,5 @@
 import { getCustomerTokenFromRequest } from "@/lib/customer-request";
-import { isDeadDropFulfillmentLocationIssued } from "@/lib/parcel-locker";
+import { isParcelLockerPickupIssued } from "@/lib/parcel-locker";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     }
 
     // Dead-drop / parcel locker: once location or locker details are issued, block customer cancellation.
-    if (isDeadDropFulfillmentLocationIssued(order)) {
+    if (isParcelLockerPickupIssued(order)) {
       return NextResponse.json(
         { error: "This order cannot be cancelled after pickup location or locker details are issued." },
         { status: 403 }

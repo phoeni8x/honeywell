@@ -194,7 +194,7 @@ export function PendingApprovalQueue({
             <h2 className="font-display text-lg font-semibold text-amber-800 dark:text-amber-300">Pending payment</h2>
             <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-bold text-white">{pending.length}</span>
             <p className="w-full text-xs text-honey-muted">
-              Approve after you verify payment. Stock is deducted when you confirm (dead-drop flow). Oldest first.
+              Approve after you verify payment. Stock is deducted when you confirm. Oldest first.
             </p>
           </div>
           <ul className="space-y-3">{pending.map((o) => orderCard(o, "payment"))}</ul>

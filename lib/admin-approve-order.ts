@@ -20,8 +20,8 @@ export type AdminApproveFailure = {
 };
 
 /**
- * Admin approves `payment_pending`: non–dead-drop deducts product stock here; dead_drop (no slot yet)
- * deducts stock and assigns a free dead drop in one DB transaction via `confirm_dead_drop_payment_and_assign`.
+ * Admin approves `payment_pending`: non–parcel-locker paths deduct product stock here; parcel-locker path (`dead_drop`)
+ * deducts stock and advances status via `confirm_dead_drop_payment_and_assign` (DB RPC name).
  */
 export async function executeAdminApproveOrder(orderId: string): Promise<AdminApproveSuccess | AdminApproveFailure> {
   const svc = createServiceClient();
@@ -78,7 +78,7 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
     await svc.from("orders").update({ defer_stock_until_approval: false }).eq("id", orderId);
   }
 
-  // Dead drop: payment approval deducts stock in DB and sets awaiting_dead_drop; admin issues parcel locker in dashboard.
+  // Parcel locker checkout: payment approval deducts stock and sets awaiting_dead_drop; admin issues machine details in dashboard.
   if (order.fulfillment_type === "dead_drop") {
     if (!order.dead_drop_id) {
       const { error: rpcErr } = await svc.rpc("confirm_dead_drop_payment_and_assign", {
@@ -154,7 +154,7 @@ export async function executeAdminApproveOrder(orderId: string): Promise<AdminAp
     try {
       await maybeDeductDeadDropStockIfConfirmed();
     } catch (e) {
-      return { success: false, error: "Dead drop stock deduction failed.", status: 400 };
+      return { success: false, error: "Could not confirm payment and update stock.", status: 400 };
     }
 
     const customerToken = order.customer_token as string | undefined;

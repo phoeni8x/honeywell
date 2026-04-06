@@ -6,7 +6,8 @@ import { parseShopOpen } from "@/lib/shop-open";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export type FulfillmentOptions = {
-  deadDrop: boolean;
+  /** True when parcel locker checkout is enabled (`fulfillment_dead_drop_enabled` in settings). */
+  parcelLockerCheckout: boolean;
   pickup: boolean;
   delivery: boolean;
 };
@@ -25,7 +26,7 @@ export function ShopCurrencyProvider({ children }: { children: React.ReactNode }
   const [currency, setCurrency] = useState<ShopCurrency>("HUF");
   const [shopOpen, setShopOpen] = useState(true);
   const [fulfillmentOptions, setFulfillmentOptions] = useState<FulfillmentOptions>({
-    deadDrop: true,
+    parcelLockerCheckout: true,
     pickup: false,
     delivery: false,
   });
@@ -44,7 +45,7 @@ export function ShopCurrencyProvider({ children }: { children: React.ReactNode }
         }
         if (data && typeof data === "object") {
           setFulfillmentOptions({
-            deadDrop: parseFulfillmentOptionEnabled(data.fulfillment_dead_drop_enabled),
+            parcelLockerCheckout: parseFulfillmentOptionEnabled(data.fulfillment_dead_drop_enabled),
             pickup: parseFulfillmentOptionEnabled(data.fulfillment_pickup_enabled),
             delivery: parseFulfillmentOptionEnabled(data.fulfillment_delivery_enabled),
           });
@@ -75,7 +76,7 @@ export function useShopCurrency(): ShopCurrencyContextValue {
     return {
       currency: "HUF",
       shopOpen: true,
-      fulfillmentOptions: { deadDrop: true, pickup: false, delivery: false },
+      fulfillmentOptions: { parcelLockerCheckout: true, pickup: false, delivery: false },
       formatPrice: (n: number) => formatPriceAmount(n, "HUF"),
       refresh: () => {},
     };

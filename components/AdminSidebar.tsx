@@ -11,7 +11,6 @@ import {
   Package,
   Settings,
   ShoppingCart,
-  Skull,
   Ticket,
   Users,
 } from "lucide-react";
@@ -31,8 +30,6 @@ const tabs = [
   { id: "announcements", label: "Announcements", icon: Megaphone, href: `${ADMIN_BASE_PATH}?tab=announcements` },
   { id: "settings", label: "Settings", icon: Settings, href: `${ADMIN_BASE_PATH}?tab=settings` },
 ] as const;
-
-const part4 = [{ label: "Dead drops", href: `${ADMIN_BASE_PATH}/dead-drops`, icon: Skull }] as const;
 
 export function AdminSidebar({ className, onNavigate }: { className?: string; onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -102,36 +99,6 @@ export function AdminSidebar({ className, onNavigate }: { className?: string; on
                   {pendingOrders > 99 ? "99+" : pendingOrders}
                 </span>
               ) : null}
-            </span>
-          </Link>
-        );
-      })}
-      <RainbowHeading
-        as="p"
-        text="FULFILLMENT"
-        className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide"
-      />
-      {part4.map(({ label, href, icon: Icon }) => {
-        const active = pathname === href;
-        return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            className={clsx(
-              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition",
-              active
-                ? "bg-gradient-to-r from-fuchsia-500/15 via-amber-400/15 to-cyan-500/15 text-honey-text"
-                : "text-honey-muted hover:bg-honey-border/40 hover:text-honey-text"
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            <span
-              className={clsx(
-                active && "bg-gradient-to-r from-fuchsia-400 via-amber-300 to-cyan-400 bg-clip-text text-transparent"
-              )}
-            >
-              {label}
             </span>
           </Link>
         );

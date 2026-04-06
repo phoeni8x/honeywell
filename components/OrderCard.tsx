@@ -2,11 +2,11 @@
 
 import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
-import { ORDER_STATUS_LABELS } from "@/lib/helpers";
+import { fulfillmentTypeDisplay, ORDER_STATUS_LABELS } from "@/lib/helpers";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import {
   extractFirstHttpUrl,
-  isDeadDropFulfillmentLocationIssued,
+  isParcelLockerPickupIssued,
   lockerProviderDisplayLabel,
   mapsSearchUrlApple,
   mapsSearchUrlGoogle,
@@ -32,7 +32,7 @@ interface OrderCardProps {
 }
 
 function canCustomerCancelOrder(order: OrderWithProduct): boolean {
-  if (isDeadDropFulfillmentLocationIssued(order)) return false;
+  if (isParcelLockerPickupIssued(order)) return false;
 
   const payAfterDelivery =
     (order as { pay_after_delivery?: boolean }).pay_after_delivery === true ||
@@ -81,9 +81,9 @@ export function OrderCard({
     displayAddress,
     googleUrl,
     appleUrl,
-    deadDropPhotos,
-    deadDropVideoUrl,
-    deadDropFindInstructions,
+    legacyLocationPhotos,
+    legacyLocationVideoUrl,
+    legacyLocationFindInstructions,
   } = useMemo(() => {
     const locText = order.locker_location_text?.trim() ?? "";
     const pass = order.locker_passcode?.trim() ?? "";
@@ -100,9 +100,9 @@ export function OrderCard({
         displayAddress: locText,
         googleUrl: g,
         appleUrl: a,
-        deadDropPhotos: [] as string[],
-        deadDropVideoUrl: null,
-        deadDropFindInstructions: null,
+        legacyLocationPhotos: [] as string[],
+        legacyLocationVideoUrl: null,
+        legacyLocationFindInstructions: null,
       };
     }
     if (order.fulfillment_type === "dead_drop" && order.dead_drop) {
@@ -115,9 +115,9 @@ export function OrderCard({
         displayAddress: dd.name,
         googleUrl: dd.google_maps_url ?? mapsUrl,
         appleUrl: dd.apple_maps_url ?? appleMapsUrl,
-        deadDropPhotos: photos,
-        deadDropVideoUrl: dd.location_video_url ?? null,
-        deadDropFindInstructions: dd.instructions ?? null,
+        legacyLocationPhotos: photos,
+        legacyLocationVideoUrl: dd.location_video_url ?? null,
+        legacyLocationFindInstructions: dd.instructions ?? null,
       };
     }
     if (order.fulfillment_type === "pickup" && order.pickup_location) {
@@ -126,9 +126,9 @@ export function OrderCard({
         displayAddress: order.pickup_location.name + (order.pickup_location.admin_message ? ` — ${order.pickup_location.admin_message}` : ""),
         googleUrl: order.pickup_location.google_maps_url ?? mapsUrl,
         appleUrl: order.pickup_location.apple_maps_url ?? appleMapsUrl,
-        deadDropPhotos: [] as string[],
-        deadDropVideoUrl: null,
-        deadDropFindInstructions: null,
+        legacyLocationPhotos: [] as string[],
+        legacyLocationVideoUrl: null,
+        legacyLocationFindInstructions: null,
       };
     }
     return {
@@ -136,9 +136,9 @@ export function OrderCard({
       displayAddress: shopAddress,
       googleUrl: mapsUrl,
       appleUrl: appleMapsUrl,
-      deadDropPhotos: [] as string[],
-      deadDropVideoUrl: null,
-      deadDropFindInstructions: null,
+      legacyLocationPhotos: [] as string[],
+      legacyLocationVideoUrl: null,
+      legacyLocationFindInstructions: null,
     };
   }, [order, shopAddress, mapsUrl, appleMapsUrl]);
 
@@ -310,7 +310,7 @@ export function OrderCard({
               )}
             {order.fulfillment_type && (
               <p className="mt-1 text-xs uppercase tracking-wide text-primary">
-                {order.fulfillment_type.replace(/_/g, " ")}
+                {fulfillmentTypeDisplay(order.fulfillment_type)}
               </p>
             )}
             <p className="mt-1 text-sm text-honey-muted">Total {formatPrice(Number(order.total_price))}</p>
@@ -459,25 +459,25 @@ export function OrderCard({
                 <span>{displayAddress}</span>
               </p>
             )}
-            {order.fulfillment_type === "dead_drop" && deadDropFindInstructions && (
+            {order.fulfillment_type === "dead_drop" && legacyLocationFindInstructions && (
               <p className="mb-3 rounded-xl border border-green-500/40 bg-green-500/10 px-3 py-2 text-xs text-green-900 dark:text-green-100">
                 <span className="mr-1 font-semibold">Find:</span>
-                {deadDropFindInstructions}
+                {legacyLocationFindInstructions}
               </p>
             )}
-            {order.fulfillment_type === "dead_drop" && deadDropVideoUrl && (
+            {order.fulfillment_type === "dead_drop" && legacyLocationVideoUrl && (
               <div className="mt-3 overflow-hidden rounded-xl border border-honey-border bg-black/20">
                 <video
-                  src={deadDropVideoUrl}
+                  src={legacyLocationVideoUrl}
                   controls
                   preload="metadata"
                   className="max-h-56 w-full object-contain"
                 />
               </div>
             )}
-            {order.fulfillment_type === "dead_drop" && deadDropPhotos.length > 0 && (
+            {order.fulfillment_type === "dead_drop" && legacyLocationPhotos.length > 0 && (
               <div className="mt-3 grid grid-cols-3 gap-2">
-                {deadDropPhotos.map((url, idx) => (
+                {legacyLocationPhotos.map((url, idx) => (
                   <a
                     key={`${url}-${idx}`}
                     href={url}
@@ -486,7 +486,7 @@ export function OrderCard({
                     className="block overflow-hidden rounded-lg border border-honey-border/60 bg-black/20"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt={`Dead drop photo ${idx + 1}`} loading="lazy" className="h-20 w-full object-cover" />
+                    <img src={url} alt={`Pickup location photo ${idx + 1}`} loading="lazy" className="h-20 w-full object-cover" />
                   </a>
                 ))}
               </div>

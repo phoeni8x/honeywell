@@ -47,7 +47,7 @@ export function HomePageInner() {
     },
     {
       title: "4. Collect",
-      body: "When your order is ready, you will receive your dead-drop details here. Follow the instructions from the team.",
+      body: "When your order is ready, you will receive your parcel machine details here. Follow the instructions from the team.",
     },
   ];
 

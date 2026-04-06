@@ -1,5 +1,5 @@
 /**
- * Client-only helpers for admin dead-drop media uploads (Telegram mini app / mobile).
+ * Client-only helpers for admin media uploads (legacy storage paths; Telegram mini app / mobile).
  */
 
 const MAX_EDGE_PX = 1920;

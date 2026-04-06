@@ -22,7 +22,7 @@ function proceedCheckoutBtn(page: Page) {
 }
 
 function checkoutDeadDropContinue(page: Page) {
-  return page.getByTestId("checkout-dead-drop-continue").or(page.getByRole("button", { name: /^Continue$/i }));
+  return page.getByTestId("checkout-parcel-locker-continue").or(page.getByRole("button", { name: /^Continue$/i }));
 }
 
 function checkoutReviewOrder(page: Page) {
