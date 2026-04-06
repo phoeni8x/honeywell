@@ -21,7 +21,12 @@ export type TelegramOrderNotifyParams = {
 export async function notifyTelegramNewOrder(params: TelegramOrderNotifyParams): Promise<void> {
   const botToken = getTelegramAdminBotToken();
   const chatId = process.env.TELEGRAM_ORDER_CHAT_ID?.trim() || process.env.ADMIN_TELEGRAM_USER_ID?.trim();
-  if (!botToken || !chatId) return;
+  if (!botToken || !chatId) {
+    console.warn(
+      "[notifyTelegramNewOrder] skipped: set TELEGRAM_ADMIN_BOT_TOKEN (or TELEGRAM_BOT_TOKEN) and TELEGRAM_ORDER_CHAT_ID or ADMIN_TELEGRAM_USER_ID on the server"
+    );
+    return;
+  }
 
   const username = params.customerUsername ? `@${params.customerUsername.replace(/^@/, "")}` : "N/A";
   const address = params.deliveryAddress?.trim() || "N/A";
@@ -32,7 +37,7 @@ export async function notifyTelegramNewOrder(params: TelegramOrderNotifyParams):
 
   const body = params.bookingWithoutPayment
     ? [
-        "New booking request (parcel locker checkout is off)",
+        "New booking request (parcel locker checkout paused — no payment yet)",
         `1) Customer username: ${username}`,
         `2) Location / notes: ${address}`,
         `3) Quoted total (pay later if accepted): ${amount}`,

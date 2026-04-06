@@ -272,6 +272,12 @@ export async function handleCreateOrder(request: Request) {
         details: err.details,
         hint: err.hint,
         mapped: normalized,
+        ...(normalized === "order_backend_misconfigured"
+          ? {
+              fix:
+                "Apply supabase/migrations/042 and 043 on the Supabase project, then Dashboard → Settings → API → Reload schema (or wait for cache refresh).",
+            }
+          : {}),
       });
       return NextResponse.json(
         { error: userMessage, code: normalized || err.code || "rpc_error" },
@@ -405,7 +411,7 @@ export async function handleCreateOrder(request: Request) {
       customerUsername ??
       resolvedTelegramUsername ??
       null;
-    void notifyTelegramNewOrder({
+    const telegramPayload = {
       orderId,
       customerUsername: usernameForNotify,
       deliveryAddress: (createdOrder?.delivery_address as string | null | undefined) ?? null,
@@ -413,7 +419,12 @@ export async function handleCreateOrder(request: Request) {
       productType: productTypeForNotify,
       paymentReferenceCode: (createdOrder?.payment_reference_code as string | null | undefined) ?? null,
       bookingWithoutPayment: bookingWithoutParcelLocker,
-    });
+    };
+    if (bookingWithoutParcelLocker) {
+      await notifyTelegramNewOrder(telegramPayload);
+    } else {
+      void notifyTelegramNewOrder(telegramPayload);
+    }
 
     const res = NextResponse.json({
       order_id: orderId,
