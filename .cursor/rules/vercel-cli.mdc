@@ -5,6 +5,10 @@ alwaysApply: true
 
 # Vercel — agent must execute
 
+**Project dashboard:** [honeywell on Vercel](https://vercel.com/rubyrobins444-4942s-projects/honeywell) — scope/team slug: `rubyrobins444-4942s-projects`, project name: `honeywell`.
+
+To fix “could not retrieve Project Settings”, log in as the account that owns that team, then from repo root: `rm -rf .vercel && vercel link --scope rubyrobins444-4942s-projects --project honeywell --yes`.
+
 When production needs to reflect code changes or the user asks for deploy verification:
 
 1. **Use the Vercel CLI** from the repo root: `npx vercel deploy --prod --yes` (or `vercel deploy --prod --yes` if installed globally). Prefer **production** deploys for changes that should go live.
