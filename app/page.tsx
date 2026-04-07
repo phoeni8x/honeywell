@@ -36,6 +36,7 @@ export default function SplashPage() {
       const raw = await res.text();
       let data: {
         error?: string;
+        /** Curated hints when verified === false (e.g. not in channel, bot not channel admin). */
         message?: string;
         verified?: boolean;
         needsOpenBot?: boolean;
@@ -71,7 +72,9 @@ export default function SplashPage() {
         router.push("/home");
       } else {
         setBotUrl(null);
-        setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+        // Curated server messages only (see /api/verify-telegram); never show raw API errors.
+        const hint = typeof data.message === "string" && data.message.trim() ? data.message.trim() : null;
+        setError(hint ?? PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
       }
     } catch {
       setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
