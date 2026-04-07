@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/expire-payment-pending",
-      "schedule": "*/10 * * * *"
-    }
-  ]
-}

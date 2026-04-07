@@ -1,0 +1,24 @@
+# Expires unpaid `payment_pending` orders (default 45 min) via production API.
+# Repo secrets: CRON_SECRET (same as Vercel env), APP_URL (e.g. https://www.teamruby.net)
+name: Expire stale payment-pending orders
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  call:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger expiry job
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$APP_URL" ]; then
+            echo "Skip: set CRON_SECRET and APP_URL in repo Actions secrets."
+            exit 0
+          fi
+          curl -sfS -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${APP_URL%/}/api/cron/expire-payment-pending"
