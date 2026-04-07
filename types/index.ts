@@ -35,6 +35,8 @@ export interface Product {
   image_url: string | null;
   is_active: boolean;
   allow_preorder?: boolean;
+  /** Pre-order only: shop_default = follow parcel-locker setting; payment = pay now; booking = request without payment. */
+  preorder_payment_mode?: "shop_default" | "payment" | "booking";
   created_at: string;
 }
 

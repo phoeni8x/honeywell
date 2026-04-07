@@ -7,6 +7,7 @@ import { isCustomerBanned } from "@/lib/customer-moderation";
 import { notifyAdminPush } from "@/lib/push-notify";
 import { sanitizePlainText } from "@/lib/sanitize";
 import { isFulfillmentDeadDropCheckoutEnabled } from "@/lib/fulfillment-settings";
+import { effectivePreorderBookingMode, type PreorderPaymentMode } from "@/lib/preorder-checkout";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { parseShopOpen } from "@/lib/shop-open";
 import { notifyTelegramNewOrder } from "@/lib/telegram-order-notify";
@@ -57,7 +58,8 @@ const ORDER_ERROR_MESSAGE_MAP: Record<string, string> = {
   fulfillment_pickup_delivery_disabled: "Pickup and delivery are no longer available. All orders use parcel lockers.",
   parcel_locker_disabled_use_booking:
     "Parcel pickup is paused. Submit a booking request instead — no payment until the team confirms.",
-  booking_not_when_locker_on: "Booking requests are only available when parcel locker checkout is turned off.",
+  booking_not_when_locker_on:
+    "Booking checkout is not available for this order. Refresh the page and use the payment flow if this is a paid pre-order.",
   preorder_pay_now_required: "Pre-order requires pay-now. Pay-on-delivery is not available.",
   points_min_order_total: "Points can be used only on orders of at least 50,000 HUF.",
   points_insufficient: "You don't have enough points for this order.",
@@ -223,16 +225,43 @@ export async function handleCreateOrder(request: Request) {
     }
 
     const lockerCheckoutEnabled = isFulfillmentDeadDropCheckoutEnabled(settingsMap.fulfillment_dead_drop_enabled);
-    if (bookingWithoutParcelLocker && lockerCheckoutEnabled) {
+
+    const { data: preorderProduct, error: preorderProductErr } = await supabase
+      .from("products")
+      .select("stock_quantity, allow_preorder, preorder_payment_mode")
+      .eq("id", product_id)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (preorderProductErr || !preorderProduct) {
       return NextResponse.json(
-        { error: ORDER_ERROR_MESSAGE_MAP.booking_not_when_locker_on, code: "booking_not_when_locker_on" },
+        { error: ORDER_ERROR_MESSAGE_MAP.product_not_found, code: "product_not_found" },
         { status: 400 }
       );
     }
-    if (!lockerCheckoutEnabled && !bookingWithoutParcelLocker) {
+
+    const mode = (preorderProduct.preorder_payment_mode as PreorderPaymentMode | null) ?? "shop_default";
+    const shouldUseBooking = effectivePreorderBookingMode({
+      parcelLockerCheckout: lockerCheckoutEnabled,
+      allowPreorder: preorderProduct.allow_preorder,
+      stockQuantity: Number(preorderProduct.stock_quantity),
+      quantity,
+      preorderPaymentMode: mode,
+    });
+
+    if (bookingWithoutParcelLocker !== shouldUseBooking) {
+      if (shouldUseBooking) {
+        return NextResponse.json(
+          {
+            error: ORDER_ERROR_MESSAGE_MAP.parcel_locker_disabled_use_booking,
+            code: "parcel_locker_disabled_use_booking",
+          },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
-        { error: ORDER_ERROR_MESSAGE_MAP.parcel_locker_disabled_use_booking, code: "parcel_locker_disabled_use_booking" },
-        { status: 409 }
+        { error: ORDER_ERROR_MESSAGE_MAP.booking_not_when_locker_on, code: "booking_not_when_locker_on" },
+        { status: 400 }
       );
     }
     if (bookingWithoutParcelLocker && pm !== "booking") {

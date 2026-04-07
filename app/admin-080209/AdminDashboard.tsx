@@ -365,6 +365,9 @@ function ProductsSection({
       image_url: editing.image_url ?? null,
       is_active: editing.is_active ?? true,
       allow_preorder: Boolean(editing.allow_preorder),
+      preorder_payment_mode: editing.allow_preorder
+        ? (editing.preorder_payment_mode ?? "shop_default")
+        : "shop_default",
     };
     try {
       if (editing.id) {
@@ -671,6 +674,7 @@ function ProductsSection({
             stock_quantity: 0,
             is_active: true,
             allow_preorder: false,
+            preorder_payment_mode: "shop_default",
           })
         }
         className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
@@ -686,7 +690,7 @@ function ProductsSection({
               <th className="p-3">Name</th>
               <th className="p-3">Category</th>
               <th className="p-3">Stock</th>
-              <th className="p-3">Pre-order</th>
+              <th className="p-3">Pre-order / payment</th>
               <th className="p-3">Prices</th>
               <th className="p-3">Active</th>
               <th className="p-3">Actions</th>
@@ -707,7 +711,17 @@ function ProductsSection({
                 <td className="p-3 font-medium">{p.name}</td>
                 <td className="p-3 text-xs">{categories.find((c) => c.slug === p.category)?.name ?? p.category}</td>
                 <td className="p-3">{p.stock_quantity}</td>
-                <td className="p-3">{p.allow_preorder ? "Enabled" : "Disabled"}</td>
+                <td className="p-3 text-xs">
+                  {!p.allow_preorder ? (
+                    "Off"
+                  ) : p.preorder_payment_mode === "payment" ? (
+                    <span title="Pre-order with payment">Pay now</span>
+                  ) : p.preorder_payment_mode === "booking" ? (
+                    <span title="Pre-order without payment">Booking</span>
+                  ) : (
+                    <span title="Follow shop parcel-locker setting">Shop default</span>
+                  )}
+                </td>
                 <td className="p-3">
                   {formatPrice(Number(p.price_regular), shopCurrency)} /{" "}
                   {formatPrice(Number(p.price_team_member), shopCurrency)}
@@ -785,10 +799,37 @@ function ProductsSection({
                 <input
                   type="checkbox"
                   checked={Boolean(editing.allow_preorder)}
-                  onChange={(e) => setEditing({ ...editing, allow_preorder: e.target.checked })}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      allow_preorder: e.target.checked,
+                      ...(!e.target.checked ? { preorder_payment_mode: "shop_default" as const } : {}),
+                    })
+                  }
                 />
                 Allow pre-order when stock is empty
               </label>
+              {editing.allow_preorder && (
+                <div>
+                  <label className="text-xs font-semibold text-honey-muted">Pre-order checkout</label>
+                  <select
+                    className="mt-1 w-full rounded-xl border border-honey-border bg-bg px-3 py-2 text-sm"
+                    value={editing.preorder_payment_mode ?? "shop_default"}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        preorder_payment_mode: e.target.value as NonNullable<Product["preorder_payment_mode"]>,
+                      })
+                    }
+                  >
+                    <option value="shop_default">
+                      Same as shop — parcel locker on = pay now; parcel locker off = booking only
+                    </option>
+                    <option value="payment">Pre-order with payment (bank transfer now)</option>
+                    <option value="booking">Pre-order without payment (booking request)</option>
+                  </select>
+                </div>
+              )}
               {editing.id && (
                 <div>
                   <label className="text-xs font-semibold text-honey-muted">Upload image</label>

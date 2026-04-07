@@ -5,6 +5,7 @@ import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { LS_REFERRED_BY, LS_TELEGRAM_USERNAME } from "@/lib/constants";
 import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { getPriceForUser } from "@/lib/helpers";
+import { effectivePreorderBookingMode } from "@/lib/preorder-checkout";
 import type { Product, UserType } from "@/types";
 import { AlertCircle, ChevronLeft, MapPin } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -46,6 +47,14 @@ export function CheckoutFlow({
   const baseTotal = unit * quantity;
   const isPreorder = Boolean(product.allow_preorder) && Number(product.stock_quantity) < quantity;
 
+  const bookingMode = effectivePreorderBookingMode({
+    parcelLockerCheckout: fulfillmentOptions.parcelLockerCheckout,
+    allowPreorder: product.allow_preorder,
+    stockQuantity: Number(product.stock_quantity),
+    quantity,
+    preorderPaymentMode: product.preorder_payment_mode,
+  });
+
   const remainderHuf = useMemo(() => baseTotal, [baseTotal]);
 
   useEffect(() => {
@@ -72,8 +81,6 @@ export function CheckoutFlow({
       </div>
     );
   }
-
-  const bookingMode = !fulfillmentOptions.parcelLockerCheckout;
 
   function paymentMethodForSubmit(): string {
     if (bookingMode) return "booking";
@@ -212,11 +219,17 @@ export function CheckoutFlow({
                 in your order.
               </p>
             )}
-            {bookingMode && (
+            {bookingMode && !fulfillmentOptions.parcelLockerCheckout && (
               <div className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-900 dark:text-sky-100">
                 Parcel locker checkout is paused. You can still{" "}
                 <span className="font-semibold text-honey-text">request this item</span> — no payment now. The team will
                 review your booking and follow up when pickup is available again.
+              </div>
+            )}
+            {bookingMode && fulfillmentOptions.parcelLockerCheckout && isPreorder && (
+              <div className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-900 dark:text-sky-100">
+                This product is set to <span className="font-semibold text-honey-text">pre-order without payment</span>.
+                Submit a booking request — no payment now. The team will confirm and follow up.
               </div>
             )}
             <div className="flex items-start gap-3 rounded-xl border border-honey-border p-4">
