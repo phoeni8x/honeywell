@@ -4,17 +4,11 @@ import { useShopCurrency } from "@/components/ShopCurrencyProvider";
 import { getOrCreateCustomerToken } from "@/lib/customer-token";
 import { fulfillmentTypeDisplay, ORDER_STATUS_LABELS } from "@/lib/helpers";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
-import {
-  extractFirstHttpUrl,
-  isParcelLockerPickupIssued,
-  lockerProviderDisplayLabel,
-  mapsSearchUrlApple,
-  mapsSearchUrlGoogle,
-} from "@/lib/parcel-locker";
+import { isParcelLockerPickupIssued, lockerProviderDisplayLabel } from "@/lib/parcel-locker";
 import { getOrderIssueTelegramUrl } from "@/lib/support-telegram";
 import type { OrderWithProduct } from "@/types";
 import clsx from "clsx";
-import { Copy, ExternalLink, LifeBuoy, MapPin, Navigation } from "lucide-react";
+import { Copy, ExternalLink, LifeBuoy, MapPin } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ConfettiBurst } from "./ConfettiBurst";
 import { ProductImage } from "./ProductImage";
@@ -23,8 +17,6 @@ import { PickupPhotoModal } from "./PickupPhotoModal";
 interface OrderCardProps {
   order: OrderWithProduct;
   shopAddress: string;
-  mapsUrl: string;
-  appleMapsUrl: string;
   /** Admin-configured bank transfer payment link (settings). */
   revolutPaymentLink?: string;
   customerToken: string;
@@ -47,8 +39,6 @@ function canCustomerCancelOrder(order: OrderWithProduct): boolean {
 export function OrderCard({
   order,
   shopAddress,
-  mapsUrl,
-  appleMapsUrl,
   revolutPaymentLink = "",
   customerToken,
   onPhotoUploaded,
@@ -82,8 +72,6 @@ export function OrderCard({
   const {
     parcelLocker,
     displayAddress,
-    googleUrl,
-    appleUrl,
     legacyLocationPhotos,
     legacyLocationVideoUrl,
     legacyLocationFindInstructions,
@@ -91,9 +79,6 @@ export function OrderCard({
     const locText = order.locker_location_text?.trim() ?? "";
     const pass = order.locker_passcode?.trim() ?? "";
     if (order.fulfillment_type === "dead_drop" && locText && pass && !order.dead_drop_id) {
-      const direct = extractFirstHttpUrl(locText);
-      const g = direct ?? mapsSearchUrlGoogle(locText);
-      const a = direct ?? mapsSearchUrlApple(locText);
       return {
         parcelLocker: {
           providerLabel: lockerProviderDisplayLabel(order.locker_provider),
@@ -101,8 +86,6 @@ export function OrderCard({
           passcode: pass,
         },
         displayAddress: locText,
-        googleUrl: g,
-        appleUrl: a,
         legacyLocationPhotos: [] as string[],
         legacyLocationVideoUrl: null,
         legacyLocationFindInstructions: null,
@@ -116,8 +99,6 @@ export function OrderCard({
       return {
         parcelLocker: null,
         displayAddress: dd.name,
-        googleUrl: dd.google_maps_url ?? mapsUrl,
-        appleUrl: dd.apple_maps_url ?? appleMapsUrl,
         legacyLocationPhotos: photos,
         legacyLocationVideoUrl: dd.location_video_url ?? null,
         legacyLocationFindInstructions: dd.instructions ?? null,
@@ -127,8 +108,6 @@ export function OrderCard({
       return {
         parcelLocker: null,
         displayAddress: order.pickup_location.name + (order.pickup_location.admin_message ? ` — ${order.pickup_location.admin_message}` : ""),
-        googleUrl: order.pickup_location.google_maps_url ?? mapsUrl,
-        appleUrl: order.pickup_location.apple_maps_url ?? appleMapsUrl,
         legacyLocationPhotos: [] as string[],
         legacyLocationVideoUrl: null,
         legacyLocationFindInstructions: null,
@@ -137,13 +116,11 @@ export function OrderCard({
     return {
       parcelLocker: null,
       displayAddress: shopAddress,
-      googleUrl: mapsUrl,
-      appleUrl: appleMapsUrl,
       legacyLocationPhotos: [] as string[],
       legacyLocationVideoUrl: null,
       legacyLocationFindInstructions: null,
     };
-  }, [order, shopAddress, mapsUrl, appleMapsUrl]);
+  }, [order, shopAddress]);
 
   const showLocationSection =
     order.fulfillment_type !== "delivery" &&
@@ -494,23 +471,6 @@ export function OrderCard({
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              <a
-                href={googleUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-honey-border px-3 py-1.5 text-xs font-semibold text-honey-text transition hover:border-primary/40"
-              >
-                <Navigation className="h-3.5 w-3.5" />
-                Get Directions
-              </a>
-              <a
-                href={appleUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-honey-border px-3 py-1.5 text-xs font-semibold text-honey-text transition hover:border-primary/40"
-              >
-                Open in Apple Maps
-              </a>
               {showMarkPickedUp && (
                 <button
                   type="button"

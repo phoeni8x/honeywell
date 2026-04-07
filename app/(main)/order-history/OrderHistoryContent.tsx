@@ -21,8 +21,6 @@ export function OrderHistoryContent() {
   const [orders, setOrders] = useState<OrderWithProduct[]>([]);
   const [settings, setSettings] = useState({
     shop_address: "",
-    google_maps_url: "",
-    apple_maps_url: "",
     revolut_payment_link: "",
   });
   const [loading, setLoading] = useState(true);
@@ -153,8 +151,6 @@ export function OrderHistoryContent() {
         if (d.shop_address !== undefined)
           setSettings({
             shop_address: d.shop_address,
-            google_maps_url: d.google_maps_url,
-            apple_maps_url: d.apple_maps_url,
             revolut_payment_link: d.revolut_payment_link,
           });
       })
@@ -194,8 +190,6 @@ export function OrderHistoryContent() {
               key={o.id}
               order={o}
               shopAddress={settings.shop_address}
-              mapsUrl={settings.google_maps_url}
-              appleMapsUrl={settings.apple_maps_url}
               revolutPaymentLink={settings.revolut_payment_link}
               customerToken={currentToken()}
               onPhotoUploaded={() => void loadOrders(currentToken(), { quiet: true })}
