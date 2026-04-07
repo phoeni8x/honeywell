@@ -1,4 +1,5 @@
 import { requireAdminUser } from "@/lib/admin-auth";
+import { shouldRestoreProductStockOnPaymentPendingVoid } from "@/lib/order-payment-pending-helpers";
 import { PUBLIC_ERROR_TRY_AGAIN_OR_GUEST } from "@/lib/public-error";
 import { notifyCustomerPush } from "@/lib/push-notify";
 import { sanitizePlainText } from "@/lib/sanitize";
@@ -8,16 +9,6 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 type ClearKind = "payment_pending" | "booking";
-
-function shouldRestoreStockForPaymentPending(order: {
-  status: unknown;
-  defer_stock_until_approval?: unknown;
-}): boolean {
-  const st = String(order.status);
-  if (st !== "payment_pending") return false;
-  const defer = Boolean(order.defer_stock_until_approval);
-  return !defer;
-}
 
 /**
  * Bulk cancel orders in the admin approval queues (pending payment or booking requests).
@@ -66,7 +57,7 @@ export async function POST(request: Request) {
 
     if (kind === "payment_pending") {
       for (const order of list) {
-        if (!shouldRestoreStockForPaymentPending(order)) continue;
+        if (!shouldRestoreProductStockOnPaymentPendingVoid(order)) continue;
         const productId = order.product_id as string | null;
         const qty = Number(order.quantity ?? 0);
         if (!productId || qty <= 0) continue;
