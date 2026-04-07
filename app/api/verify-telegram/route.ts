@@ -141,22 +141,11 @@ export async function POST(request: Request) {
 
     const memberRes = await getChannelMembership(botToken, channelId, Number(telegramUserId));
     if (memberRes.ok) {
-      if (memberRes.member) {
-        return NextResponse.json({ verified: true });
-      }
-      return NextResponse.json({
-        verified: false,
-        message:
-          "You're not detected in the team channel yet. Join the private channel, open our Telegram bot and send /start, then tap Verify again.",
-      });
+      return NextResponse.json({ verified: memberRes.member });
     }
 
     console.error("[verify-telegram] getChatMember failed", memberRes.error);
-    return NextResponse.json({
-      verified: false,
-      message:
-        "We could not check channel membership on Telegram. Add the customer bot to your team channel as an administrator (same as the old bot), then try again.",
-    });
+    return NextResponse.json({ verified: false, error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST });
   } catch (e) {
     console.error("[verify-telegram]", e);
     return NextResponse.json({ error: PUBLIC_ERROR_TRY_AGAIN_OR_GUEST }, { status: 500 });
