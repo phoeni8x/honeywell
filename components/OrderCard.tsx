@@ -64,12 +64,14 @@ export function OrderCard({
   const product = order.product;
   const statusLabel = ORDER_STATUS_LABELS[order.status] ?? order.status;
   const isFinalStatus = ["delivered", "picked_up", "cancelled", "payment_expired"].includes(order.status);
-  const isVipCustomer = order.user_type === "team_member";
-  /** Pay-before-admin-approval: only while still awaiting payment (not after order moves forward). */
-  const showRevolutPayNowBanner =
+  /**
+   * Bank transfer before admin confirms: treat missing timing as pay-now (matches DB coalesce),
+   * but not pay-on-delivery (those pay after delivery).
+   */
+  const showRevolutPayNowCta =
     order.payment_method === "revolut" &&
-    order.revolut_pay_timing === "pay_now" &&
-    order.status === "payment_pending";
+    order.status === "payment_pending" &&
+    order.revolut_pay_timing !== "pay_on_delivery";
   const showRevolutPayAfterDeliveryBanner =
     order.payment_method === "revolut" &&
     order.revolut_pay_timing === "pay_on_delivery" &&
@@ -321,36 +323,6 @@ export function OrderCard({
             <p className="mt-1 text-xs text-honey-muted">
               {new Date(order.created_at).toLocaleString("en-GB")}
             </p>
-            {showRevolutPayNowBanner && (
-              <div className="mt-3 rounded-2xl border-2 border-amber-400/60 bg-amber-50 px-4 py-3 dark:bg-amber-400/10">
-                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Awaiting order details</p>
-                <p className="mt-1 text-xs text-amber-800/90 dark:text-amber-300/90">
-                  After you pay by bank transfer, our team will confirm your order and you&apos;ll see updates here. Use the
-                  payment reference above in your transfer memo, then open the payment page.
-                </p>
-                <a
-                  href={revolutPaymentLink || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-md transition active:scale-95 hover:bg-primary-light"
-                  style={{ WebkitTapHighlightColor: "transparent" }}
-                  onClick={(e) => {
-                    if (!revolutPaymentLink) {
-                      e.preventDefault();
-                      setRevolutLinkError("Payment link not configured yet. Contact admin.");
-                    } else {
-                      setRevolutLinkError(null);
-                    }
-                  }}
-                >
-                  Click here to pay
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-                {revolutLinkError && (
-                  <p className="mt-2 text-center text-xs text-red-600 dark:text-red-400">{revolutLinkError}</p>
-                )}
-              </div>
-            )}
             {showRevolutPayAfterDeliveryBanner && (
               <div className="mt-3 rounded-2xl border-2 border-primary/40 bg-primary/5 px-4 py-3 dark:bg-primary/10">
                 <p className="mb-2 text-xs font-semibold text-primary">
@@ -409,15 +381,40 @@ export function OrderCard({
                   </a>
                 </p>
               )}
-            <a
-              href={getOrderIssueTelegramUrl(order.id)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-            >
-              <LifeBuoy className="h-3.5 w-3.5" />
-              Report an issue with this order (Telegram)
-            </a>
+            {showRevolutPayNowCta ? (
+              <>
+                <a
+                  href={revolutPaymentLink || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                  onClick={(e) => {
+                    if (!revolutPaymentLink) {
+                      e.preventDefault();
+                      setRevolutLinkError("Payment link not configured yet. Contact admin.");
+                    } else {
+                      setRevolutLinkError(null);
+                    }
+                  }}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Click here to pay
+                </a>
+                {revolutLinkError && (
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">{revolutLinkError}</p>
+                )}
+              </>
+            ) : (
+              <a
+                href={getOrderIssueTelegramUrl(order.id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                <LifeBuoy className="h-3.5 w-3.5" />
+                Report an issue with this order (Telegram)
+              </a>
+            )}
           </div>
         </div>
 
