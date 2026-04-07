@@ -19,6 +19,8 @@ interface OrderCardProps {
   shopAddress: string;
   /** Admin-configured bank transfer payment link (settings). */
   revolutPaymentLink?: string;
+  /** Admin Google Maps URL for parcel locker area (settings). */
+  parcelLockerGoogleMapsUrl?: string;
   customerToken: string;
   onPhotoUploaded?: () => void;
 }
@@ -40,6 +42,7 @@ export function OrderCard({
   order,
   shopAddress,
   revolutPaymentLink = "",
+  parcelLockerGoogleMapsUrl = "",
   customerToken,
   onPhotoUploaded,
 }: OrderCardProps) {
@@ -68,6 +71,9 @@ export function OrderCard({
     order.status === "delivered";
 
   const isLegacyPickup = order.fulfillment_type === "pickup";
+
+  const lockerMapsHref = parcelLockerGoogleMapsUrl.trim();
+  const showLockerMapsLink = Boolean(lockerMapsHref && /^https?:\/\//i.test(lockerMapsHref));
 
   const {
     parcelLocker,
@@ -425,6 +431,17 @@ export function OrderCard({
                     {lockerCodeCopied ? "Copied" : "Copy code"}
                   </button>
                 </div>
+                {showLockerMapsLink && (
+                  <a
+                    href={lockerMapsHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Click here for Google Maps
+                  </a>
+                )}
               </div>
             )}
             {!parcelLocker && (

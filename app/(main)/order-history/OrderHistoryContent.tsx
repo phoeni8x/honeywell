@@ -22,6 +22,7 @@ export function OrderHistoryContent() {
   const [settings, setSettings] = useState({
     shop_address: "",
     revolut_payment_link: "",
+    parcel_locker_google_maps_url: "",
   });
   const [loading, setLoading] = useState(true);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -152,6 +153,7 @@ export function OrderHistoryContent() {
           setSettings({
             shop_address: d.shop_address,
             revolut_payment_link: d.revolut_payment_link,
+            parcel_locker_google_maps_url: d.parcel_locker_google_maps_url ?? "",
           });
       })
       .catch(() => {});
@@ -191,6 +193,7 @@ export function OrderHistoryContent() {
               order={o}
               shopAddress={settings.shop_address}
               revolutPaymentLink={settings.revolut_payment_link}
+              parcelLockerGoogleMapsUrl={settings.parcel_locker_google_maps_url}
               customerToken={currentToken()}
               onPhotoUploaded={() => void loadOrders(currentToken(), { quiet: true })}
             />

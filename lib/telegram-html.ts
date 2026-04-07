@@ -61,6 +61,8 @@ export function buildLockerCustomerMessageHtml(opts: {
   providerLabel: string;
   locationText: string;
   passcode: string;
+  /** Admin-set Google Maps URL (settings) — shown as a tappable link in Telegram. */
+  googleMapsUrl?: string | null;
 }): string {
   const esc = escapeTelegramHtml;
   const q = Math.max(1, Math.floor(Number(opts.quantity) || 1));
@@ -77,5 +79,10 @@ export function buildLockerCustomerMessageHtml(opts: {
   lines.push(esc(opts.locationText));
   lines.push("");
   lines.push(`🔐 <b>Locker code:</b> <code>${esc(opts.passcode)}</code>`);
+  const mapHref = opts.googleMapsUrl ? safeHrefForTelegramHtml(opts.googleMapsUrl) : null;
+  if (mapHref) {
+    lines.push("");
+    lines.push(`🗺 <a href="${mapHref}">Click here for Google Maps</a>`);
+  }
   return lines.join("\n");
 }

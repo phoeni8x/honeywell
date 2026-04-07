@@ -1850,6 +1850,11 @@ function SettingsSection({
     { key: "crypto_exchange_url", label: "Crypto guide — exchange link" },
     { key: "shop_address", label: "Shop address (display)" },
     { key: "maps_query", label: "Maps search query (optional override)" },
+    {
+      key: "parcel_locker_google_maps_url",
+      label:
+        "Parcel locker — Google Maps link (https). Shown in Telegram and on My orders when a locker is issued.",
+    },
     { key: "hero_tagline", label: "Home hero tagline" },
     { key: "TELEGRAM_BOT_TOKEN", label: "Telegram bot token (server env preferred)" },
     { key: "TELEGRAM_CHANNEL_ID", label: "Telegram channel ID (server env preferred)" },

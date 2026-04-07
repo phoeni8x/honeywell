@@ -39,6 +39,8 @@ export async function notifyCustomerLockerViaTelegram(opts: {
   lockerPasscode: string;
   customerToken: string;
   customerUsername: string | null | undefined;
+  /** From settings key parcel_locker_google_maps_url (https only in message). */
+  googleMapsUrl?: string | null;
 }): Promise<void> {
   const botToken = getTelegramCustomerBotToken()?.trim();
   if (!botToken) return;
@@ -57,6 +59,7 @@ export async function notifyCustomerLockerViaTelegram(opts: {
     providerLabel: lockerProviderDisplayLabel(opts.lockerProvider),
     locationText: opts.lockerLocationText.trim(),
     passcode: opts.lockerPasscode.trim(),
+    googleMapsUrl: opts.googleMapsUrl?.trim() || null,
   });
 
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

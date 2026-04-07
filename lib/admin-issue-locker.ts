@@ -78,6 +78,17 @@ export async function issueLockerForDeadDropOrderAndNotify(
     return { ok: false, error: "Could not issue locker.", status: 400 };
   }
 
+  const { data: mapSettingRows } = await svc
+    .from("settings")
+    .select("value")
+    .eq("key", "parcel_locker_google_maps_url")
+    .limit(1);
+  const rawMapUrl =
+    mapSettingRows?.[0] && typeof (mapSettingRows[0] as { value?: unknown }).value === "string"
+      ? (mapSettingRows[0] as { value: string }).value.trim()
+      : "";
+  const parcelLockerGoogleMapsUrl = rawMapUrl || null;
+
   const { data: order } = await svc
     .from("orders")
     .select("customer_token, customer_username, order_number, quantity, products(name)")
@@ -108,6 +119,7 @@ export async function issueLockerForDeadDropOrderAndNotify(
     lockerPasscode,
     customerToken: customerToken ?? "",
     customerUsername: (order?.customer_username as string | null | undefined) ?? null,
+    googleMapsUrl: parcelLockerGoogleMapsUrl,
   });
 
   return { ok: true };
