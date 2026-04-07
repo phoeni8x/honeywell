@@ -336,9 +336,24 @@ function ProductsSection({
     .map((id) => categories.find((c) => c.id === id))
     .filter((c): c is ProductCategoryRow => Boolean(c));
 
+  function formatPostgrestErrorForAdmin(error: unknown): string | null {
+    const e = error as { message?: string; details?: string; hint?: string };
+    const parts = [e.message, e.details, e.hint].filter((x) => typeof x === "string" && x.trim());
+    const s = parts.join("\n").trim();
+    return s.length > 0 ? s.slice(0, 500) : null;
+  }
+
   function reportProductsError(context: string, error: unknown): void {
     console.error(`[admin products:${context}]`, error);
-    alert(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+    const detail = formatPostgrestErrorForAdmin(error);
+    alert(detail ? `${PUBLIC_ERROR_TRY_AGAIN_OR_GUEST}\n\n${detail}` : PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+  }
+
+  /** DB migration 047 not applied — PostgREST rejects unknown column. */
+  function isMissingPreorderPaymentModeColumn(error: unknown): boolean {
+    const e = error as { message?: string; code?: string };
+    const m = String(e.message ?? "").toLowerCase();
+    return e.code === "PGRST204" || m.includes("preorder_payment_mode");
   }
 
   useEffect(() => {
@@ -369,19 +384,32 @@ function ProductsSection({
         ? (editing.preorder_payment_mode ?? "shop_default")
         : "shop_default",
     };
+    const { preorder_payment_mode: _mode, ...payloadWithoutPreorderMode } = payload;
+
     try {
-      if (editing.id) {
-        const { error } = await supabase.from("products").update(payload).eq("id", editing.id);
-        if (error) {
-          reportProductsError("saveProduct:update", error);
+      const apply = async (body: typeof payload | typeof payloadWithoutPreorderMode) => {
+        if (editing.id) {
+          return supabase.from("products").update(body).eq("id", editing.id);
+        }
+        return supabase.from("products").insert(body);
+      };
+
+      let { error } = await apply(payload);
+      if (error && isMissingPreorderPaymentModeColumn(error)) {
+        console.warn("[admin products:saveProduct] retrying without preorder_payment_mode (run migration 047 on Supabase)");
+        ({ error } = await apply(payloadWithoutPreorderMode));
+        if (!error) {
+          alert(
+            "Product saved. The pre-order checkout option was not stored because the database is missing column preorder_payment_mode. In Supabase → SQL, run the migration from supabase/migrations/047_products_preorder_payment_mode.sql, then save again."
+          );
+          setEditing(null);
+          onRefresh();
           return;
         }
-      } else {
-        const { error } = await supabase.from("products").insert(payload);
-        if (error) {
-          reportProductsError("saveProduct:insert", error);
-          return;
-        }
+      }
+      if (error) {
+        reportProductsError(editing.id ? "saveProduct:update" : "saveProduct:insert", error);
+        return;
       }
       setEditing(null);
       onRefresh();
