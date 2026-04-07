@@ -1,7 +1,6 @@
 "use client";
 
 import { OrderCard } from "@/components/OrderCard";
-import { RevolutModal } from "@/components/RevolutModal";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { getOrCreateCustomerToken, setCustomerToken } from "@/lib/customer-token";
 import { syncCustomerTokenFromUrl } from "@/lib/sync-customer-token-from-url";
@@ -27,8 +26,6 @@ export function OrderHistoryContent() {
     revolut_payment_link: "",
   });
   const [loading, setLoading] = useState(true);
-  const [revolutOpen, setRevolutOpen] = useState(false);
-  const [revolutPaymentRef, setRevolutPaymentRef] = useState<string | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { state: pushState, subscribe: subscribePush } = usePushNotifications();
 
@@ -82,6 +79,15 @@ export function OrderHistoryContent() {
     url.searchParams.delete("ct");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }, [queryToken]);
+
+  // Legacy checkout used ?revolut=1 to open a modal; strip it so bookmarks stay clean.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("revolut")) return;
+    url.searchParams.delete("revolut");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
 
   /** Refetch when returning to the tab (e.g. after admin marks delivered). */
   useEffect(() => {
@@ -155,34 +161,6 @@ export function OrderHistoryContent() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (searchParams.get("revolut") !== "1") return;
-    setRevolutOpen(true);
-    const oid = searchParams.get("orderId")?.trim();
-    if (!oid) {
-      setRevolutPaymentRef(undefined);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const t = getOrCreateCustomerToken();
-        const res = await fetch(`/api/account/orders/${encodeURIComponent(oid)}`, {
-          headers: { "x-customer-token": t },
-        });
-        const data = (await res.json().catch(() => ({}))) as { order?: { payment_reference_code?: string | null } };
-        if (!cancelled && data.order?.payment_reference_code) {
-          setRevolutPaymentRef(data.order.payment_reference_code);
-        }
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [searchParams]);
-
   return (
     <div className="space-y-8">
       <div>
@@ -226,15 +204,6 @@ export function OrderHistoryContent() {
         </div>
       )}
 
-      <RevolutModal
-        open={revolutOpen}
-        onClose={() => {
-          setRevolutOpen(false);
-          setRevolutPaymentRef(undefined);
-        }}
-        revolutUrl={settings.revolut_payment_link}
-        paymentReferenceCode={revolutPaymentRef}
-      />
       <p className="text-center text-sm text-honey-muted">
         Want a paginated view?{" "}
         <a href="/account/orders" className="text-primary underline">

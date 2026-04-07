@@ -65,10 +65,11 @@ export function OrderCard({
   const statusLabel = ORDER_STATUS_LABELS[order.status] ?? order.status;
   const isFinalStatus = ["delivered", "picked_up", "cancelled", "payment_expired"].includes(order.status);
   const isVipCustomer = order.user_type === "team_member";
+  /** Pay-before-admin-approval: only while still awaiting payment (not after order moves forward). */
   const showRevolutPayNowBanner =
     order.payment_method === "revolut" &&
     order.revolut_pay_timing === "pay_now" &&
-    !isFinalStatus;
+    order.status === "payment_pending";
   const showRevolutPayAfterDeliveryBanner =
     order.payment_method === "revolut" &&
     order.revolut_pay_timing === "pay_on_delivery" &&
@@ -322,14 +323,16 @@ export function OrderCard({
             </p>
             {showRevolutPayNowBanner && (
               <div className="mt-3 rounded-2xl border-2 border-amber-400/60 bg-amber-50 px-4 py-3 dark:bg-amber-400/10">
-                <p className="mb-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
-                  {isVipCustomer ? "Pay with bank transfer" : "Payment required to confirm your order"}
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Awaiting order details</p>
+                <p className="mt-1 text-xs text-amber-800/90 dark:text-amber-300/90">
+                  After you pay by bank transfer, our team will confirm your order and you&apos;ll see updates here. Use the
+                  payment reference above in your transfer memo, then open the payment page.
                 </p>
                 <a
                   href={revolutPaymentLink || "#"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-md transition active:scale-95 hover:bg-primary-light"
+                  className="mt-3 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-md transition active:scale-95 hover:bg-primary-light"
                   style={{ WebkitTapHighlightColor: "transparent" }}
                   onClick={(e) => {
                     if (!revolutPaymentLink) {
@@ -340,14 +343,11 @@ export function OrderCard({
                     }
                   }}
                 >
-                  {isVipCustomer ? "Pay with bank transfer" : "Open bank transfer payment"}
+                  Click here to pay
                   <ExternalLink className="h-4 w-4" />
                 </a>
-                <p className="mt-2 text-center text-xs text-amber-600 dark:text-amber-400">
-                  Tap to open your payment link, send payment, then come back here.
-                </p>
                 {revolutLinkError && (
-                  <p className="mt-1 text-center text-xs text-red-600 dark:text-red-400">{revolutLinkError}</p>
+                  <p className="mt-2 text-center text-xs text-red-600 dark:text-red-400">{revolutLinkError}</p>
                 )}
               </div>
             )}

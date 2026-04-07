@@ -110,7 +110,7 @@ export default function ProductPage() {
       return;
     }
     if (paymentMethod === "revolut" && revolutPayTiming === "pay_now") {
-      router.push(withToken("/order-history", { revolut: "1", orderId }));
+      router.push(withToken("/order-history", { orderId }));
       return;
     }
     router.push(withToken("/order-history", { orderId }));
