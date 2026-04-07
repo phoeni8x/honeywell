@@ -1135,8 +1135,10 @@ function OrdersSection({
 
   async function markPickedUp(order: Order & { product?: Product | null }) {
     if (!order.pickup_photo_url) {
-      showToast(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST, false);
-      return;
+      const ok = window.confirm(
+        "No customer pickup photo on file. Mark this order as collected anyway?"
+      );
+      if (!ok) return;
     }
     await setStatus(order.id, "picked_up");
   }
