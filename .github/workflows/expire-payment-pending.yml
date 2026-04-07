@@ -1,6 +1,6 @@
-# Expires unpaid `payment_pending` orders (default 45 min) via production API.
+# Expires unpaid `payment_pending` (default 45 min) and stale `booking` pre-orders (default 7 h).
 # Repo secrets: CRON_SECRET (same as Vercel env), APP_URL (e.g. https://www.teamruby.net)
-name: Expire stale payment-pending orders
+name: Expire stale payment-pending and bookings
 
 on:
   schedule:

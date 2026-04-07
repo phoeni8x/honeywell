@@ -1,16 +1,16 @@
+import { expireStaleBookingOrders } from "@/lib/expire-stale-booking-orders";
 import { expireStalePaymentPendingOrders } from "@/lib/expire-stale-payment-pending-orders";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-/** Parcel locker expiry loops — allow headroom on cold starts. */
+/** Payment + booking expiry loops — allow headroom on cold starts. */
 export const maxDuration = 60;
 
 /**
- * Vercel Cron: secured with `CRON_SECRET` (Authorization: Bearer …).
- * Vercel injects that header automatically when `CRON_SECRET` is set on the project.
- * Fallback: `INTERNAL_PUSH_SECRET` if you trigger the same URL manually with that bearer.
- * Set `PAYMENT_PENDING_EXPIRE_MINUTES` to override default 45.
+ * Secured with `CRON_SECRET` or `INTERNAL_PUSH_SECRET` (Authorization: Bearer …).
+ * - `PAYMENT_PENDING_EXPIRE_MINUTES` (default 45) → `payment_expired`
+ * - `BOOKING_PENDING_EXPIRE_HOURS` (default 7) → `cancelled` for `pre_ordered` + `booking`
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET?.trim() || process.env.INTERNAL_PUSH_SECRET?.trim();
@@ -21,18 +21,44 @@ export async function GET(request: Request) {
 
   const rawMin = process.env.PAYMENT_PENDING_EXPIRE_MINUTES?.trim();
   const expireMinutes = rawMin ? Number(rawMin) : 45;
+  const rawBookHrs = process.env.BOOKING_PENDING_EXPIRE_HOURS?.trim();
+  const bookingExpireHours = rawBookHrs ? Number(rawBookHrs) : 7;
 
-  try {
-    const svc = createServiceClient();
-    const result = await expireStalePaymentPendingOrders(svc, expireMinutes);
-    return NextResponse.json({
-      ok: true,
-      expired: result.expired,
-      stock_restore_failures: result.stockRestoreFailures,
-      expire_minutes: Number.isFinite(expireMinutes) && expireMinutes > 0 ? expireMinutes : 45,
-    });
-  } catch (e) {
-    console.error("[cron/expire-payment-pending]", e);
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+  const svc = createServiceClient();
+  const bookHrs = Number.isFinite(bookingExpireHours) && bookingExpireHours > 0 ? bookingExpireHours : 7;
+  const payMin = Number.isFinite(expireMinutes) && expireMinutes > 0 ? expireMinutes : 45;
+
+  const [payOutcome, bookOutcome] = await Promise.allSettled([
+    expireStalePaymentPendingOrders(svc, payMin),
+    expireStaleBookingOrders(svc, bookHrs),
+  ]);
+
+  const payment =
+    payOutcome.status === "fulfilled"
+      ? {
+          expired: payOutcome.value.expired,
+          stock_restore_failures: payOutcome.value.stockRestoreFailures,
+          expire_minutes: payMin,
+        }
+      : {
+          expired: 0,
+          stock_restore_failures: 0,
+          expire_minutes: payMin,
+          error: payOutcome.reason instanceof Error ? payOutcome.reason.message : "payment_pending job failed",
+        };
+
+  const booking =
+    bookOutcome.status === "fulfilled"
+      ? { cancelled: bookOutcome.value.cancelled, expire_hours: bookHrs }
+      : { cancelled: 0, expire_hours: bookHrs, error: bookOutcome.reason instanceof Error ? bookOutcome.reason.message : "booking job failed" };
+
+  if (payOutcome.status === "rejected") {
+    console.error("[cron] expireStalePaymentPendingOrders", payOutcome.reason);
   }
+  if (bookOutcome.status === "rejected") {
+    console.error("[cron] expireStaleBookingOrders", bookOutcome.reason);
+  }
+
+  const ok = payOutcome.status === "fulfilled" && bookOutcome.status === "fulfilled";
+  return NextResponse.json({ ok, payment_pending: payment, booking }, { status: ok ? 200 : 207 });
 }
