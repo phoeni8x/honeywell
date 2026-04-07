@@ -204,16 +204,56 @@ export function OrderCard({
   }
 
   async function uploadPhoto(file: File) {
-    const form = new FormData();
-    form.append("file", file);
-    form.append("orderId", order.id);
-    form.append("customerToken", customerToken);
+    let token = getOrCreateCustomerToken().trim() || customerToken.trim();
+    const postPhoto = (t: string) => {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("orderId", order.id);
+      form.append("customerToken", t);
+      return fetch("/api/orders/pickup-photo", { method: "POST", body: form });
+    };
 
-    const res = await fetch("/api/orders/pickup-photo", {
-      method: "POST",
-      body: form,
-    });
-    const data = await res.json().catch(() => ({}));
+    let res = await postPhoto(token);
+    if (!res.ok) {
+      const adopt = await fetch("/api/orders/adopt-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: order.id }),
+      });
+      const adoptData = (await adopt.json().catch(() => ({}))) as { customer_token?: string };
+      const retryToken = typeof adoptData.customer_token === "string" ? adoptData.customer_token.trim() : "";
+      if (adopt.ok && retryToken) {
+        res = await postPhoto(retryToken);
+      }
+    }
+
+    if (!res.ok) throw new Error(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+    onPhotoUploaded?.();
+  }
+
+  async function acknowledgePickupWithoutPhoto() {
+    let token = getOrCreateCustomerToken().trim() || customerToken.trim();
+    const postAck = (t: string) =>
+      fetch("/api/orders/pickup-acknowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-customer-token": t },
+        body: JSON.stringify({ order_id: order.id }),
+      });
+
+    let res = await postAck(token);
+    if (!res.ok) {
+      const adopt = await fetch("/api/orders/adopt-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: order.id }),
+      });
+      const adoptData = (await adopt.json().catch(() => ({}))) as { customer_token?: string };
+      const retryToken = typeof adoptData.customer_token === "string" ? adoptData.customer_token.trim() : "";
+      if (adopt.ok && retryToken) {
+        res = await postAck(retryToken);
+      }
+    }
+
     if (!res.ok) throw new Error(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
     onPhotoUploaded?.();
   }
@@ -507,7 +547,12 @@ export function OrderCard({
         )}
       </article>
 
-      <PickupPhotoModal open={showPhoto} onClose={() => setShowPhoto(false)} onSubmit={uploadPhoto} />
+      <PickupPhotoModal
+        open={showPhoto}
+        onClose={() => setShowPhoto(false)}
+        onSubmit={uploadPhoto}
+        onNoPhotoComplete={acknowledgePickupWithoutPhoto}
+      />
     </>
   );
 }

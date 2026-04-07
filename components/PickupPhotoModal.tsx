@@ -8,12 +8,15 @@ interface PickupPhotoModalProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (file: File) => Promise<void>;
+  /** Customer finished at locker without uploading a photo — notifies admin / updates order. */
+  onNoPhotoComplete?: () => Promise<void>;
 }
 
 export function PickupPhotoModal({
   open,
   onClose,
   onSubmit,
+  onNoPhotoComplete,
 }: PickupPhotoModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
@@ -174,20 +177,42 @@ export function PickupPhotoModal({
                 : "Upload photo"}
             </button>
 
-            {/* Completed / Close button */}
+            {/* Done / collected without photo */}
             <button
               type="button"
-              onClick={handleClose}
-              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-semibold text-white transition hover:bg-primary-light active:scale-95"
+              disabled={loading}
+              onClick={() => {
+                if (uploaded) {
+                  handleClose();
+                  return;
+                }
+                if (onNoPhotoComplete) {
+                  setError(null);
+                  setLoading(true);
+                  void onNoPhotoComplete()
+                    .then(() => {
+                      setUploaded(true);
+                      handleClose();
+                    })
+                    .catch(() => {
+                      setError(PUBLIC_ERROR_TRY_AGAIN_OR_GUEST);
+                    })
+                    .finally(() => setLoading(false));
+                  return;
+                }
+                handleClose();
+              }}
+              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-semibold text-white transition hover:bg-primary-light active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <CheckCircle className="h-4 w-4" />
-              {uploaded ? "Done" : "Completed"}
+              {uploaded ? "Done" : onNoPhotoComplete ? "Collected (no photo)" : "Close"}
             </button>
           </div>
 
           <p className="mt-3 text-center text-xs text-honey-muted">
-            Tap &quot;Completed&quot; if you already collected without a photo,
-            or upload proof first then tap Done.
+            {onNoPhotoComplete
+              ? "Upload a photo with Send photo, or tap Collected (no photo) if you already took your parcel."
+              : "Upload proof with Send photo, then tap Done."}
           </p>
         </div>
       </div>
